@@ -461,20 +461,16 @@ async function _doShadowRequest() {
 
   const {az, alt} = getSunPos();
   const c = getPubCenter();
-  // Bounds = circle bounding box.
-  const dLat = CIRCLE_RADIUS_M / 111320;
-  const dLng = CIRCLE_RADIUS_M / (111320 * Math.cos(c.lat * Math.PI / 180));
 
   try {
     const res = await fetch('/api/shadow', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        north: c.lat + dLat, south: c.lat - dLat,
-        east: c.lng + dLng, west: c.lng - dLng,
+        lat: c.lat, lng: c.lng,
+        radius: CIRCLE_RADIUS_M,
         sun_azimuth: az, sun_altitude: alt,
         min_height: parseFloat(document.getElementById('min-height').value),
-        seats: [],
       }),
     });
     const data = await res.json();
@@ -500,14 +496,18 @@ async function _doShadowRequest() {
     state.shadowLayers = [];
     state.shadowPolys = data.shadow_polys || [];
 
-    state.shadowPolys.forEach(coords => {
-      const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
-        color: 'rgba(30,30,60,0.3)', weight: 0,
-        fillColor: '#1E1E3C', fillOpacity: 0.55,
+    // Draw all shadows as a single multi-polygon to avoid opacity stacking.
+    if (state.shadowPolys.length) {
+      const allRings = state.shadowPolys.map(coords =>
+        coords.map(c => [c[0], c[1]])
+      );
+      const poly = L.polygon(allRings, {
+        color: 'transparent', weight: 0,
+        fillColor: '#1E1E3C', fillOpacity: 0.5,
         interactive: false, pane: 'shadow',
       }).addTo(map);
       state.shadowLayers.push(poly);
-    });
+    }
 
     drawCircle();
     _updateSunPctText();

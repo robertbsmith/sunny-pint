@@ -112,3 +112,75 @@ def get_buildings(south, west, north, east, transform, shape):
         fill=0, dtype=np.uint8,
     )
     return mask.astype(bool), osgb_polys, wgs_polys
+
+
+def get_building_data(lat, lng, radius_m, lidar_manager, min_height=6.0):
+    """Get building polygons with heights for a circular area.
+
+    Returns (wgs_polygons, heights) where each entry is a building.
+    Heights are sampled from LiDAR DSM (90th percentile within footprint).
+    """
+    import math
+
+    dlat = (radius_m + 200) / 111320.0  # extra buffer for shadow sources
+    dlng = (radius_m + 200) / (111320.0 * math.cos(math.radians(lat)))
+    south, north = lat - dlat, lat + dlat
+    west, east = lng - dlng, lng + dlng
+
+    # Get DSM for height sampling.
+    ow, os_ = to_osgb.transform(west, south)
+    oe, on = to_osgb.transform(east, north)
+    dsm, tfm = lidar_manager._read_area(ow, os_, oe, on)
+
+    # Get buildings.
+    if dsm is not None:
+        _, osgb_polys, wgs_polys = get_buildings(
+            south, west, north, east, tfm, dsm.shape
+        )
+    else:
+        key = (
+            round(south - 0.001, 4),
+            round(west - 0.001, 4),
+            round(north + 0.001, 4),
+            round(east + 0.001, 4),
+        )
+        osgb_polys, wgs_polys = _cached_query(key)
+
+    if not osgb_polys or dsm is None:
+        # No LiDAR — return buildings with default height.
+        return wgs_polys, [8.0] * len(wgs_polys)
+
+    # Sample height per building from DSM.
+    from .shadow import _local_min
+    ground = _local_min(dsm, radius=11)
+
+    heights = []
+    for poly in osgb_polys:
+        # Rasterize this single building.
+        mask = rasterize(
+            [(poly, 1)], out_shape=dsm.shape, transform=tfm,
+            fill=0, dtype=np.uint8,
+        ).astype(bool)
+
+        if not mask.any():
+            heights.append(8.0)  # default
+            continue
+
+        dsm_vals = dsm[mask]
+        ground_vals = ground[mask]
+        local_ground = float(np.median(ground_vals))
+
+        # Only consider pixels above ground (ignore misaligned edges).
+        above = dsm_vals[dsm_vals > local_ground + min_height]
+        if len(above) > 0:
+            roof_h = float(np.percentile(above, 90))
+            heights.append(max(roof_h - local_ground, 3.0))
+        else:
+            # Try with lower threshold.
+            above = dsm_vals[dsm_vals > local_ground + 2.0]
+            if len(above) > 0:
+                heights.append(float(np.percentile(above, 90)) - local_ground)
+            else:
+                heights.append(8.0)
+
+    return wgs_polys, heights

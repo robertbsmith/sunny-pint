@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .lidar import LidarManager
+from .buildings import get_building_data
+from .shadows import compute_shadow_polygons
 
 app = FastAPI(title="SunPub")
 lidar = LidarManager("data")
@@ -15,14 +17,12 @@ PUBS_FILE = Path("data/pubs.json")
 
 
 class ShadowRequest(BaseModel):
-    north: float
-    south: float
-    east: float
-    west: float
+    lat: float
+    lng: float
+    radius: float = 60.0
     sun_azimuth: float
     sun_altitude: float
-    min_height: float = 0.0
-    seats: list[dict]
+    min_height: float = 6.0
 
 
 @app.get("/api/status")
@@ -41,64 +41,83 @@ def pubs():
 def shadow(req: ShadowRequest):
     if req.sun_altitude <= 0:
         return {
-            "has_lidar": lidar.has_data,
-            "seats": [],
+            "shadow_polys": [],
             "buildings": [],
-            "shadow_image": None,
             "sun_pct": None,
             "below_horizon": True,
         }
 
     try:
-        result = lidar.query(
-            req.north, req.south, req.east, req.west,
-            req.sun_azimuth, req.sun_altitude,
-            req.seats, req.min_height,
+        # Get buildings with heights from LiDAR.
+        buildings_wgs, heights = get_building_data(
+            req.lat, req.lng, req.radius, lidar, req.min_height
         )
-    except Exception as e:
-        print(f"Shadow computation error: {e}")
-        result = None
 
-    if result is None:
+        # Geometric shadow projection.
+        shadow_polys = compute_shadow_polygons(
+            buildings_wgs, heights,
+            req.sun_azimuth, req.sun_altitude,
+        )
+
+        # Sun percentage: estimate from shadow area vs circle area.
+        sun_pct = _estimate_sun_pct(
+            shadow_polys, buildings_wgs,
+            req.lat, req.lng, req.radius,
+        )
+
         return {
-            "has_lidar": False,
-            "seats": [],
-            "buildings": [],
-            "shadow_image": None,
-            "sun_pct": None,
+            "shadow_polys": shadow_polys,
+            "buildings": buildings_wgs,
+            "sun_pct": sun_pct,
         }
-    return result
+    except Exception as e:
+        print(f"Shadow error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "shadow_polys": [],
+            "buildings": [],
+            "sun_pct": None,
+            "error": str(e),
+        }
 
 
-class DebugRequest(BaseModel):
-    north: float
-    south: float
-    east: float
-    west: float
-    min_height: float = 6.0
+def _estimate_sun_pct(shadow_polys, building_polys, lat, lng, radius_m):
+    """Estimate % of the circle area that's in sun."""
+    import math
+    from shapely.geometry import Point, Polygon
+    from shapely.ops import unary_union
+
+    M_PER_DEG_LAT = 111320.0
+    M_PER_DEG_LNG = 111320.0 * math.cos(math.radians(lat))
+
+    # Circle area in degrees (approximate).
+    circle = Point(lng, lat).buffer(radius_m / M_PER_DEG_LNG)
+
+    # Shadow area within circle.
+    shadow_shapes = []
+    for coords in shadow_polys:
+        p = Polygon([(c[1], c[0]) for c in coords])
+        if p.is_valid and not p.is_empty:
+            shadow_shapes.append(p)
+
+    # Building area within circle.
+    for coords in building_polys:
+        p = Polygon([(c[1], c[0]) for c in coords])
+        if p.is_valid and not p.is_empty:
+            shadow_shapes.append(p)
+
+    if not shadow_shapes:
+        return 100.0
+
+    blocked = unary_union(shadow_shapes).intersection(circle)
+    blocked_frac = blocked.area / circle.area if circle.area > 0 else 0
+    return round(100.0 * (1.0 - blocked_frac), 1)
 
 
 @app.post("/api/debug")
-def debug_layers(req: DebugRequest):
-    result = lidar.debug_layers(req.north, req.south, req.east, req.west, req.min_height)
-    if result is None:
-        return {"error": "No LiDAR data"}
-    return result
-
-
-class ElevationRequest(BaseModel):
-    north: float
-    south: float
-    east: float
-    west: float
-
-
-@app.post("/api/elevation")
-def elevation(req: ElevationRequest):
-    result = lidar.elevation_image(req.north, req.south, req.east, req.west)
-    if result is None:
-        return {"has_lidar": False}
-    return result
+def debug_layers():
+    return {"message": "Debug layers not available in geometric mode"}
 
 
 app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
