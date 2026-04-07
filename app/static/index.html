@@ -117,6 +117,7 @@ const state = {
   sunMarker: null,       // sun position marker on circle rim
   shadowLayers: [],      // Leaflet polygon layers on map
   shadowPolys: [],       // [[lat,lng],...] for canvas rendering
+  buildingHeights: [],   // height in metres per building
   buildings: [],         // [[lat,lng],...] polygons from OSM
   buildingLayers: [],    // Leaflet polygon layers on map
   sunPct: null,
@@ -218,8 +219,9 @@ function selectPub(id) {
   document.getElementById('circle-section').style.display = 'block';
 
   renderPubList(document.getElementById('pub-search').value);
-  updateSunDisplay();
-  requestShadow();
+
+  // Fetch buildings + heights once for this pub.
+  fetchBuildings(pub.lat, pub.lng);
 }
 
 function clearOverlays() {
@@ -232,6 +234,7 @@ function clearOverlays() {
   state.buildingLayers.forEach(l => map.removeLayer(l));
   state.buildingLayers = [];
   state.buildings = [];
+  state.buildingHeights = [];
   clearDebugCache();
 }
 
@@ -311,53 +314,79 @@ function _drawCircleOn(canvas) {
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 25;
+  const big = size >= 400;
+  const pub = state.pubs.find(p => p.id === state.selectedPub);
+  const {az, alt} = getSunPos();
+  const c = getPubCenter();
+  const mPerDeg = 111320;
+  const cosLat = Math.cos(c.lat * Math.PI / 180);
+  const pxPerM = r / CIRCLE_RADIUS_M;
 
   ctx.clearRect(0, 0, size, size);
 
-  // Background circle — sunny yellow.
+  // Helper: convert lat/lng to canvas pixel.
+  function toXY(lat, lng) {
+    return [
+      cx + (lng - c.lng) * mPerDeg * cosLat * pxPerM,
+      cy - (lat - c.lat) * mPerDeg * pxPerM,
+    ];
+  }
+
+  // Background circle.
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, 2 * Math.PI);
   ctx.clip();
-  ctx.fillStyle = '#FEF3C7';
-  ctx.fillRect(0, 0, size, size);
 
-  // Draw shadow polygons as vectors.
-  if (state.shadowPolys.length) {
-    const c = getPubCenter();
-    const mPerDeg = 111320;
-    const cosLat = Math.cos(c.lat * Math.PI / 180);
-    const pxPerM = r / CIRCLE_RADIUS_M;
+  if (alt <= 0) {
+    // Night — dark background.
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, size, size);
+  } else {
+    // Day — blend from night blue (at horizon) to sunny yellow (above ~8°).
+    const dayFade = Math.min(alt / 8, 1);
+    const bgR = Math.round(26 + (254 - 26) * dayFade);
+    const bgG = Math.round(26 + (243 - 26) * dayFade);
+    const bgB = Math.round(46 + (199 - 46) * dayFade);
+    ctx.fillStyle = `rgb(${bgR},${bgG},${bgB})`;
+    ctx.fillRect(0, 0, size, size);
 
-    ctx.fillStyle = 'rgba(30,30,60,0.55)';
-    state.shadowPolys.forEach(coords => {
-      ctx.beginPath();
-      coords.forEach((pt, i) => {
-        const px = cx + (pt[1] - c.lng) * mPerDeg * cosLat * pxPerM;
-        const py = cy - (pt[0] - c.lat) * mPerDeg * pxPerM;
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    // Shadow polygons — draw to offscreen canvas first to avoid
+    // opacity stacking from overlapping quads, then composite.
+    if (state.shadowPolys.length) {
+      const shadowAlpha = Math.min(alt / 8, 0.5);
+      // Offscreen canvas: draw shadows opaque, then blit with alpha.
+      const off = document.createElement('canvas');
+      off.width = size; off.height = size;
+      const ox = off.getContext('2d');
+      ox.beginPath();
+      ox.arc(cx, cy, r, 0, 2 * Math.PI);
+      ox.clip();
+      ox.fillStyle = '#1E1E3C';
+      state.shadowPolys.forEach(coords => {
+        ox.beginPath();
+        coords.forEach((pt, i) => {
+          const [px, py] = toXY(pt[0], pt[1]);
+          if (i === 0) ox.moveTo(px, py); else ox.lineTo(px, py);
+        });
+        ox.fill();
       });
-      ctx.closePath();
-      ctx.fill();
-    });
+      ctx.globalAlpha = shadowAlpha;
+      ctx.drawImage(off, 0, 0);
+      ctx.globalAlpha = 1;
+    }
   }
 
-  // Draw buildings as crisp vector polygons.
+  // Buildings.
   if (state.buildings.length) {
-    const c = getPubCenter();
-    const mPerDeg = 111320;
-    const cosLat = Math.cos(c.lat * Math.PI / 180);
-    const pxPerM = r / CIRCLE_RADIUS_M;
-
-    ctx.fillStyle = 'rgba(156,163,175,0.75)';
-    ctx.strokeStyle = '#6B7280';
-    ctx.lineWidth = size >= 400 ? 1.5 : 0.8;
+    ctx.fillStyle = alt <= 0 ? 'rgba(40,40,60,0.9)' : 'rgba(156,163,175,0.75)';
+    ctx.strokeStyle = alt <= 0 ? '#4A5568' : '#6B7280';
+    ctx.lineWidth = big ? 1.5 : 0.8;
 
     state.buildings.forEach(coords => {
       ctx.beginPath();
       coords.forEach((pt, i) => {
-        const px = cx + (pt[1] - c.lng) * mPerDeg * cosLat * pxPerM;
-        const py = cy - (pt[0] - c.lat) * mPerDeg * pxPerM;
+        const [px, py] = toXY(pt[0], pt[1]);
         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
       });
       ctx.closePath();
@@ -366,77 +395,119 @@ function _drawCircleOn(canvas) {
     });
   }
 
+  // Outdoor area of selected pub (green highlight).
+  if (pub && pub.outdoor && pub.outdoor.length >= 3) {
+    ctx.fillStyle = alt <= 0 ? 'rgba(39,174,96,0.15)' : 'rgba(39,174,96,0.2)';
+    ctx.strokeStyle = '#27AE60';
+    ctx.lineWidth = big ? 2 : 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    pub.outdoor.forEach((pt, i) => {
+      const [px, py] = toXY(pt[0], pt[1]);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Pub marker dot.
+  ctx.beginPath();
+  ctx.arc(cx, cy, big ? 5 : 3, 0, 2 * Math.PI);
+  ctx.fillStyle = '#E53E3E';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
   ctx.restore();
 
   // Circle border.
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, 2 * Math.PI);
-  ctx.strokeStyle = '#CBD5E0';
+  ctx.strokeStyle = alt <= 0 ? '#4A5568' : '#CBD5E0';
   ctx.lineWidth = 2;
   ctx.stroke();
 
   // Compass labels.
-  ctx.fillStyle = '#A0AEC0';
-  ctx.font = '11px system-ui';
+  const compassSize = big ? 13 : 11;
+  ctx.fillStyle = alt <= 0 ? '#718096' : '#A0AEC0';
+  ctx.font = `${compassSize}px system-ui`;
   ctx.textAlign = 'center';
-  ctx.fillText('N', cx, cy - r - 6);
-  ctx.fillText('S', cx, cy + r + 14);
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('N', cx, cy - r - 4);
+  ctx.textBaseline = 'top';
+  ctx.fillText('S', cx, cy + r + 4);
   ctx.textBaseline = 'middle';
-  ctx.fillText('E', cx + r + 12, cy);
-  ctx.fillText('W', cx - r - 12, cy);
-  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('E', cx + r + (big ? 14 : 10), cy);
+  ctx.fillText('W', cx - r - (big ? 14 : 10), cy);
 
-  // Sun position on rim.
-  const {az, alt} = getSunPos();
+  // Sun/moon on rim.
   if (alt > 0) {
     const sunRad = (az - 90) * Math.PI / 180;
     const sx = cx + r * Math.cos(sunRad);
     const sy = cy + r * Math.sin(sunRad);
+    const sunR = big ? 10 : 7;
 
-    // Sun glow.
-    const grad = ctx.createRadialGradient(sx, sy, 4, sx, sy, 14);
+    const grad = ctx.createRadialGradient(sx, sy, sunR * 0.4, sx, sy, sunR * 1.8);
     grad.addColorStop(0, 'rgba(245,158,11,0.8)');
     grad.addColorStop(1, 'rgba(245,158,11,0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(sx - 14, sy - 14, 28, 28);
+    ctx.fillRect(sx - sunR * 2, sy - sunR * 2, sunR * 4, sunR * 4);
 
-    // Sun dot.
     ctx.beginPath();
-    ctx.arc(sx, sy, 8, 0, 2 * Math.PI);
+    ctx.arc(sx, sy, sunR, 0, 2 * Math.PI);
     ctx.fillStyle = '#F59E0B';
     ctx.fill();
     ctx.strokeStyle = '#D97706';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = '9px system-ui';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('☀', sx, sy);
+  } else {
+    // Moon icon when below horizon — show at the sun's azimuth position.
+    const moonRad = (az - 90) * Math.PI / 180;
+    const mx = cx + r * Math.cos(moonRad);
+    const my = cy + r * Math.sin(moonRad);
+    const moonR = big ? 8 : 6;
+    ctx.beginPath();
+    ctx.arc(mx, my, moonR, 0, 2 * Math.PI);
+    ctx.fillStyle = '#A0AEC0';
+    ctx.fill();
+    // Crescent cutout.
+    ctx.beginPath();
+    ctx.arc(mx + moonR * 0.35, my - moonR * 0.15, moonR * 0.75, 0, 2 * Math.PI);
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fill();
   }
 
-  // Time label inside circle.
+  // Info text — always shown on both sizes.
   const mins = parseInt(document.getElementById('time-slider').value);
   const hh = String(Math.floor(mins / 60)).padStart(2, '0');
   const mm = String(mins % 60).padStart(2, '0');
-  if (size >= 400) {
-    ctx.fillStyle = '#4A5568';
-    ctx.font = `${size * 0.05}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(hh + ':' + mm, cx, cy + r * 0.85);
-    if (state.sunPct !== null) {
-      ctx.font = `bold ${size * 0.07}px system-ui`;
-      ctx.fillStyle = '#D69E2E';
-      ctx.fillText(state.sunPct + '% sun', cx, cy - r * 0.85);
-    }
-    // Pub name
-    const pub = state.pubs.find(p => p.id === state.selectedPub);
-    if (pub) {
-      ctx.font = `bold ${size * 0.04}px system-ui`;
-      ctx.fillStyle = '#2D3748';
-      ctx.fillText(pub.name, cx, cy + r * 0.95 + 20);
-    }
+
+  // Time.
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = alt <= 0 ? '#A0AEC0' : '#4A5568';
+  ctx.font = `bold ${big ? size * 0.06 : 14}px system-ui`;
+  ctx.fillText(hh + ':' + mm, cx, cy + r * (big ? 0.82 : 0.78));
+
+  // Sun %.
+  if (alt <= 0) {
+    ctx.font = `${big ? size * 0.04 : 10}px system-ui`;
+    ctx.fillStyle = '#718096';
+    ctx.fillText('Below horizon', cx, cy - r * (big ? 0.82 : 0.75));
+  } else if (state.sunPct !== null) {
+    ctx.font = `bold ${big ? size * 0.065 : 13}px system-ui`;
+    ctx.fillStyle = '#D69E2E';
+    ctx.fillText(state.sunPct + '% sun', cx, cy - r * (big ? 0.82 : 0.75));
+  }
+
+  // Pub name.
+  if (pub) {
+    ctx.font = `bold ${big ? size * 0.035 : 9}px system-ui`;
+    ctx.fillStyle = alt <= 0 ? '#A0AEC0' : '#2D3748';
+    ctx.fillText(pub.name, cx, cy + r + (big ? 22 : 16));
   }
 }
 
@@ -449,71 +520,116 @@ function _updateSunPctText() {
   }
 }
 
-// ── Shadow API ─────────────────────────────────────────────────────
-let debounceTimer = null;
-function requestShadow() {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(_doShadowRequest, 200);
-}
-
-async function _doShadowRequest() {
-  if (!state.gardenCircle) return;
-
-  const {az, alt} = getSunPos();
-  const c = getPubCenter();
-
+// ── Building data (fetched once per pub) ───────────────────────────
+async function fetchBuildings(lat, lng) {
   try {
-    const res = await fetch('/api/shadow', {
+    const res = await fetch('/api/buildings', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        lat: c.lat, lng: c.lng,
+        lat, lng,
         radius: CIRCLE_RADIUS_M,
-        sun_azimuth: az, sun_altitude: alt,
         min_height: parseFloat(document.getElementById('min-height').value),
       }),
     });
     const data = await res.json();
 
-    state.sunPct = data.sun_pct ?? null;
+    state.buildings = data.buildings || [];
+    state.buildingHeights = data.heights || [];
 
-    // Building polygons — only update if we got new ones (first request for this pub).
-    if (data.buildings && data.buildings.length && !state.buildings.length) {
-      state.buildings = data.buildings;
-      state.buildingLayers.forEach(l => map.removeLayer(l));
-      state.buildingLayers = [];
-      data.buildings.forEach(coords => {
-        const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
-          color: '#6B7280', weight: 0.5, fillColor: '#9CA3AF',
-          fillOpacity: 0.7, interactive: false,
-        }).addTo(map);
-        state.buildingLayers.push(poly);
-      });
+    // Draw buildings on map.
+    state.buildingLayers.forEach(l => map.removeLayer(l));
+    state.buildingLayers = [];
+    state.buildings.forEach(coords => {
+      const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
+        color: '#6B7280', weight: 0.5, fillColor: '#9CA3AF',
+        fillOpacity: 0.7, interactive: false,
+      }).addTo(map);
+      state.buildingLayers.push(poly);
+    });
+
+    // Now render with current time.
+    updateSunDisplay();
+    computeAndRender();
+  } catch (err) {
+    console.error('building fetch failed', err);
+  }
+}
+
+// ── Client-side shadow computation ─────────────────────────────────
+function computeShadows(buildings, heights, azDeg, altDeg) {
+  if (altDeg <= 0 || !buildings.length) return [];
+
+  const azRad = azDeg * Math.PI / 180;
+  const tanAlt = Math.tan(altDeg * Math.PI / 180);
+  const c = getPubCenter();
+  const M_LAT = 111320;
+  const M_LNG = 111320 * Math.cos(c.lat * Math.PI / 180);
+
+  const quads = []; // All shadow quadrilaterals as [lat,lng] arrays.
+
+  for (let b = 0; b < buildings.length; b++) {
+    const coords = buildings[b];
+    const h = heights[b];
+    if (h <= 0 || coords.length < 3) continue;
+
+    const shadowLen = Math.min(h / tanAlt, 200);
+    const dlat = -shadowLen * Math.cos(azRad) / M_LAT;
+    const dlng = -shadowLen * Math.sin(azRad) / M_LNG;
+
+    // Each wall segment → shadow quad.
+    for (let i = 0; i < coords.length - 1; i++) {
+      const [y1, x1] = coords[i];
+      const [y2, x2] = coords[i + 1];
+      quads.push([
+        [y1, x1], [y2, x2],
+        [y2 + dlat, x2 + dlng], [y1 + dlat, x1 + dlng],
+      ]);
     }
+    // Projected footprint.
+    quads.push(coords.map(c => [c[0] + dlat, c[1] + dlng]));
+    // Original footprint (roof shadow).
+    quads.push(coords);
+  }
+  return quads;
+}
 
-    // Shadow polygons — vector, not raster.
-    state.shadowLayers.forEach(l => map.removeLayer(l));
-    state.shadowLayers = [];
-    state.shadowPolys = data.shadow_polys || [];
+function computeAndRender(updateMap = true) {
+  const mins = parseInt(document.getElementById('time-slider').value);
+  const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm = String(mins % 60).padStart(2, '0');
+  document.getElementById('time-display').textContent = hh + ':' + mm;
 
-    // Draw all shadows as a single multi-polygon to avoid opacity stacking.
-    if (state.shadowPolys.length) {
-      const allRings = state.shadowPolys.map(coords =>
-        coords.map(c => [c[0], c[1]])
-      );
-      const poly = L.polygon(allRings, {
+  const {az, alt} = getSunPos();
+
+  state.shadowPolys = computeShadows(
+    state.buildings, state.buildingHeights, az, alt
+  );
+
+  // Canvas circle — always update (fast).
+  drawCircle();
+  _updateSunPctText();
+  updateSunMarker();
+
+  // Map shadows — skip during play for performance.
+  if (updateMap && !state.playing) {
+    _updateMapShadows(alt);
+  }
+}
+
+function _updateMapShadows(alt) {
+  state.shadowLayers.forEach(l => map.removeLayer(l));
+  state.shadowLayers = [];
+  if (state.shadowPolys.length && alt > 0) {
+    const shadowOpacity = Math.min(alt / 8, 0.5);
+    state.shadowPolys.forEach(coords => {
+      const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
         color: 'transparent', weight: 0,
-        fillColor: '#1E1E3C', fillOpacity: 0.5,
+        fillColor: '#1E1E3C', fillOpacity: shadowOpacity,
         interactive: false, pane: 'shadow',
       }).addTo(map);
       state.shadowLayers.push(poly);
-    }
-
-    drawCircle();
-    _updateSunPctText();
-    updateSunMarker();
-  } catch (err) {
-    console.error('shadow request failed', err);
+    });
   }
 }
 
@@ -523,6 +639,9 @@ function togglePlay() {
     clearInterval(state.playTimer);
     state.playing = false;
     document.getElementById('btn-play').textContent = 'Play';
+    // Update map now that play stopped.
+    _updateMapShadows(getSunPos().alt);
+    return;
   } else {
     state.playing = true;
     document.getElementById('btn-play').textContent = 'Stop';
@@ -533,12 +652,12 @@ function togglePlay() {
 
     state.playTimer = setInterval(() => {
       const slider = document.getElementById('time-slider');
-      let v = parseInt(slider.value) + 10;
-      if (v > sunset) v = sunrise; // loop back to sunrise
+      let v = parseInt(slider.value) + 5; // 5-min steps
+      if (v > sunset) v = sunrise;
       slider.value = v;
       updateSunDisplay();
-      requestShadow();
-    }, 350);
+      computeAndRender();
+    }, 80); // ~12fps, instant since no network
   }
 }
 
@@ -609,19 +728,20 @@ function clearDebugCache() { debugCache = null; }
 
 // ── Events ─────────────────────────────────────────────────────────
 document.getElementById('pub-search').addEventListener('input', e => renderPubList(e.target.value));
-document.getElementById('date-input').addEventListener('change', () => { updateSunDisplay(); requestShadow(); });
-document.getElementById('time-slider').addEventListener('input', () => { updateSunDisplay(); requestShadow(); });
+document.getElementById('date-input').addEventListener('change', () => computeAndRender(true));
+document.getElementById('time-slider').addEventListener('input', () => computeAndRender(false));
+document.getElementById('time-slider').addEventListener('change', () => _updateMapShadows(getSunPos().alt));
 document.getElementById('btn-play').addEventListener('click', togglePlay);
 document.getElementById('min-height').addEventListener('input', e => {
   document.getElementById('min-height-val').textContent = e.target.value;
-  requestShadow();
+  computeAndRender();
 });
 document.getElementById('btn-now').addEventListener('click', () => {
   const now = new Date();
   document.getElementById('date-input').value = now.toISOString().slice(0, 10);
   document.getElementById('time-slider').value = now.getHours() * 60 + now.getMinutes();
   updateSunDisplay();
-  requestShadow();
+  computeAndRender();
 });
 
 // ── Init ───────────────────────────────────────────────────────────

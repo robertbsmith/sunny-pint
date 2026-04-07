@@ -29,7 +29,7 @@ def compute_shadow_polygons(
         List of [[lat, lng], ...] shadow polygon rings (WGS84),
         with building footprints subtracted.
     """
-    if sun_altitude_deg <= 1 or not building_polys_wgs:
+    if sun_altitude_deg <= 0 or not building_polys_wgs:
         return []
 
     az_rad = math.radians(sun_azimuth_deg)
@@ -47,8 +47,8 @@ def compute_shadow_polygons(
         if height <= 0 or len(coords) < 3:
             continue
 
-        # Shadow offset in degrees.
-        shadow_len = height / tan_alt
+        # Cap shadow length for sanity (avoids infinite geometry at horizon).
+        shadow_len = min(height / tan_alt, 200.0)
         dlat = -shadow_len * math.cos(az_rad) / M_PER_DEG_LAT
         dlng = -shadow_len * math.sin(az_rad) / M_PER_DEG_LNG
 

@@ -122,8 +122,8 @@ def get_building_data(lat, lng, radius_m, lidar_manager, min_height=6.0):
     """
     import math
 
-    dlat = (radius_m + 200) / 111320.0  # extra buffer for shadow sources
-    dlng = (radius_m + 200) / (111320.0 * math.cos(math.radians(lat)))
+    dlat = (radius_m + 80) / 111320.0  # buffer for nearby shadow sources
+    dlng = (radius_m + 80) / (111320.0 * math.cos(math.radians(lat)))
     south, north = lat - dlat, lat + dlat
     west, east = lng - dlng, lng + dlng
 
