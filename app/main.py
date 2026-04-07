@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .lidar import LidarManager
-from .buildings import get_building_data
+from .buildings import get_building_data, get_roads_with_types
 
 app = FastAPI(title="SunPub")
 lidar = LidarManager("data")
@@ -42,9 +42,17 @@ def buildings(req: BuildingRequest):
         buildings_wgs, heights = get_building_data(
             req.lat, req.lng, req.radius, lidar, req.min_height
         )
+        import math
+        dlat = (req.radius + 80) / 111320.0
+        dlng = (req.radius + 80) / (111320.0 * math.cos(math.radians(req.lat)))
+        roads = get_roads_with_types(
+            req.lat - dlat, req.lng - dlng,
+            req.lat + dlat, req.lng + dlng,
+        )
         return {
             "buildings": buildings_wgs,
             "heights": heights,
+            "roads": roads,
         }
     except Exception as e:
         print(f"Building fetch error: {e}")

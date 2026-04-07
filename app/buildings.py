@@ -114,6 +114,74 @@ def get_buildings(south, west, north, east, transform, shape):
     return mask.astype(bool), osgb_polys, wgs_polys
 
 
+def get_roads(south, west, north, east):
+    """Get road linestrings from the GeoPackage for a WGS-84 bbox.
+    Returns list of [[lat, lng], ...] polylines."""
+    conn = _get_conn()
+    if conn is None:
+        return []
+
+    try:
+        rows = conn.execute("""
+            SELECT fid, geom FROM roads
+            WHERE fid IN (
+                SELECT id FROM rtree_roads_geom
+                WHERE minx <= ? AND maxx >= ?
+                AND miny <= ? AND maxy >= ?
+            )
+        """, (east, west, north, south)).fetchall()
+    except Exception:
+        return []  # roads layer might not exist yet
+
+    result = []
+    for fid, blob in rows:
+        try:
+            hl = _gpkg_header_len(blob)
+            geom = wkb.loads(blob[hl:])
+            if geom.is_empty:
+                continue
+            coords = [[y, x] for x, y in geom.coords]
+            if len(coords) >= 2:
+                result.append(coords)
+        except Exception:
+            continue
+    return result
+
+
+def get_roads_with_types(south, west, north, east):
+    """Get roads with highway type from the GeoPackage.
+    Returns list of {coords: [[lat,lng],...], type: str}."""
+    conn = _get_conn()
+    if conn is None:
+        return []
+
+    try:
+        rows = conn.execute("""
+            SELECT fid, geom, highway FROM roads
+            WHERE fid IN (
+                SELECT id FROM rtree_roads_geom
+                WHERE minx <= ? AND maxx >= ?
+                AND miny <= ? AND maxy >= ?
+            )
+        """, (east, west, north, south)).fetchall()
+    except Exception:
+        return []
+
+    result = []
+    for fid, blob, highway in rows:
+        try:
+            hl = _gpkg_header_len(blob)
+            geom = wkb.loads(blob[hl:])
+            if geom.is_empty:
+                continue
+            coords = [[y, x] for x, y in geom.coords]
+            if len(coords) >= 2:
+                result.append({"coords": coords, "type": highway or "residential"})
+        except Exception:
+            continue
+    return result
+
+
 def get_building_data(lat, lng, radius_m, lidar_manager, min_height=6.0):
     """Get building polygons with heights for a circular area.
 

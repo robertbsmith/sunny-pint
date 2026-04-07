@@ -29,16 +29,34 @@ SCHEMA = {
 }
 
 
+ROAD_SCHEMA = {
+    "geometry": "LineString",
+    "properties": {
+        "osm_id": "int",
+        "highway": "str",
+        "name": "str",
+    },
+}
+
+ROAD_TYPES = {
+    "motorway", "trunk", "primary", "secondary", "tertiary",
+    "residential", "unclassified", "service", "living_street",
+    "pedestrian", "footway", "path", "track",
+}
+
+
 class BuildingExtractor(osmium.SimpleHandler):
     def __init__(self, bbox):
         super().__init__()
         self.bbox = bbox
         self.buildings = []
-        self.count = 0
+        self.roads = []
+        self.bld_count = 0
+        self.road_count = 0
 
     def way(self, w):
-        if "building" not in w.tags:
-            return
+        tags = dict(w.tags)
+        s, w_, n_, e = self.bbox
 
         nodes = []
         for n in w.nodes:
@@ -46,11 +64,7 @@ class BuildingExtractor(osmium.SimpleHandler):
                 return
             nodes.append((n.lon, n.lat))
 
-        if len(nodes) < 3:
-            return
-
-        # Check if any node is in bbox.
-        s, w_, n_, e = self.bbox
+        # Check bbox.
         in_bbox = False
         for lon, lat in nodes:
             if s <= lat <= n_ and w_ <= lon <= e:
@@ -59,25 +73,35 @@ class BuildingExtractor(osmium.SimpleHandler):
         if not in_bbox:
             return
 
-        # Close the ring if needed.
-        if nodes[0] != nodes[-1]:
-            nodes.append(nodes[0])
+        # Buildings.
+        if "building" in tags and len(nodes) >= 3:
+            if nodes[0] != nodes[-1]:
+                nodes.append(nodes[0])
+            self.buildings.append({
+                "geometry": {"type": "Polygon", "coordinates": [nodes]},
+                "properties": {
+                    "osm_id": w.id,
+                    "building": tags.get("building", "yes"),
+                    "name": tags.get("name", ""),
+                    "height": tags.get("height", tags.get("building:height", "")),
+                    "levels": tags.get("building:levels", ""),
+                },
+            })
+            self.bld_count += 1
+            if self.bld_count % 5000 == 0:
+                print(f"  {self.bld_count} buildings...", flush=True)
 
-        tags = dict(w.tags)
-        self.buildings.append({
-            "geometry": {"type": "Polygon", "coordinates": [nodes]},
-            "properties": {
-                "osm_id": w.id,
-                "building": tags.get("building", "yes"),
-                "name": tags.get("name", ""),
-                "height": tags.get("height", tags.get("building:height", "")),
-                "levels": tags.get("building:levels", ""),
-            },
-        })
-
-        self.count += 1
-        if self.count % 5000 == 0:
-            print(f"  {self.count} buildings extracted...", flush=True)
+        # Roads.
+        if tags.get("highway") in ROAD_TYPES and len(nodes) >= 2:
+            self.roads.append({
+                "geometry": {"type": "LineString", "coordinates": nodes},
+                "properties": {
+                    "osm_id": w.id,
+                    "highway": tags.get("highway", ""),
+                    "name": tags.get("name", ""),
+                },
+            })
+            self.road_count += 1
 
 
 def main():
@@ -88,12 +112,16 @@ def main():
     handler = BuildingExtractor(BBOX)
     handler.apply_file(str(PBF), locations=True)
     elapsed = time.time() - t0
-    print(f"  Extracted {handler.count} buildings in {elapsed:.0f}s")
+    print(f"  Extracted {handler.bld_count} buildings, {handler.road_count} roads in {elapsed:.0f}s")
 
-    print(f"Writing {OUT} ...")
+    # Write to temp file, then move into place so the live DB isn't clobbered.
+    import shutil
+    TMP = OUT.with_suffix('.gpkg.tmp')
+
+    print(f"Writing {TMP} ...")
     t0 = time.time()
     with fiona.open(
-        str(OUT), "w",
+        str(TMP), "w",
         driver="GPKG",
         schema=SCHEMA,
         crs=CRS.from_epsg(4326),
@@ -102,9 +130,20 @@ def main():
         for b in handler.buildings:
             dst.write(b)
 
+    with fiona.open(
+        str(TMP), "w",
+        driver="GPKG",
+        schema=ROAD_SCHEMA,
+        crs=CRS.from_epsg(4326),
+        layer="roads",
+    ) as dst:
+        for r in handler.roads:
+            dst.write(r)
+
     elapsed = time.time() - t0
+    shutil.move(str(TMP), str(OUT))
     size_mb = OUT.stat().st_size / 1e6
-    print(f"  Wrote {handler.count} features in {elapsed:.1f}s ({size_mb:.1f} MB)")
+    print(f"  Wrote {handler.bld_count} buildings + {handler.road_count} roads in {elapsed:.1f}s ({size_mb:.1f} MB)")
     print(f"  Saved to {OUT}")
 
 
