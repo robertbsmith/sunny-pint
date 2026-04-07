@@ -1,0 +1,9 @@
+data/lidar/
+data/inspire/
+data/england-latest.osm.pbf
+data/buildings.tif
+data/*.zip
+__pycache__/
+*.pyc
+.venv/
+ref/

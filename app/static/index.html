@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SunPub</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#1a1a2e}
+#map{position:absolute;top:0;left:0;right:320px;bottom:0;transition:opacity .2s}
+#panel{position:absolute;top:0;right:0;width:320px;bottom:0;
+  background:#fff;overflow-y:auto;display:flex;flex-direction:column;
+  border-left:2px solid #e2e8f0}
+
+/* Expanded circle view */
+#circle-expanded{position:absolute;top:0;left:0;right:320px;bottom:0;
+  background:#f7fafc;display:none;align-items:center;justify-content:center;
+  cursor:pointer;z-index:1000}
+#circle-expanded canvas{max-width:90%;max-height:90%}
+body.circle-mode #circle-expanded{display:flex}
+body.circle-mode #map{opacity:0;pointer-events:none}
+#panel h1{font-size:1.4rem;padding:16px 16px 4px;color:#1a202c}
+#panel .subtitle{padding:0 16px 12px;color:#718096;font-size:.85rem}
+section{padding:12px 16px;border-top:1px solid #e2e8f0}
+section h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;
+  color:#a0aec0;margin-bottom:8px}
+button{padding:6px 12px;border:1px solid #cbd5e0;border-radius:6px;
+  background:#fff;cursor:pointer;font-size:.85rem;transition:all .15s}
+button:hover{background:#edf2f7}
+button.active{background:#3182ce;color:#fff;border-color:#3182ce}
+input[type=date],input[type=search]{width:100%;padding:6px 10px;
+  border:1px solid #cbd5e0;border-radius:6px;font-size:.85rem;margin-bottom:6px}
+input[type=range]{width:100%;margin:6px 0}
+.time-row{display:flex;align-items:center;gap:8px}
+.time-row span{font-size:1.1rem;font-weight:600;min-width:50px;font-variant-numeric:tabular-nums}
+
+/* Pub list */
+#pub-list{max-height:180px;overflow-y:auto;margin-top:4px}
+.pub-item{padding:5px 8px;cursor:pointer;border-radius:4px;font-size:.85rem;
+  display:flex;justify-content:space-between;align-items:center}
+.pub-item:hover{background:#edf2f7}
+.pub-item.selected{background:#ebf8ff;font-weight:600}
+.pub-badge{font-size:.65rem;padding:1px 5px;border-radius:3px;background:#f0fff4;color:#276749}
+
+/* Sun circle */
+#sun-circle-wrap{display:flex;justify-content:center;padding:8px 0}
+#sun-circle{background:#f7fafc;border-radius:50%;cursor:pointer}
+#sun-pct{text-align:center;font-size:1.3rem;font-weight:700;color:#d69e2e;padding:4px 0}
+
+.pub-tooltip{font-size:.8rem;padding:2px 6px;white-space:nowrap}
+#status-bar{padding:8px 16px;background:#fffff0;color:#744210;font-size:.8rem;
+  border-top:1px solid #fefcbf;display:none}
+#status-bar.show{display:block}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="circle-expanded"><canvas id="sun-circle-big" width="700" height="700"></canvas></div>
+<div id="panel">
+  <h1>SunPub</h1>
+  <p class="subtitle">Find sunny beer gardens in Norwich</p>
+
+  <section>
+    <h3>Pubs</h3>
+    <input type="search" id="pub-search" placeholder="Search pubs...">
+    <div id="pub-list"></div>
+  </section>
+
+  <section id="circle-section" style="display:none">
+    <div id="sun-circle-wrap">
+      <canvas id="sun-circle" width="260" height="260"></canvas>
+    </div>
+    <div id="sun-pct"></div>
+  </section>
+
+  <section>
+    <h3>Date &amp; Time</h3>
+    <input type="date" id="date-input">
+    <input type="range" id="time-slider" min="0" max="1440" step="5" value="720">
+    <div class="time-row">
+      <span id="time-display">12:00</span>
+      <button id="btn-play">Play</button>
+      <button id="btn-now">Now</button>
+    </div>
+  </section>
+
+  <section>
+    <h3>Shadow Filter</h3>
+    <label style="font-size:.85rem">Min obstacle height: <b id="min-height-val">6</b>m</label>
+    <input type="range" id="min-height" min="0" max="15" step="0.5" value="6">
+  </section>
+
+  <section>
+    <h3>Debug Layers</h3>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="dbg-btn" data-layer="raw_dsm">Raw LiDAR</button>
+      <button class="dbg-btn" data-layer="clean_dsm">Reconstructed</button>
+      <button class="dbg-btn" data-layer="ground">Ground</button>
+      <button class="dbg-btn" data-layer="">Off</button>
+    </div>
+    <div id="debug-info" style="font-size:.75rem;color:#a0aec0;margin-top:4px"></div>
+  </section>
+
+  <div id="status-bar"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const state = {
+  pubs: [],
+  selectedPub: null,
+  pubMarkers: new Map(),
+  gardenCircle: null,    // L.Circle on map
+  sunMarker: null,       // sun position marker on circle rim
+  shadowLayers: [],      // Leaflet polygon layers on map
+  shadowPolys: [],       // [[lat,lng],...] for canvas rendering
+  buildings: [],         // [[lat,lng],...] polygons from OSM
+  buildingLayers: [],    // Leaflet polygon layers on map
+  sunPct: null,
+  mode: 'pan',
+  playing: false,
+  playTimer: null,
+};
+
+const CIRCLE_RADIUS_M = 60; // metres around pub centre
+
+// ── Map ────────────────────────────────────────────────────────────
+const map = L.map('map', {zoomControl: true}).setView([52.6309, 1.2974], 15);
+
+const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 22, maxNativeZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+});
+const sat = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom: 22, maxNativeZoom: 19, attribution: '&copy; Esri'}
+);
+osm.addTo(map);
+L.control.layers({'Street': osm, 'Satellite': sat}).addTo(map);
+
+map.createPane('shadow');
+map.getPane('shadow').style.zIndex = 350;
+
+const pubLayer = new L.LayerGroup().addTo(map);
+
+// ── Pubs ───────────────────────────────────────────────────────────
+async function loadPubs() {
+  const res = await fetch('/api/pubs');
+  state.pubs = await res.json();
+  renderPubMarkers();
+  renderPubList();
+}
+
+function renderPubMarkers() {
+  pubLayer.clearLayers();
+  state.pubMarkers.clear();
+  state.pubs.forEach(pub => {
+    const color = (pub.beer_garden || pub.outdoor_seating) ? '#d69e2e' : '#a0aec0';
+    const marker = L.circleMarker([pub.lat, pub.lng], {
+      radius: 5, weight: 1.5, color: '#fff', fillColor: color, fillOpacity: 0.9,
+    });
+    marker.bindTooltip(pub.name, {className: 'pub-tooltip', direction: 'top', offset: [0, -6]});
+    marker.on('click', () => selectPub(pub.id));
+    marker.addTo(pubLayer);
+    state.pubMarkers.set(pub.id, marker);
+  });
+}
+
+function renderPubList(filter = '') {
+  const el = document.getElementById('pub-list');
+  const q = filter.toLowerCase();
+  const filtered = q
+    ? state.pubs.filter(p => p.name.toLowerCase().includes(q))
+    : state.pubs;
+  el.innerHTML = '';
+  filtered.slice(0, 50).forEach(pub => {
+    const div = document.createElement('div');
+    div.className = 'pub-item' + (state.selectedPub === pub.id ? ' selected' : '');
+    let badge = '';
+    if (pub.beer_garden) badge = '<span class="pub-badge">garden</span>';
+    div.innerHTML = `<span>${pub.name}</span>${badge}`;
+    div.addEventListener('click', () => selectPub(pub.id));
+    el.appendChild(div);
+  });
+}
+
+// ── Select pub ─────────────────────────────────────────────────────
+function selectPub(id) {
+  const pub = state.pubs.find(p => p.id === id);
+  if (!pub) return;
+  state.selectedPub = id;
+
+  // Clear previous.
+  clearOverlays();
+
+  // Draw circle on map.
+  state.gardenCircle = L.circle([pub.lat, pub.lng], {
+    radius: CIRCLE_RADIUS_M,
+    color: '#3182ce', weight: 2, fillColor: '#ebf8ff', fillOpacity: 0.08,
+  }).addTo(map);
+
+  // Zoom to fit circle.
+  map.fitBounds(state.gardenCircle.getBounds().pad(0.3), {maxZoom: 19});
+
+  // Highlight marker.
+  state.pubMarkers.forEach((m, mid) => {
+    m.setStyle({
+      radius: mid === id ? 8 : 5,
+      weight: mid === id ? 3 : 1.5,
+      color: mid === id ? '#3182ce' : '#fff',
+    });
+  });
+
+  // Show circle section.
+  document.getElementById('circle-section').style.display = 'block';
+
+  renderPubList(document.getElementById('pub-search').value);
+  updateSunDisplay();
+  requestShadow();
+}
+
+function clearOverlays() {
+  if (state.gardenCircle) { map.removeLayer(state.gardenCircle); state.gardenCircle = null; }
+  if (state.sunMarker) { map.removeLayer(state.sunMarker); state.sunMarker = null; }
+  if (debugOverlay) { map.removeLayer(debugOverlay); debugOverlay = null; }
+  state.shadowLayers.forEach(l => map.removeLayer(l));
+  state.shadowLayers = [];
+  state.shadowPolys = [];
+  state.buildingLayers.forEach(l => map.removeLayer(l));
+  state.buildingLayers = [];
+  state.buildings = [];
+  clearDebugCache();
+}
+
+// ── Sun position ───────────────────────────────────────────────────
+function getDateTime() {
+  const d = document.getElementById('date-input').value;
+  const mins = parseInt(document.getElementById('time-slider').value);
+  const dt = new Date(d + 'T00:00:00');
+  dt.setMinutes(mins);
+  return dt;
+}
+
+function getPubCenter() {
+  const pub = state.pubs.find(p => p.id === state.selectedPub);
+  return pub ? {lat: pub.lat, lng: pub.lng} : {lat: 52.6309, lng: 1.2974};
+}
+
+function getSunPos() {
+  const dt = getDateTime();
+  const c = getPubCenter();
+  const pos = SunCalc.getPosition(dt, c.lat, c.lng);
+  const az = ((pos.azimuth * 180 / Math.PI) + 180) % 360;
+  const alt = pos.altitude * 180 / Math.PI;
+  return {az, alt};
+}
+
+function getSunTimes() {
+  const dt = getDateTime();
+  const c = getPubCenter();
+  return SunCalc.getTimes(dt, c.lat, c.lng);
+}
+
+function updateSunDisplay() {
+  const {az, alt} = getSunPos();
+  const mins = parseInt(document.getElementById('time-slider').value);
+  const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm = String(mins % 60).padStart(2, '0');
+  document.getElementById('time-display').textContent = hh + ':' + mm;
+
+  updateSunMarker();
+  drawCircle();
+}
+
+// ── Sun marker on map circle rim ───────────────────────────────────
+function updateSunMarker() {
+  if (state.sunMarker) { map.removeLayer(state.sunMarker); state.sunMarker = null; }
+  if (!state.gardenCircle) return;
+  const {az, alt} = getSunPos();
+  if (alt <= 0) return;
+
+  const c = getPubCenter();
+  const azRad = az * Math.PI / 180;
+  const r = CIRCLE_RADIUS_M;
+  // Offset in metres → approx lat/lng
+  const dLat = (r * Math.cos(azRad)) / 111320;
+  const dLng = (r * Math.sin(azRad)) / (111320 * Math.cos(c.lat * Math.PI / 180));
+
+  const sunIcon = L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;border-radius:50%;background:#F59E0B;
+      border:2px solid #D97706;box-shadow:0 0 8px rgba(245,158,11,0.5);
+      display:flex;align-items:center;justify-content:center;font-size:12px">☀</div>`,
+    iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+  state.sunMarker = L.marker([c.lat + dLat, c.lng + dLng], {icon: sunIcon}).addTo(map);
+}
+
+// ── Canvas circle view ─────────────────────────────────────────────
+function drawCircle() {
+  _drawCircleOn(document.getElementById('sun-circle'));
+  _drawCircleOn(document.getElementById('sun-circle-big'));
+}
+
+function _drawCircleOn(canvas) {
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - 25;
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Background circle — sunny yellow.
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+  ctx.clip();
+  ctx.fillStyle = '#FEF3C7';
+  ctx.fillRect(0, 0, size, size);
+
+  // Draw shadow polygons as vectors.
+  if (state.shadowPolys.length) {
+    const c = getPubCenter();
+    const mPerDeg = 111320;
+    const cosLat = Math.cos(c.lat * Math.PI / 180);
+    const pxPerM = r / CIRCLE_RADIUS_M;
+
+    ctx.fillStyle = 'rgba(30,30,60,0.55)';
+    state.shadowPolys.forEach(coords => {
+      ctx.beginPath();
+      coords.forEach((pt, i) => {
+        const px = cx + (pt[1] - c.lng) * mPerDeg * cosLat * pxPerM;
+        const py = cy - (pt[0] - c.lat) * mPerDeg * pxPerM;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fill();
+    });
+  }
+
+  // Draw buildings as crisp vector polygons.
+  if (state.buildings.length) {
+    const c = getPubCenter();
+    const mPerDeg = 111320;
+    const cosLat = Math.cos(c.lat * Math.PI / 180);
+    const pxPerM = r / CIRCLE_RADIUS_M;
+
+    ctx.fillStyle = 'rgba(156,163,175,0.75)';
+    ctx.strokeStyle = '#6B7280';
+    ctx.lineWidth = size >= 400 ? 1.5 : 0.8;
+
+    state.buildings.forEach(coords => {
+      ctx.beginPath();
+      coords.forEach((pt, i) => {
+        const px = cx + (pt[1] - c.lng) * mPerDeg * cosLat * pxPerM;
+        const py = cy - (pt[0] - c.lat) * mPerDeg * pxPerM;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    });
+  }
+
+  ctx.restore();
+
+  // Circle border.
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+  ctx.strokeStyle = '#CBD5E0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Compass labels.
+  ctx.fillStyle = '#A0AEC0';
+  ctx.font = '11px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', cx, cy - r - 6);
+  ctx.fillText('S', cx, cy + r + 14);
+  ctx.textBaseline = 'middle';
+  ctx.fillText('E', cx + r + 12, cy);
+  ctx.fillText('W', cx - r - 12, cy);
+  ctx.textBaseline = 'alphabetic';
+
+  // Sun position on rim.
+  const {az, alt} = getSunPos();
+  if (alt > 0) {
+    const sunRad = (az - 90) * Math.PI / 180;
+    const sx = cx + r * Math.cos(sunRad);
+    const sy = cy + r * Math.sin(sunRad);
+
+    // Sun glow.
+    const grad = ctx.createRadialGradient(sx, sy, 4, sx, sy, 14);
+    grad.addColorStop(0, 'rgba(245,158,11,0.8)');
+    grad.addColorStop(1, 'rgba(245,158,11,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(sx - 14, sy - 14, 28, 28);
+
+    // Sun dot.
+    ctx.beginPath();
+    ctx.arc(sx, sy, 8, 0, 2 * Math.PI);
+    ctx.fillStyle = '#F59E0B';
+    ctx.fill();
+    ctx.strokeStyle = '#D97706';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('☀', sx, sy);
+  }
+
+  // Time label inside circle.
+  const mins = parseInt(document.getElementById('time-slider').value);
+  const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm = String(mins % 60).padStart(2, '0');
+  if (size >= 400) {
+    ctx.fillStyle = '#4A5568';
+    ctx.font = `${size * 0.05}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(hh + ':' + mm, cx, cy + r * 0.85);
+    if (state.sunPct !== null) {
+      ctx.font = `bold ${size * 0.07}px system-ui`;
+      ctx.fillStyle = '#D69E2E';
+      ctx.fillText(state.sunPct + '% sun', cx, cy - r * 0.85);
+    }
+    // Pub name
+    const pub = state.pubs.find(p => p.id === state.selectedPub);
+    if (pub) {
+      ctx.font = `bold ${size * 0.04}px system-ui`;
+      ctx.fillStyle = '#2D3748';
+      ctx.fillText(pub.name, cx, cy + r * 0.95 + 20);
+    }
+  }
+}
+
+function _updateSunPctText() {
+  const {alt} = getSunPos();
+  if (state.sunPct !== null) {
+    document.getElementById('sun-pct').textContent = state.sunPct + '% in sun';
+  } else {
+    document.getElementById('sun-pct').textContent = alt <= 0 ? 'Below horizon' : '';
+  }
+}
+
+// ── Shadow API ─────────────────────────────────────────────────────
+let debounceTimer = null;
+function requestShadow() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(_doShadowRequest, 200);
+}
+
+async function _doShadowRequest() {
+  if (!state.gardenCircle) return;
+
+  const {az, alt} = getSunPos();
+  const c = getPubCenter();
+  // Bounds = circle bounding box.
+  const dLat = CIRCLE_RADIUS_M / 111320;
+  const dLng = CIRCLE_RADIUS_M / (111320 * Math.cos(c.lat * Math.PI / 180));
+
+  try {
+    const res = await fetch('/api/shadow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        north: c.lat + dLat, south: c.lat - dLat,
+        east: c.lng + dLng, west: c.lng - dLng,
+        sun_azimuth: az, sun_altitude: alt,
+        min_height: parseFloat(document.getElementById('min-height').value),
+        seats: [],
+      }),
+    });
+    const data = await res.json();
+
+    state.sunPct = data.sun_pct ?? null;
+
+    // Building polygons — only update if we got new ones (first request for this pub).
+    if (data.buildings && data.buildings.length && !state.buildings.length) {
+      state.buildings = data.buildings;
+      state.buildingLayers.forEach(l => map.removeLayer(l));
+      state.buildingLayers = [];
+      data.buildings.forEach(coords => {
+        const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
+          color: '#6B7280', weight: 0.5, fillColor: '#9CA3AF',
+          fillOpacity: 0.7, interactive: false,
+        }).addTo(map);
+        state.buildingLayers.push(poly);
+      });
+    }
+
+    // Shadow polygons — vector, not raster.
+    state.shadowLayers.forEach(l => map.removeLayer(l));
+    state.shadowLayers = [];
+    state.shadowPolys = data.shadow_polys || [];
+
+    state.shadowPolys.forEach(coords => {
+      const poly = L.polygon(coords.map(c => [c[0], c[1]]), {
+        color: 'rgba(30,30,60,0.3)', weight: 0,
+        fillColor: '#1E1E3C', fillOpacity: 0.55,
+        interactive: false, pane: 'shadow',
+      }).addTo(map);
+      state.shadowLayers.push(poly);
+    });
+
+    drawCircle();
+    _updateSunPctText();
+    updateSunMarker();
+  } catch (err) {
+    console.error('shadow request failed', err);
+  }
+}
+
+// ── Play — sunrise to sunset, loop ─────────────────────────────────
+function togglePlay() {
+  if (state.playing) {
+    clearInterval(state.playTimer);
+    state.playing = false;
+    document.getElementById('btn-play').textContent = 'Play';
+  } else {
+    state.playing = true;
+    document.getElementById('btn-play').textContent = 'Stop';
+
+    const times = getSunTimes();
+    const sunrise = times.sunrise.getHours() * 60 + times.sunrise.getMinutes();
+    const sunset = times.sunset.getHours() * 60 + times.sunset.getMinutes();
+
+    state.playTimer = setInterval(() => {
+      const slider = document.getElementById('time-slider');
+      let v = parseInt(slider.value) + 10;
+      if (v > sunset) v = sunrise; // loop back to sunrise
+      slider.value = v;
+      updateSunDisplay();
+      requestShadow();
+    }, 350);
+  }
+}
+
+// ── Status ─────────────────────────────────────────────────────────
+function showStatus(msg) {
+  const el = document.getElementById('status-bar');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+// ── Circle expand/collapse ─────────────────────────────────────────
+document.getElementById('sun-circle').addEventListener('click', () => {
+  document.body.classList.add('circle-mode');
+  drawCircle();
+});
+document.getElementById('circle-expanded').addEventListener('click', () => {
+  document.body.classList.remove('circle-mode');
+});
+
+// ── Debug layers ───────────────────────────────────────────────────
+let debugOverlay = null;
+let debugCache = null;
+
+document.querySelectorAll('.dbg-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const layer = btn.dataset.layer;
+    // Remove existing overlay.
+    if (debugOverlay) { map.removeLayer(debugOverlay); debugOverlay = null; }
+    document.querySelectorAll('.dbg-btn').forEach(b => b.classList.remove('active'));
+
+    if (!layer) {
+      document.getElementById('debug-info').textContent = '';
+      return;
+    }
+    btn.classList.add('active');
+
+    // Fetch debug data if not cached.
+    if (!debugCache && state.gardenCircle) {
+      const c = getPubCenter();
+      const dLat = CIRCLE_RADIUS_M / 111320;
+      const dLng = CIRCLE_RADIUS_M / (111320 * Math.cos(c.lat * Math.PI / 180));
+      const res = await fetch('/api/debug', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          north: c.lat + dLat, south: c.lat - dLat,
+          east: c.lng + dLng, west: c.lng - dLng,
+          min_height: parseFloat(document.getElementById('min-height').value),
+        }),
+      });
+      debugCache = await res.json();
+    }
+    if (!debugCache || !debugCache.layers) return;
+
+    const imgData = debugCache.layers[layer];
+    if (!imgData) return;
+
+    const url = 'data:image/png;base64,' + imgData;
+    const bnds = L.latLngBounds(debugCache.bounds);
+    debugOverlay = L.imageOverlay(url, bnds, {opacity: 0.8}).addTo(map);
+
+    document.getElementById('debug-info').textContent = 'Showing: ' + layer;
+  });
+});
+
+// Clear debug cache when pub changes.
+function clearDebugCache() { debugCache = null; }
+
+// ── Events ─────────────────────────────────────────────────────────
+document.getElementById('pub-search').addEventListener('input', e => renderPubList(e.target.value));
+document.getElementById('date-input').addEventListener('change', () => { updateSunDisplay(); requestShadow(); });
+document.getElementById('time-slider').addEventListener('input', () => { updateSunDisplay(); requestShadow(); });
+document.getElementById('btn-play').addEventListener('click', togglePlay);
+document.getElementById('min-height').addEventListener('input', e => {
+  document.getElementById('min-height-val').textContent = e.target.value;
+  requestShadow();
+});
+document.getElementById('btn-now').addEventListener('click', () => {
+  const now = new Date();
+  document.getElementById('date-input').value = now.toISOString().slice(0, 10);
+  document.getElementById('time-slider').value = now.getHours() * 60 + now.getMinutes();
+  updateSunDisplay();
+  requestShadow();
+});
+
+// ── Init ───────────────────────────────────────────────────────────
+(function init() {
+  const now = new Date();
+  document.getElementById('date-input').value = now.toISOString().slice(0, 10);
+  document.getElementById('time-slider').value = now.getHours() * 60 + now.getMinutes();
+  updateSunDisplay();
+  loadPubs();
+  fetch('/api/status').then(r => r.json()).then(d => {
+    if (!d.has_lidar) showStatus('No LiDAR data. Run: uv run python scripts/download_lidar.py');
+  });
+})();
+</script>
+</body>
+</html>
