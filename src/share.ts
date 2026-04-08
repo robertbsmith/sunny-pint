@@ -97,19 +97,23 @@ export async function shareSnapshot(): Promise<void> {
     : `Checking out ${pub.name} on Sunny Pint — sunny-pint.co.uk`;
 
   // Try Web Share API (mobile native share sheet).
-  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+  if (navigator.share) {
     try {
-      await navigator.share({
-        text: shareText,
-        files: [file],
-      });
+      // Try sharing with image file first.
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ text: shareText, files: [file] });
+        return;
+      }
+      // Fall back to text + URL only (no image).
+      await navigator.share({ text: shareText, url: window.location.href });
       return;
-    } catch {
-      // User cancelled or share failed — fall through to download.
+    } catch (err) {
+      // User cancelled share — don't fall through to dialog.
+      if (err instanceof Error && err.name === "AbortError") return;
     }
   }
 
-  // Fallback: show a share dialog with image + copyable link.
+  // Desktop fallback: show dialog with image + copyable link.
   showShareDialog(blob, shareText, pub.name);
 }
 
