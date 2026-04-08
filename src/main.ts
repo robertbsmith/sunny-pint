@@ -4,7 +4,7 @@ import { state, selectedPub } from "./state";
 import type { Pub } from "./types";
 import { initPubList, sortByDistance, renderList } from "./publist";
 import { initCircle, renderCircle } from "./circle";
-import { initSunArc } from "./sunarc";
+import { initSunArc, renderArc } from "./sunarc";
 import { computeShadows } from "./shadow";
 import { loadBuildingsForPub } from "./buildings";
 import { initIcons } from "./icons";
@@ -215,6 +215,15 @@ async function init(): Promise<void> {
 
     // Theme toggle.
     document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
+
+    // Now button — reset time to current.
+    document.getElementById("btn-now")!.addEventListener("click", () => {
+      const now = new Date();
+      state.timeMins = now.getHours() * 60 + now.getMinutes();
+      state.date = new Date();
+      updateScene();
+      renderArc();
+    });
 
     // Mobile pub drawer toggle.
     document.getElementById("pubs-handle")!.addEventListener("click", () => {
