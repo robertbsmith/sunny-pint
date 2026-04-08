@@ -430,12 +430,12 @@ function drawOutdoorArea(
   }
   ctx.closePath();
 
-  const greenAlpha = 0.08 + 0.10 * dayFrac;
+  const greenAlpha = 0.12 + 0.12 * dayFrac;
   ctx.fillStyle = `rgba(39,174,96,${greenAlpha.toFixed(2)})`;
   ctx.fill();
-  ctx.setLineDash([4, 3]);
-  ctx.strokeStyle = COLORS.outdoorStroke;
-  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = "#27AE60";
+  ctx.lineWidth = 2.5;
   ctx.stroke();
   ctx.setLineDash([]);
 }
