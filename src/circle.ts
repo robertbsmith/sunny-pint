@@ -420,7 +420,8 @@ function drawOutdoorArea(
   mpp: number, dayFrac: number,
 ): void {
   const pub = selectedPub();
-  if (!pub?.outdoor) return;
+  if (!pub) return;
+  if (!pub.outdoor) return;
 
   ctx.beginPath();
   for (let i = 0; i < pub.outdoor.length; i++) {

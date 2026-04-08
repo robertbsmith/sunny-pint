@@ -150,9 +150,9 @@ async function init(): Promise<void> {
     const urlPub = urlState.pubId ? state.pubs.find((p) => p.id === urlState.pubId) : null;
 
     if (urlPub) {
-      // Sort from the selected pub's location.
-      setLocation(urlPub.lat, urlPub.lng);
+      // Set pub ID first so setLocation doesn't auto-select a different pub.
       state.selectedPubId = urlPub.id;
+      setLocation(urlPub.lat, urlPub.lng);
       const label = urlState.query || "Norwich";
       document.getElementById("location-label")!.textContent = `Pubs near ${label}`;
       if (urlState.query) setLocationQuery(urlState.query);
