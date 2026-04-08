@@ -2,3 +2,4 @@
   Access-Control-Allow-Origin: *
   Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges
   Content-Type: application/octet-stream
+  Cache-Control: public, max-age=604800, no-transform
