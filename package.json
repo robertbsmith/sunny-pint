@@ -12,6 +12,7 @@
     "fix": "biome check --write ."
   },
   "dependencies": {
+    "lucide": "^1.7.0",
     "maplibre-gl": "^5.22.0",
     "pmtiles": "^4.4.0",
     "suncalc": "^1.9.0"

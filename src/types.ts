@@ -1,26 +1,27 @@
-/** A pub from the pub list */
+/** A pub from the merged pub list (FSA + VOA + OSM) */
 export interface Pub {
   id: string;
   name: string;
   lat: number;
   lng: number;
-  beer_garden: boolean;
-  outdoor_seating: boolean;
-  polygon: [number, number][] | null; // building footprint [[lat,lng],...]
-  outdoor: [number, number][] | null; // outdoor area [[lat,lng],...]
-  plot: [number, number][] | null; // land registry plot
+  postcode: string;
+  in_fsa: boolean;
+  in_osm: boolean;
+  in_voa: boolean;
+  osm_id?: string;
+  polygon?: [number, number][]; // building footprint [[lat,lng],...]
+  outdoor?: [number, number][]; // outdoor area [[lat,lng],...]
+  beer_garden?: string;
+  outdoor_seating?: string;
+  opening_hours?: string;
+  rateable_value?: number;
+  distance?: number; // computed client-side, metres
 }
 
 /** A building with height data */
 export interface Building {
   coords: [number, number][]; // [[lat,lng],...]
   height: number; // metres above ground
-}
-
-/** A road segment */
-export interface Road {
-  coords: [number, number][]; // [[lat,lng],...]
-  type: string; // highway tag value
 }
 
 /** Shadow quad — four corners of a shadow polygon */
@@ -32,21 +33,16 @@ export interface SunPosition {
   altitude: number; // degrees above horizon
 }
 
-/** Weather state for a location */
-export type WeatherState = "sunny" | "partly-cloudy" | "overcast" | "unknown";
-
 /** App state */
 export interface AppState {
   pubs: Pub[];
   selectedPubId: string | null;
   buildings: Building[];
-  roads: Road[];
-  pubBuildingIndex: number; // which building is the selected pub
+  pubBuildingIndex: number;
   shadowPolys: ShadowPoly[];
   timeMins: number; // minutes from midnight
   date: Date;
   playing: boolean;
-  weatherState: WeatherState;
   userLat: number | null;
   userLng: number | null;
 }

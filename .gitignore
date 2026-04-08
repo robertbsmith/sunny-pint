@@ -11,6 +11,8 @@ data/lidar/
 data/inspire/
 data/england-latest.osm.pbf
 data/buildings.gpkg-journal
+data/voa/
+data/fsa/
 
 # Environment
 .env

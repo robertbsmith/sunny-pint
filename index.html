@@ -2,14 +2,76 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F59E0B" />
+    <meta name="description" content="Find sunny beer garden seats with real-time shadow maps" />
     <title>SunPub</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+
+      <!-- Header -->
+      <header id="header">
+        <div class="header-inner">
+          <div class="header-left">
+            <button id="btn-locate" title="Use GPS location"></button>
+            <span id="location-label">Loading...</span>
+          </div>
+          <div class="header-right">
+            <span class="brand">SunPub</span>
+            <button id="btn-theme" title="Toggle theme"></button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main content -->
+      <main id="main">
+        <!-- Porthole + controls -->
+        <section id="viz">
+          <div id="circle-wrap">
+            <canvas id="circle-canvas"></canvas>
+          </div>
+          <div id="arc-wrap">
+            <canvas id="arc-canvas" height="110"></canvas>
+            <div class="arc-controls">
+              <div class="arc-left">
+                <button id="btn-play">
+                  <span id="play-icon"></span>
+                </button>
+                <span id="time-display">12:00</span>
+              </div>
+              <button id="btn-date">Today</button>
+              <input type="date" id="date-input" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Pub list -->
+        <section id="pubs">
+          <div class="search-wrap">
+            <span id="search-icon"></span>
+            <input id="pub-search" type="search" placeholder="Search pubs..." />
+          </div>
+          <ul id="pub-list"></ul>
+        </section>
+      </main>
+
+      <!-- Footer -->
+      <footer id="footer">
+        Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>,
+        <a href="https://www.gov.uk/government/organisations/environment-agency">EA LiDAR</a>,
+        <a href="https://www.ordnancesurvey.co.uk/">Land Registry</a> &mdash; OGL v3
+      </footer>
+
+    </div>
+
+    <!-- Fullscreen circle overlay -->
+    <div id="circle-fullscreen">
+      <canvas id="circle-canvas-big"></canvas>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

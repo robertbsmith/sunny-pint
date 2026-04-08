@@ -1,8 +1,12 @@
-"""Extract buildings from England .osm.pbf into a GeoPackage with spatial index.
+"""Extract buildings from .osm.pbf into a GeoPackage with spatial index.
 
 GeoPackage (GPKG) is SQLite + spatial index. Bbox queries are instant.
+
+Usage:
+    uv run python scripts/build_gpkg.py --area norwich
 """
 
+import shutil
 import time
 from pathlib import Path
 
@@ -10,12 +14,10 @@ import fiona
 from fiona.crs import CRS
 import osmium
 
+from areas import parse_area
+
 PBF = Path(__file__).resolve().parent.parent / "data" / "england-latest.osm.pbf"
 OUT = Path(__file__).resolve().parent.parent / "data" / "buildings.gpkg"
-
-# Only extract buildings in the greater Norwich area for now.
-# Expand this bbox or remove the filter to go UK-wide.
-BBOX = (52.55, 1.15, 52.70, 1.40)  # (south, west, north, east)
 
 SCHEMA = {
     "geometry": "Polygon",
@@ -29,95 +31,69 @@ SCHEMA = {
 }
 
 
-ROAD_SCHEMA = {
-    "geometry": "LineString",
-    "properties": {
-        "osm_id": "int",
-        "highway": "str",
-        "name": "str",
-    },
-}
-
-ROAD_TYPES = {
-    "motorway", "trunk", "primary", "secondary", "tertiary",
-    "residential", "unclassified", "service", "living_street",
-    "pedestrian", "footway", "path", "track",
-}
-
-
 class BuildingExtractor(osmium.SimpleHandler):
     def __init__(self, bbox):
         super().__init__()
         self.bbox = bbox
         self.buildings = []
-        self.roads = []
-        self.bld_count = 0
-        self.road_count = 0
+        self.count = 0
 
     def way(self, w):
         tags = dict(w.tags)
-        s, w_, n_, e = self.bbox
+        if "building" not in tags:
+            return
 
+        s, w_, n_, e = self.bbox
         nodes = []
         for n in w.nodes:
             if not n.location.valid():
                 return
             nodes.append((n.lon, n.lat))
 
-        # Check bbox.
-        in_bbox = False
-        for lon, lat in nodes:
-            if s <= lat <= n_ and w_ <= lon <= e:
-                in_bbox = True
-                break
-        if not in_bbox:
+        if len(nodes) < 3:
             return
 
-        # Buildings.
-        if "building" in tags and len(nodes) >= 3:
-            if nodes[0] != nodes[-1]:
-                nodes.append(nodes[0])
-            self.buildings.append({
-                "geometry": {"type": "Polygon", "coordinates": [nodes]},
-                "properties": {
-                    "osm_id": w.id,
-                    "building": tags.get("building", "yes"),
-                    "name": tags.get("name", ""),
-                    "height": tags.get("height", tags.get("building:height", "")),
-                    "levels": tags.get("building:levels", ""),
-                },
-            })
-            self.bld_count += 1
-            if self.bld_count % 5000 == 0:
-                print(f"  {self.bld_count} buildings...", flush=True)
+        # Check bbox.
+        if not any(s <= lat <= n_ and w_ <= lon <= e for lon, lat in nodes):
+            return
 
-        # Roads.
-        if tags.get("highway") in ROAD_TYPES and len(nodes) >= 2:
-            self.roads.append({
-                "geometry": {"type": "LineString", "coordinates": nodes},
-                "properties": {
-                    "osm_id": w.id,
-                    "highway": tags.get("highway", ""),
-                    "name": tags.get("name", ""),
-                },
-            })
-            self.road_count += 1
+        if nodes[0] != nodes[-1]:
+            nodes.append(nodes[0])
+
+        self.buildings.append({
+            "geometry": {"type": "Polygon", "coordinates": [nodes]},
+            "properties": {
+                "osm_id": w.id,
+                "building": tags.get("building", "yes"),
+                "name": tags.get("name", ""),
+                "height": tags.get("height", tags.get("building:height", "")),
+                "levels": tags.get("building:levels", ""),
+            },
+        })
+        self.count += 1
+        if self.count % 5000 == 0:
+            print(f"  {self.count} buildings...", flush=True)
 
 
 def main():
-    print(f"Reading {PBF.name} ...")
-    print(f"Bbox: {BBOX}")
+    area = parse_area()
+    bbox = area.bbox
+
+    if bbox is None:
+        print("ERROR: --area uk requires a .pbf for the whole UK. Use a specific area.")
+        return
+
+    print(f"Extracting buildings for {area.name}")
+    print(f"  PBF: {PBF.name}")
+    print(f"  Bbox: {bbox}")
 
     t0 = time.time()
-    handler = BuildingExtractor(BBOX)
+    handler = BuildingExtractor(bbox)
     handler.apply_file(str(PBF), locations=True)
     elapsed = time.time() - t0
-    print(f"  Extracted {handler.bld_count} buildings, {handler.road_count} roads in {elapsed:.0f}s")
+    print(f"  Extracted {handler.count} buildings in {elapsed:.0f}s")
 
-    # Write to temp file, then move into place so the live DB isn't clobbered.
-    import shutil
-    TMP = OUT.with_suffix('.gpkg.tmp')
-
+    TMP = OUT.with_suffix(".gpkg.tmp")
     print(f"Writing {TMP} ...")
     t0 = time.time()
     with fiona.open(
@@ -130,20 +106,10 @@ def main():
         for b in handler.buildings:
             dst.write(b)
 
-    with fiona.open(
-        str(TMP), "w",
-        driver="GPKG",
-        schema=ROAD_SCHEMA,
-        crs=CRS.from_epsg(4326),
-        layer="roads",
-    ) as dst:
-        for r in handler.roads:
-            dst.write(r)
-
     elapsed = time.time() - t0
     shutil.move(str(TMP), str(OUT))
     size_mb = OUT.stat().st_size / 1e6
-    print(f"  Wrote {handler.bld_count} buildings + {handler.road_count} roads in {elapsed:.1f}s ({size_mb:.1f} MB)")
+    print(f"  Wrote {handler.count} buildings in {elapsed:.1f}s ({size_mb:.1f} MB)")
     print(f"  Saved to {OUT}")
 
 
