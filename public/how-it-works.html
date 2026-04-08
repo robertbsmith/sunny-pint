@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How It Works — Sunny Pint</title>
+  <style>
+    :root { --amber: #D97706; --amber-light: #FEF3C7; --grey: #64748B; --dark: #1C1B1A; --mid: #5C5955; --light-bg: #FAFAF8; --code-bg: #F1F0EE; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 1rem; line-height: 1.7; color: var(--dark); background: var(--light-bg); }
+    h1 { font-size: 1.8rem; font-family: Georgia, serif; color: var(--amber); margin-top: 2rem; }
+    h2 { font-size: 1.3rem; margin-top: 3rem; padding-bottom: 0.4rem; border-bottom: 2px solid var(--amber-light); }
+    h3 { font-size: 1.05rem; margin-top: 2rem; color: var(--mid); }
+    p { color: var(--dark); }
+    a { color: var(--amber); }
+    .back { margin-bottom: 1rem; font-size: 0.9rem; }
+    .hero { text-align: center; margin: 2rem 0 3rem; }
+    .hero p { font-size: 1.1rem; color: var(--mid); max-width: 600px; margin: 0.5rem auto; }
+    .diagram { margin: 1.5rem 0; text-align: center; overflow-x: auto; }
+    .diagram svg { max-width: 100%; height: auto; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .stat { background: white; border: 1px solid #E5E3E0; border-radius: 8px; padding: 1rem; text-align: center; }
+    .stat .num { font-size: 1.6rem; font-weight: 800; color: var(--amber); font-family: Georgia, serif; }
+    .stat .label { font-size: 0.75rem; color: var(--grey); margin-top: 0.2rem; }
+    .formula { background: var(--code-bg); padding: 0.8rem 1.2rem; border-radius: 6px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.9rem; margin: 1rem 0; overflow-x: auto; }
+    .example { background: white; border: 1px solid #E5E3E0; border-radius: 8px; padding: 1.2rem; margin: 1.5rem 0; }
+    .example .title { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .placeholder { background: #FEF3C7; border: 2px dashed var(--amber); border-radius: 8px; padding: 2rem; text-align: center; color: var(--amber); margin: 1.5rem 0; font-size: 0.9rem; }
+    .layers { margin: 1.5rem 0; }
+    .layer { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #EEE; }
+    .layer-num { width: 28px; height: 28px; border-radius: 50%; background: var(--amber); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+    .layer-label { font-weight: 600; font-size: 0.9rem; }
+    .layer-desc { font-size: 0.8rem; color: var(--grey); }
+    .hist-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0; font-size: 0.8rem; }
+    .hist-bar .bar { background: var(--amber); height: 18px; border-radius: 3px; min-width: 2px; }
+    .hist-bar .label { width: 60px; text-align: right; color: var(--grey); flex-shrink: 0; }
+    .hist-bar .count { color: var(--grey); font-size: 0.75rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.85rem; }
+    th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #E5E3E0; }
+    th { color: var(--grey); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .toc { background: white; border: 1px solid #E5E3E0; border-radius: 8px; padding: 1.2rem 1.5rem; margin: 2rem 0; }
+    .toc ol { padding-left: 1.2rem; margin: 0.5rem 0 0; }
+    .toc li { margin: 0.3rem 0; }
+    .toc a { text-decoration: none; font-size: 0.9rem; }
+    .toc a:hover { text-decoration: underline; }
+    footer { margin-top: 4rem; padding: 1rem 0; border-top: 1px solid #E5E3E0; font-size: 0.8rem; color: var(--grey); text-align: center; }
+  </style>
+</head>
+<body>
+  <p class="back"><a href="/">&larr; Back to Sunny Pint</a></p>
+
+  <div class="hero">
+    <h1>How Sunny Pint Works</h1>
+    <p>Real-time shadow maps for UK pubs using LiDAR elevation data, OpenStreetMap building outlines, and geometric sun projection.</p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="num">33,234</div><div class="label">Pubs from OSM</div></div>
+    <div class="stat"><div class="num">13.4M</div><div class="label">Buildings extracted</div></div>
+    <div class="stat"><div class="num">22M</div><div class="label">Land Registry parcels</div></div>
+    <div class="stat"><div class="num">60fps</div><div class="label">Shadow animation</div></div>
+  </div>
+
+  <nav class="toc">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#pipeline">The Data Pipeline</a></li>
+      <li><a href="#shadows">Shadow Computation</a></li>
+      <li><a href="#heights">Measuring Building Heights</a></li>
+      <li><a href="#terrain">Terrain Awareness</a></li>
+      <li><a href="#porthole">The Porthole View</a></li>
+      <li><a href="#gardens">Computing Outdoor Areas</a></li>
+      <li><a href="#optimisations">Optimisations</a></li>
+    </ol>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="pipeline">1. The Data Pipeline</h2>
+
+  <p>Sunny Pint is a fully static site &mdash; no backend at runtime. All the heavy computation happens once in a data pipeline, and the results are served as static files from Cloudflare Pages. The browser does shadow computation client-side at 60fps.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Data sources -->
+      <rect x="10" y="10" width="130" height="44" rx="6" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+      <text x="75" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#78350F">OSM .pbf</text>
+      <text x="75" y="42" text-anchor="middle" font-size="9" fill="#92400E">1.6 GB, all England</text>
+
+      <rect x="10" y="70" width="130" height="44" rx="6" fill="#DBEAFE" stroke="#3B82F6" stroke-width="1.5"/>
+      <text x="75" y="88" text-anchor="middle" font-size="11" font-weight="700" fill="#1E3A5F">EA LiDAR</text>
+      <text x="75" y="102" text-anchor="middle" font-size="9" fill="#1E40AF">DSM + DTM, 1m resolution</text>
+
+      <rect x="10" y="130" width="130" height="44" rx="6" fill="#F3E8FF" stroke="#8B5CF6" stroke-width="1.5"/>
+      <text x="75" y="148" text-anchor="middle" font-size="11" font-weight="700" fill="#4C1D95">Land Registry</text>
+      <text x="75" y="162" text-anchor="middle" font-size="9" fill="#5B21B6">22M cadastral parcels</text>
+
+      <!-- Pipeline steps -->
+      <rect x="200" y="10" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="260" y="33" text-anchor="middle" font-size="10" fill="#374151">merge_pubs</text>
+      <line x1="140" y1="32" x2="200" y2="32" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <rect x="200" y="60" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="260" y="83" text-anchor="middle" font-size="10" fill="#374151">build_gpkg</text>
+      <line x1="140" y1="32" x2="195" y2="75" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4"/>
+
+      <rect x="380" y="60" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="440" y="83" text-anchor="middle" font-size="10" fill="#374151">measure_heights</text>
+      <line x1="320" y1="78" x2="380" y2="78" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <line x1="140" y1="92" x2="380" y2="82" stroke="#3B82F6" stroke-width="1" stroke-dasharray="4"/>
+
+      <rect x="380" y="120" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="440" y="138" text-anchor="middle" font-size="9" fill="#374151">compute_horizons</text>
+
+      <rect x="200" y="180" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="260" y="203" text-anchor="middle" font-size="10" fill="#374151">match_plots</text>
+      <line x1="140" y1="152" x2="200" y2="195" stroke="#8B5CF6" stroke-width="1" stroke-dasharray="4"/>
+
+      <rect x="380" y="180" width="120" height="36" rx="4" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="440" y="203" text-anchor="middle" font-size="10" fill="#374151">generate_tiles</text>
+      <line x1="320" y1="198" x2="380" y2="198" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="4"/>
+      <line x1="500" y1="96" x2="500" y2="180" stroke="#9CA3AF" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+      <!-- Outputs -->
+      <rect x="560" y="5" width="150" height="40" rx="6" fill="#D97706" stroke="none"/>
+      <text x="635" y="20" text-anchor="middle" font-size="10" font-weight="700" fill="white">pubs.json</text>
+      <text x="635" y="34" text-anchor="middle" font-size="9" fill="#FEF3C7">33k pubs, ~1 MB gzipped</text>
+      <line x1="320" y1="28" x2="560" y2="22" stroke="#D97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+      <line x1="320" y1="198" x2="555" y2="30" stroke="#D97706" stroke-width="1" stroke-dasharray="4"/>
+
+      <rect x="560" y="175" width="150" height="40" rx="6" fill="#D97706" stroke="none"/>
+      <text x="635" y="190" text-anchor="middle" font-size="10" font-weight="700" fill="white">tiles/*.pbf</text>
+      <text x="635" y="204" text-anchor="middle" font-size="9" fill="#FEF3C7">~5k files, z14 vector tiles</text>
+      <line x1="500" y1="198" x2="560" y2="195" stroke="#D97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+
+      <!-- Browser -->
+      <rect x="560" y="260" width="150" height="60" rx="8" fill="white" stroke="#D97706" stroke-width="2"/>
+      <text x="635" y="282" text-anchor="middle" font-size="11" font-weight="700" fill="#D97706">Browser</text>
+      <text x="635" y="296" text-anchor="middle" font-size="9" fill="#78350F">Shadow computation</text>
+      <text x="635" y="308" text-anchor="middle" font-size="9" fill="#78350F">Canvas 2D @ 60fps</text>
+      <line x1="635" y1="215" x2="635" y2="260" stroke="#D97706" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+      <line x1="635" y1="45" x2="635" y2="260" stroke="#D97706" stroke-width="1" stroke-dasharray="4"/>
+
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#9CA3AF"/></marker>
+        <marker id="arrow-amber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#D97706"/></marker>
+      </defs>
+    </svg>
+  </div>
+
+  <p>The pipeline runs in six steps, taking about 30 minutes for Norwich or several hours for the whole UK. Every step is idempotent &mdash; you can re-run safely.</p>
+
+  <table>
+    <tr><th>Step</th><th>Input</th><th>Output</th><th>Norwich</th><th>UK</th></tr>
+    <tr><td>merge_pubs</td><td>OSM .pbf</td><td>Pub list</td><td>142 pubs</td><td>33,234 pubs</td></tr>
+    <tr><td>build_gpkg</td><td>OSM .pbf</td><td>Building polygons</td><td>98k buildings</td><td>13.4M buildings</td></tr>
+    <tr><td>measure_heights</td><td>GeoPackage + LiDAR</td><td>Heights per building</td><td>~1 min</td><td>~24 hrs</td></tr>
+    <tr><td>match_plots</td><td>Pubs + INSPIRE + buildings</td><td>Outdoor areas</td><td>99 gardens</td><td>TBD</td></tr>
+    <tr><td>generate_tiles</td><td>Buildings near pubs</td><td>.pbf tile files</td><td>56 tiles, 0.5 MB</td><td>~5k tiles</td></tr>
+  </table>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="shadows">2. Shadow Computation</h2>
+
+  <p>Shadows are computed geometrically, not via ray-tracing or raster methods. For each building wall segment, we project a shadow quadrilateral based on the building height and sun position. This produces mathematically exact shadow edges at 60fps.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 600 250" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Ground plane -->
+      <line x1="50" y1="200" x2="550" y2="200" stroke="#CBD5E0" stroke-width="2"/>
+      <text x="555" y="204" font-size="10" fill="#94A3B8">ground</text>
+
+      <!-- Building -->
+      <rect x="150" y="80" width="60" height="120" fill="#94A3B8" stroke="#64748B" stroke-width="1.5" opacity="0.8"/>
+      <text x="180" y="150" text-anchor="middle" font-size="11" fill="white" font-weight="700">h</text>
+
+      <!-- Height dimension -->
+      <line x1="130" y1="80" x2="130" y2="200" stroke="#64748B" stroke-width="1" stroke-dasharray="3"/>
+      <line x1="125" y1="80" x2="135" y2="80" stroke="#64748B" stroke-width="1"/>
+      <line x1="125" y1="200" x2="135" y2="200" stroke="#64748B" stroke-width="1"/>
+      <text x="122" y="145" text-anchor="end" font-size="10" fill="#64748B">height</text>
+
+      <!-- Sun -->
+      <circle cx="450" cy="50" r="20" fill="#FBBF24" opacity="0.8"/>
+      <text x="450" y="55" text-anchor="middle" font-size="12" fill="#78350F">&#x2600;</text>
+
+      <!-- Sun ray -->
+      <line x1="430" y1="60" x2="210" y2="80" stroke="#FBBF24" stroke-width="1.5" stroke-dasharray="6,3"/>
+      <line x1="430" y1="60" x2="350" y2="200" stroke="#FBBF24" stroke-width="1" stroke-dasharray="6,3" opacity="0.5"/>
+
+      <!-- Shadow on ground -->
+      <polygon points="210,200 150,200 150,200 350,200" fill="#1A202C" opacity="0.2"/>
+      <rect x="210" y="196" width="140" height="8" fill="#1A202C" opacity="0.25" rx="1"/>
+
+      <!-- Shadow length annotation -->
+      <line x1="210" y1="215" x2="350" y2="215" stroke="#D97706" stroke-width="1.5"/>
+      <line x1="210" y1="210" x2="210" y2="220" stroke="#D97706" stroke-width="1"/>
+      <line x1="350" y1="210" x2="350" y2="220" stroke="#D97706" stroke-width="1"/>
+      <text x="280" y="230" text-anchor="middle" font-size="10" fill="#D97706" font-weight="600">shadow length</text>
+
+      <!-- Sun altitude angle -->
+      <path d="M 300,200 A 40,40 0 0 1 270,175" fill="none" stroke="#D97706" stroke-width="1.5"/>
+      <text x="300" y="185" font-size="10" fill="#D97706" font-weight="600">&alpha;</text>
+
+      <!-- Formula -->
+      <text x="400" y="140" font-size="11" fill="#374151" font-weight="600">shadow = h / tan(&alpha;)</text>
+      <text x="400" y="158" font-size="10" fill="#94A3B8">capped at 200m</text>
+    </svg>
+  </div>
+
+  <div class="formula">
+    shadow_length = min(building_height / tan(sun_altitude), 200m)<br>
+    dlat = -shadow_length &times; cos(azimuth) / 111,320<br>
+    dlng = -shadow_length &times; sin(azimuth) / (111,320 &times; cos(latitude))
+  </div>
+
+  <p>Each wall segment of a building produces a shadow quadrilateral &mdash; the four corners are the two endpoints of the wall and their projected positions on the ground. The building's roof footprint, shifted by the shadow offset, adds the "roof shadow". Together these form the complete shadow polygon.</p>
+
+  <h3>Opacity compositing</h3>
+  <p>When multiple buildings cast overlapping shadows, drawing them all semi-transparently causes <em>opacity stacking</em> &mdash; overlaps appear darker. We avoid this by drawing all shadow quads to an opaque offscreen canvas, then compositing the result onto the main canvas with a single alpha blit. This gives uniform shadow darkness regardless of overlap.</p>
+
+  <div class="example">
+    <div class="title">Example: The Whalebone, Norwich (52.644, 1.297)</div>
+    <p style="font-size:0.85rem;color:var(--grey)">At 4pm in June, the sun is at azimuth ~240&deg; (WSW), altitude ~35&deg;. A 10m building casts a shadow of 10/tan(35&deg;) = 14.3m. At 7pm (altitude ~10&deg;), the same building casts 10/tan(10&deg;) = 56.7m &mdash; reaching across the entire beer garden.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="heights">3. Measuring Building Heights</h2>
+
+  <p>Building heights come from Environment Agency LiDAR data: 1-metre resolution laser scans of the ground surface. We use two datasets:</p>
+
+  <ul>
+    <li><strong>DSM</strong> (Digital Surface Model) &mdash; the top of everything: roofs, trees, cars</li>
+    <li><strong>DTM</strong> (Digital Terrain Model) &mdash; bare ground with buildings removed</li>
+  </ul>
+
+  <p>Height = DSM minus DTM. Simple subtraction, no ground estimation needed.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Ground (DTM) -->
+      <path d="M30,180 Q150,175 200,178 Q250,180 300,170 Q350,160 400,165 Q450,170 500,168 L570,170" fill="none" stroke="#22C55E" stroke-width="2"/>
+      <text x="575" y="174" font-size="9" fill="#22C55E" font-weight="600">DTM</text>
+
+      <!-- Building on DSM -->
+      <path d="M30,180 Q150,175 200,178 L200,178 L200,100 L300,100 L300,170 Q350,160 400,165 L400,165 L400,120 L440,115 L440,120 L480,120 L480,168 L500,168 L570,170" fill="none" stroke="#3B82F6" stroke-width="2"/>
+      <text x="575" y="118" font-size="9" fill="#3B82F6" font-weight="600">DSM</text>
+
+      <!-- Building fill -->
+      <rect x="200" y="100" width="100" height="78" fill="#3B82F6" opacity="0.1"/>
+      <rect x="400" y="118" width="80" height="50" fill="#3B82F6" opacity="0.1"/>
+
+      <!-- Height arrows -->
+      <line x1="250" y1="100" x2="250" y2="176" stroke="#D97706" stroke-width="2"/>
+      <line x1="245" y1="100" x2="255" y2="100" stroke="#D97706" stroke-width="2"/>
+      <line x1="245" y1="176" x2="255" y2="176" stroke="#D97706" stroke-width="2"/>
+      <text x="258" y="142" font-size="11" fill="#D97706" font-weight="700">h</text>
+
+      <line x1="440" y1="118" x2="440" y2="166" stroke="#D97706" stroke-width="2"/>
+      <line x1="435" y1="118" x2="445" y2="118" stroke="#D97706" stroke-width="2"/>
+      <line x1="435" y1="166" x2="445" y2="166" stroke="#D97706" stroke-width="2"/>
+      <text x="448" y="146" font-size="11" fill="#D97706" font-weight="700">h</text>
+
+      <!-- Labels -->
+      <text x="250" y="90" text-anchor="middle" font-size="10" fill="#374151">Building A</text>
+      <text x="440" y="108" text-anchor="middle" font-size="10" fill="#374151">Building B</text>
+
+      <!-- 90th percentile annotation -->
+      <line x1="200" y1="105" x2="300" y2="105" stroke="#EF4444" stroke-width="1" stroke-dasharray="3"/>
+      <text x="310" y="108" font-size="8" fill="#EF4444">90th percentile (ridge height)</text>
+    </svg>
+  </div>
+
+  <p>We sample the 90th percentile of pixel values within each building footprint, not the maximum. This captures ridge height on pitched roofs while ignoring chimney and antenna outliers.</p>
+
+  <h3>Norwich building heights</h3>
+  <div style="margin: 1rem 0;">
+    <div class="hist-bar"><span class="label">0-5m</span><div class="bar" style="width: 1px;"></div><span class="count">142</span></div>
+    <div class="hist-bar"><span class="label">5-10m</span><div class="bar" style="width: 400px;"></div><span class="count">354,453</span></div>
+    <div class="hist-bar"><span class="label">10-15m</span><div class="bar" style="width: 3px;"></div><span class="count">577</span></div>
+    <div class="hist-bar"><span class="label">15-20m</span><div class="bar" style="width: 1px;"></div><span class="count">120</span></div>
+    <div class="hist-bar"><span class="label">20-25m</span><div class="bar" style="width: 1px;"></div><span class="count">28</span></div>
+    <div class="hist-bar"><span class="label">25m+</span><div class="bar" style="width: 1px;"></div><span class="count">17</span></div>
+  </div>
+  <p style="font-size:0.85rem;color:var(--grey)">Most Norwich buildings are 5-10m (two-storey residential). The tallest structures are church spires and multi-storey car parks at ~50m. Mean: 7.7m, Median: 8.0m.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="terrain">4. Terrain Awareness</h2>
+
+  <h3>Elevation adjustment</h3>
+  <p>A building on a hill is effectively taller from the pub's perspective. We store each building's ground elevation (from the DTM) and the pub's elevation, then adjust the effective height:</p>
+
+  <div class="formula">
+    effective_height = building_height + (building_elevation - pub_elevation)
+  </div>
+
+  <div class="diagram">
+    <svg viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Terrain slope -->
+      <path d="M50,180 Q200,178 300,150 Q400,125 500,100" fill="none" stroke="#22C55E" stroke-width="2.5"/>
+
+      <!-- Pub at bottom -->
+      <rect x="100" y="158" width="40" height="20" fill="#D97706" stroke="#B45309" stroke-width="1" rx="2"/>
+      <text x="120" y="153" text-anchor="middle" font-size="9" fill="#D97706" font-weight="600">Pub</text>
+
+      <!-- Building on hill -->
+      <rect x="400" y="80" width="40" height="40" fill="#94A3B8" stroke="#64748B" stroke-width="1"/>
+      <text x="420" y="75" text-anchor="middle" font-size="9" fill="#64748B">Building</text>
+
+      <!-- Actual height -->
+      <line x1="450" y1="80" x2="450" y2="120" stroke="#3B82F6" stroke-width="1.5"/>
+      <text x="460" y="104" font-size="9" fill="#3B82F6">h</text>
+
+      <!-- Elevation difference -->
+      <line x1="100" y1="178" x2="100" y2="200" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3"/>
+      <line x1="400" y1="120" x2="400" y2="200" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3"/>
+      <line x1="100" y1="195" x2="400" y2="195" stroke="#EF4444" stroke-width="1"/>
+      <text x="250" y="210" text-anchor="middle" font-size="9" fill="#EF4444">&Delta; elevation</text>
+
+      <!-- Effective height -->
+      <line x1="385" y1="80" x2="385" y2="178" stroke="#D97706" stroke-width="2" stroke-dasharray="5,3"/>
+      <text x="370" y="135" text-anchor="end" font-size="10" fill="#D97706" font-weight="600">effective h</text>
+    </svg>
+  </div>
+
+  <h3>Terrain horizon occlusion</h3>
+  <p>In hilly areas, a hill between the pub and the sun can block sunlight entirely &mdash; even with no building on it. For each pub, the pipeline casts 36 rays (every 10&deg; of azimuth) and records the maximum terrain elevation angle in each direction.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Terrain profile -->
+      <path d="M50,160 Q100,158 150,155 Q200,140 250,100 Q300,80 350,90 Q400,110 450,140 Q500,155 550,158" fill="#E8F5E9" stroke="#22C55E" stroke-width="2"/>
+
+      <!-- Pub -->
+      <rect x="40" y="148" width="24" height="12" fill="#D97706" rx="2"/>
+      <text x="52" y="145" text-anchor="middle" font-size="8" fill="#D97706" font-weight="600">Pub</text>
+
+      <!-- Sun above horizon - visible -->
+      <circle cx="480" cy="40" r="16" fill="#FBBF24" opacity="0.8"/>
+      <text x="480" y="45" text-anchor="middle" font-size="10" fill="#78350F">&#x2600;</text>
+      <line x1="52" y1="154" x2="480" y2="40" stroke="#FBBF24" stroke-width="1" stroke-dasharray="4" opacity="0.5"/>
+
+      <!-- Sun below horizon - blocked -->
+      <circle cx="300" cy="45" r="14" fill="#FBBF24" opacity="0.3"/>
+      <text x="300" y="50" text-anchor="middle" font-size="9" fill="#B45309">&#x2600;</text>
+      <line x1="52" y1="154" x2="300" y2="45" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4"/>
+      <line x1="150" y1="130" x2="300" y2="45" stroke="#EF4444" stroke-width="2.5" opacity="0"/>
+
+      <!-- Horizon angle -->
+      <path d="M 90,154 A 50,50 0 0 1 72,120" fill="none" stroke="#D97706" stroke-width="1.5"/>
+      <text x="98" y="130" font-size="9" fill="#D97706" font-weight="600">horizon angle</text>
+
+      <!-- Blocked label -->
+      <text x="200" y="95" font-size="10" fill="#EF4444" font-weight="600" transform="rotate(-25, 200, 95)">blocked by terrain</text>
+
+      <!-- Visible label -->
+      <text x="420" y="70" font-size="10" fill="#22C55E" font-weight="600">sun visible</text>
+    </svg>
+  </div>
+
+  <p>At runtime, the browser compares the sun's altitude at its current azimuth against the horizon profile. If the sun is below the terrain horizon, no shadows are drawn &mdash; the pub is fully in terrain shade.</p>
+
+  <p>The profile is stored as a compact base64 string (48 characters per pub). Flat-area pubs don't store a profile at all, saving space.</p>
+
+  <div class="placeholder">UK terrain examples coming soon &mdash; pipeline still processing LiDAR data for hilly cities (Bath, Sheffield, Edinburgh)</div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="porthole">5. The Porthole View</h2>
+
+  <p>The porthole is a Canvas 2D rendering, not a map library. It draws real map tiles from CARTO as a background, then overlays building polygons and shadow geometry on top.</p>
+
+  <h3>Rendering layers (bottom to top)</h3>
+  <div class="layers">
+    <div class="layer"><span class="layer-num">1</span><div><span class="layer-label">Map tiles</span><div class="layer-desc">3&times;3 grid of CartoDB Voyager tiles at zoom 18 (~0.6 m/px)</div></div></div>
+    <div class="layer"><span class="layer-num">2</span><div><span class="layer-label">Night overlay</span><div class="layer-desc">Dark blue fill, opacity based on dayFrac (smooth twilight transition)</div></div></div>
+    <div class="layer"><span class="layer-num">3</span><div><span class="layer-label">Shadows</span><div class="layer-desc">Composited via offscreen canvas for uniform opacity</div></div></div>
+    <div class="layer"><span class="layer-num">4</span><div><span class="layer-label">Buildings</span><div class="layer-desc">Grey polygons, pub building highlighted</div></div></div>
+    <div class="layer"><span class="layer-num">5</span><div><span class="layer-label">Outdoor area</span><div class="layer-desc">Green dashed outline with evenodd holes for enclosed buildings</div></div></div>
+    <div class="layer"><span class="layer-num">6</span><div><span class="layer-label">Pub marker</span><div class="layer-desc">Pin icon at the pub's location</div></div></div>
+    <div class="layer"><span class="layer-num">7</span><div><span class="layer-label">Bezel</span><div class="layer-desc">Metallic ring with compass ticks (N/S/E/W)</div></div></div>
+    <div class="layer"><span class="layer-num">8</span><div><span class="layer-label">Sun icon</span><div class="layer-desc">Positioned on bezel at sun's bearing</div></div></div>
+  </div>
+
+  <p>The porthole shows a ~74m radius around the pub at zoom 18. Buildings within 274m (porthole radius + 200m shadow cap) are loaded from the vector tiles, but only those within the viewport are drawn.</p>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="gardens">6. Computing Outdoor Areas</h2>
+
+  <p>The green dashed outline marking a pub's outdoor area is computed by subtracting building footprints from the Land Registry cadastral parcel:</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 600 180" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+      <!-- Step 1: Plot -->
+      <rect x="20" y="20" width="140" height="130" rx="4" fill="#E8F5E9" stroke="#22C55E" stroke-width="2"/>
+      <text x="90" y="160" text-anchor="middle" font-size="10" fill="#22C55E" font-weight="600">Land Registry parcel</text>
+
+      <!-- Minus -->
+      <text x="185" y="90" text-anchor="middle" font-size="24" fill="#374151">&minus;</text>
+
+      <!-- Step 2: Buildings -->
+      <rect x="210" y="20" width="140" height="130" rx="4" fill="none" stroke="#CBD5E0" stroke-width="1" stroke-dasharray="4"/>
+      <rect x="230" y="35" width="60" height="45" fill="#94A3B8" rx="2"/>
+      <rect x="310" y="60" width="25" height="25" fill="#94A3B8" rx="2"/>
+      <rect x="240" y="100" width="30" height="30" fill="#94A3B8" rx="2"/>
+      <text x="280" y="160" text-anchor="middle" font-size="10" fill="#64748B" font-weight="600">All buildings</text>
+
+      <!-- Equals -->
+      <text x="375" y="90" text-anchor="middle" font-size="24" fill="#374151">=</text>
+
+      <!-- Step 3: Garden -->
+      <rect x="400" y="20" width="140" height="130" rx="4" fill="#E8F5E9" stroke="#22C55E" stroke-width="2"/>
+      <!-- Holes -->
+      <rect x="420" y="35" width="60" height="45" fill="white" rx="2" stroke="#CBD5E0" stroke-width="1"/>
+      <rect x="500" y="60" width="25" height="25" fill="white" rx="2" stroke="#CBD5E0" stroke-width="1"/>
+      <rect x="430" y="100" width="30" height="30" fill="white" rx="2" stroke="#CBD5E0" stroke-width="1"/>
+      <text x="470" y="160" text-anchor="middle" font-size="10" fill="#22C55E" font-weight="600">Outdoor area</text>
+    </svg>
+  </div>
+
+  <p>This computation happens in the pipeline, not at runtime. The resulting polygon (with holes for enclosed buildings) ships in <code>pubs.json</code> and is drawn directly by the Canvas renderer using the <code>evenodd</code> fill rule.</p>
+
+  <div class="placeholder">Norwich garden examples coming soon &mdash; pipeline re-running with INSPIRE data</div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <h2 id="optimisations">7. Optimisations</h2>
+
+  <h3>Height-dependent building filter</h3>
+  <p>Not every building within 300m of a pub needs to be in the tiles. A short garden shed 250m away can never cast a shadow that reaches the pub. The maximum shadow reach depends on the building height:</p>
+
+  <div class="formula">
+    reach = porthole_radius + min(height / tan(3&deg;), 200m)
+  </div>
+
+  <table>
+    <tr><th>Building height</th><th>Max shadow (at 3&deg;)</th><th>Reach from pub</th></tr>
+    <tr><td>6m (shed)</td><td>114m</td><td>188m</td></tr>
+    <tr><td>8m (default)</td><td>153m</td><td>227m</td></tr>
+    <tr><td>10m (two-storey)</td><td>191m</td><td>265m</td></tr>
+    <tr><td>15m+ (tall)</td><td>200m (capped)</td><td>274m</td></tr>
+  </table>
+
+  <p>This filter reduces the number of buildings in tiles by ~30% for Norwich, with proportional savings in file size and download time.</p>
+
+  <h3>Pre-exploded vector tiles</h3>
+  <p>We tried PMTiles (a single-file spatial archive using HTTP range requests) but Cloudflare Pages strips the <code>Content-Length</code> header when compressing responses, which breaks PMTiles. Instead, we pre-explode the archive into individual z14 <code>.pbf</code> files. Each pub needs 1-4 tile fetches (~10-100 KB each), and the browser caches them via the service worker.</p>
+
+  <h3>Polygon stripping</h3>
+  <p>The full building polygon for each pub (20-50 coordinate pairs) was 70% of <code>pubs.json</code>. The frontend only needs the centroid for matching, so we pre-compute it in the pipeline and ship just two numbers (<code>clat</code>, <code>clng</code>). This reduced the file from 11.3 MB to 6.3 MB (44% saving).</p>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="num">30%</div><div class="label">Fewer buildings (height filter)</div></div>
+    <div class="stat"><div class="num">44%</div><div class="label">Smaller pubs.json</div></div>
+    <div class="stat"><div class="num">~1 MB</div><div class="label">pubs.json gzipped</div></div>
+    <div class="stat"><div class="num">1-4</div><div class="label">Tile fetches per pub</div></div>
+  </div>
+
+  <footer>
+    <a href="/">Sunny Pint</a> &middot; <a href="/attribution.html">Attribution &amp; Licences</a> &middot; Built with data from <a href="https://www.openstreetmap.org/">OpenStreetMap</a>, <a href="https://environment.data.gov.uk/">Environment Agency</a>, and <a href="https://use-land-property-data.service.gov.uk/">HM Land Registry</a>
+  </footer>
+</body>
+</html>
