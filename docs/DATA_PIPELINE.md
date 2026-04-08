@@ -1,125 +1,140 @@
 # Data Pipeline
 
-How to obtain, process, and serve the data SunPub needs.
+How to obtain, process, and serve the data Sunny Pint needs.
 
 ## Overview
 
 ```
-OSM .pbf ──→ GeoPackage ──→ Heights ──→ PMTiles ──→ public/data/
-   ↑              ↑            ↑
-Geofabrik    build_gpkg.py  measure_heights.py + LiDAR DSM
+OSM .pbf ──→ merge_pubs ──→ pubs_merged.json
+                                  │
+OSM .pbf ──→ build_gpkg ──→ buildings.gpkg ──→ measure_heights ──→ (heights added)
+                                  │                                       │
+INSPIRE GMLs ──→ match_plots ─────┴───────→ public/data/pubs.json         │
+                                                                          │
+                               generate_tiles ←───────────────────────────┘
+                                      │
+                               public/data/tiles/*.pbf
 ```
 
-## Step 1: Download OSM Data
+## Quick Start (Full UK Pipeline)
 
 ```bash
-# England extract from Geofabrik (~1.6GB)
+# 1. Download source data
 curl -L -o data/england-latest.osm.pbf \
   https://download.geofabrik.de/europe/united-kingdom/england-latest.osm.pbf
+
+# 2. Run the full pipeline
+just pipeline area=uk
+
+# Or step by step:
+just merge-pubs area=uk        # Extract pubs from OSM
+just download-inspire           # Download all INSPIRE plot data (England & Wales)
+just build-gpkg area=uk         # Extract buildings from .pbf → GeoPackage
+just measure-heights area=uk    # Sample LiDAR heights (auto-downloads tiles)
+just match-plots area=uk        # Match pubs to plots, compute outdoor areas
+just generate-tiles area=uk     # Create individual .pbf tile files
 ```
 
-Updated weekly. Contains all OSM features for England.
-
-## Step 2: Extract Buildings + Roads → GeoPackage
-
+For a single area (faster for development):
 ```bash
-just build-gpkg
-# or: uv run python scripts/build_gpkg.py
+just pipeline area=norwich
 ```
 
-Scans the .pbf, extracts `building=*` ways and `highway=*` ways within a bbox. Writes to `data/buildings.gpkg` with R-tree spatial index.
+Available areas: `norwich`, `bristol`, `london`, `edinburgh`, `cardiff`, `uk`
 
-**Current bbox**: Greater Norwich `(52.55, 1.15, 52.70, 1.40)`. Change `BBOX` in the script to expand.
+## Step 1: Extract Pubs from OSM
 
-**Output**: ~98k buildings, ~42k roads, 33MB GeoPackage.
+**Script**: `scripts/merge_pubs.py`
+**Input**: `data/england-latest.osm.pbf`
+**Output**: `data/pubs_merged.json`
 
-**Note**: Writes to a `.tmp` file then moves into place to avoid clobbering the live database.
+Extracts all `amenity=pub` nodes and ways from the .pbf file. Each pub gets:
+- Name, lat/lng, building polygon (if mapped as a way)
+- Beer garden, outdoor seating, opening hours tags
 
-## Step 3: Download LiDAR DSM
+UK-wide: ~33k pubs.
 
-```bash
-just download-lidar
-# or: uv run python scripts/download_lidar.py
-```
+## Step 2: Download INSPIRE Plot Data
 
-Downloads EA LiDAR Composite DSM 1m tiles via WCS (Web Coverage Service). Each tile is a 1km×1km GeoTIFF at 1m resolution (~4MB each).
+**Script**: `scripts/download_inspire.py`
+**Output**: `data/inspire/*.gml` (318 files, ~28 GB)
 
-**WCS endpoint**: `environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m/wcs`
+Downloads cadastral parcel boundaries from HM Land Registry for all local authorities in England and Wales. Used to compute pub outdoor areas (plot minus buildings = garden).
 
-**Coverage ID**: `9ba4d5ac-d596-445a-9056-dae3ddec0178__Lidar_Composite_Elevation_LZ_DSM_1m`
+Files are cached — re-running skips already downloaded authorities.
 
-**CRS**: EPSG:27700 (OSGB National Grid)
+## Step 3: Extract Buildings → GeoPackage
 
-**Current area**: 10km×10km around Norwich (100 tiles, ~400MB total).
+**Script**: `scripts/build_gpkg.py`
+**Input**: `data/england-latest.osm.pbf`
+**Output**: `data/buildings.gpkg`
 
-The tiles are in OSGB projection. Building heights are sampled from these tiles in the next step.
+Extracts all `building=*` ways from the .pbf and streams them into a GeoPackage (SQLite + R-tree spatial index). Streaming avoids OOM for large datasets.
 
-## Step 4: Measure Building Heights
+UK-wide: ~12M buildings.
 
-```bash
-just measure-heights
-# or: uv run python scripts/measure_heights.py
-```
+## Step 4: Measure Building Heights from LiDAR
 
-For each building in the GeoPackage:
-1. Find the LiDAR tile(s) covering it
-2. Rasterize the building footprint onto the DSM grid
-3. Compute local ground level (local minimum filter, radius=11m)
-4. Take the 90th percentile of DSM values within the footprint
-5. Height = 90th percentile − ground level
-6. Filter: buildings shorter than 6m are marked as such (hedges, sheds)
+**Script**: `scripts/measure_heights.py`
+**Input**: `data/buildings.gpkg` + EA LiDAR tiles (auto-downloaded)
+**Output**: Heights written back to `buildings.gpkg`
 
-Writes height values back into the GeoPackage as a new column.
+For each building:
+1. Downloads EA LiDAR DSM + DTM tiles covering the building (cached)
+2. Samples pixel values within the building footprint
+3. Height = 90th percentile of (DSM - DTM) values
+4. Buildings shorter than 6m are flagged (hedges, walls, sheds)
 
-**Why 90th percentile**: Captures the ridge height of pitched roofs while ignoring chimney/antenna outliers. More accurate than max (which grabs chimneys) or median (which underestimates on peaked roofs).
+**Why 90th percentile**: Captures ridge height of pitched roofs while ignoring chimney/antenna outliers.
 
-## Step 5: Generate PMTiles
+**LiDAR sources**:
+- England: EA WCS (`environment.data.gov.uk`)
+- Scotland: JNCC WCS
+- Wales: NRW COG
 
-```bash
-just generate-pmtiles
-# or: uv run python scripts/generate_pmtiles.py
-```
+## Step 5: Match Plots and Compute Outdoor Areas
 
-Converts the GeoPackage (with heights) into a PMTiles file for static serving.
-
-**PMTiles**: A single file containing vector tiles with a built-in spatial index. The client makes HTTP range requests to fetch just the tiles it needs — no tile server required.
-
-**Output**: `public/data/buildings.pmtiles`
-
-## Step 6: Fetch Pub Data
-
-```bash
-just fetch-pubs
-# or: uv run python scripts/fetch_pubs.py
-```
-
-Queries Overpass API for `amenity=pub` in Norwich. Enriches with:
-- Building polygon (from OSM way geometry)
-- Beer garden / outdoor seating tags
-- Outdoor area (from Land Registry INSPIRE: plot minus building)
-
+**Script**: `scripts/match_plots.py`
+**Input**: `data/pubs_merged.json` + `data/inspire/*.gml` + `data/buildings.gpkg`
 **Output**: `public/data/pubs.json`
 
-## Land Registry INSPIRE Data
+For each pub:
+1. Loads INSPIRE parcels from individual GML files, filtered to parcels near pubs (avoids loading all 22M parcels into memory)
+2. Finds the cadastral parcel containing the pub
+3. Subtracts ALL building footprints from the parcel (not just the pub building)
+4. The remaining polygon is the outdoor area (garden/beer garden)
+5. Supports holes in the outdoor polygon (buildings fully enclosed in the plot)
 
-Property plot boundaries. Used to compute outdoor areas (plot minus building = garden).
+## Step 6: Generate Vector Tile Files
 
-```bash
-# Download Norwich plots (requires session cookie)
-curl -s -c cookies.txt -b cookies.txt \
-  "https://use-land-property-data.service.gov.uk/datasets/inspire" -o /dev/null
-curl -s -L -c cookies.txt -b cookies.txt \
-  -o data/inspire/norwich.zip \
-  "https://use-land-property-data.service.gov.uk/datasets/inspire/download/Norwich.zip"
-```
+**Script**: `scripts/generate_tiles.py`
+**Input**: `public/data/pubs.json` + `data/buildings.gpkg`
+**Output**: `public/data/tiles/{x}-{y}.pbf`
 
-Format: GML (EPSG:27700). The `match_plots.py` script matches pubs to their plots and computes outdoor areas.
+Creates individual z14 vector tile files for static serving:
+1. Filters buildings to those near pubs using **height-dependent radius** — short buildings that can't cast shadows far enough are excluded
+2. Runs tippecanoe to create a temporary PMTiles archive at z14
+3. Extracts individual tiles as `.pbf` files
+
+**Height-dependent filtering**: Instead of a flat 300m radius, each building's maximum shadow reach is calculated from its height and the minimum useful sun angle (3°). A 6m shed 200m away is excluded because its shadow can't reach the pub. This reduces tile count by ~30%.
+
+**Output stats** (Norwich): 56 tiles, 0.5 MB total, largest 111 KB.
 
 ## Coordinate Systems
 
-- **OSM data**: WGS84 (EPSG:4326) — lat/lng
-- **LiDAR DSM**: OSGB National Grid (EPSG:27700) — eastings/northings in metres
-- **Land Registry**: OSGB (EPSG:27700)
-- **App runtime**: Everything in WGS84
+| System | CRS | Used by |
+|--------|-----|---------|
+| WGS84 | EPSG:4326 | OSM data, app runtime, GeoJSON |
+| OSGB National Grid | EPSG:27700 | EA LiDAR, Land Registry INSPIRE |
 
-**Important**: OSGB grid north is rotated ~2.6° from true north at Norwich. Any raster computed in OSGB must be reprojected to WGS84 before overlaying on a map. Geometric shadow projection avoids this by working in WGS84 directly.
+All runtime data is in WGS84. OSGB is only used during pipeline processing.
+
+## Data Sources
+
+| Source | What | License | How to obtain |
+|--------|------|---------|---------------|
+| OpenStreetMap | Pubs, buildings, roads | ODbL | [Geofabrik .pbf](https://download.geofabrik.de/europe/united-kingdom/england.html) |
+| EA LiDAR | Building heights (DSM/DTM) | OGL v3 | Auto-downloaded via WCS |
+| HM Land Registry INSPIRE | Property plot boundaries | OGL v3 | `scripts/download_inspire.py` |
+| Open-Meteo | Cloud cover / weather | CC BY 4.0 | API (no key needed) |
+| CARTO | Base map tiles | CC BY 3.0 | CDN tiles |

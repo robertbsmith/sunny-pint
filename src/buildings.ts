@@ -10,8 +10,8 @@ import Pbf from "pbf";
 import { state } from "./state";
 import type { Building, Pub } from "./types";
 
-// Porthole radius (~74 m) + shadow cap (200 m) + margin.
-const LOAD_RADIUS_M = 300;
+// Porthole radius (~74 m) + shadow cap (200 m).
+const LOAD_RADIUS_M = 274;
 const M_PER_DEG_LAT = 111320;
 
 // Tile zoom level — must match generate_tiles.py TILE_ZOOM.

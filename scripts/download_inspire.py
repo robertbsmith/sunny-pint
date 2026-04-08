@@ -10,6 +10,7 @@ Usage:
 """
 
 import io
+import http.cookiejar
 import re
 import time
 import urllib.request
@@ -22,15 +23,70 @@ OUTPUT_GML = DATA_DIR / "Land_Registry_Cadastral_Parcels.gml"
 BASE_URL = "https://use-land-property-data.service.gov.uk"
 LIST_URL = f"{BASE_URL}/datasets/inspire/download"
 
-USER_AGENT = "SunnyPint/0.1 (https://sunny-pint.co.uk)"
+USER_AGENT = "Mozilla/5.0 (compatible; SunnyPint/0.1; +https://sunny-pint.co.uk)"
+
+# Cookie jar for session handling.
+_cookie_jar = http.cookiejar.CookieJar()
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Capture 302 redirects instead of following them."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise _RedirectCaptured(newurl)
+
+
+class _RedirectCaptured(Exception):
+    def __init__(self, url: str):
+        self.url = url
+
+
+_opener = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(_cookie_jar),
+    urllib.request.HTTPRedirectHandler(),
+)
+
+_opener_no_redirect = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(_cookie_jar),
+    _NoRedirect(),
+)
+
+
+def _fetch(url: str, timeout: int = 60) -> bytes:
+    """Fetch a URL with cookie handling."""
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with _opener.open(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def _fetch_with_redirect(url: str, timeout: int = 60) -> bytes:
+    """Fetch a URL that redirects to a signed S3 URL.
+
+    The Land Registry returns a 302 to a signed S3 URL. We capture the redirect
+    and fetch the S3 URL directly (without cookies, which confuse S3).
+    """
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        _opener_no_redirect.open(req, timeout=timeout)
+        # Shouldn't get here — expect a redirect.
+        raise Exception("Expected redirect, got 200")
+    except _RedirectCaptured as e:
+        # Fetch the S3 URL directly without cookies.
+        s3_req = urllib.request.Request(e.url)
+        with urllib.request.urlopen(s3_req, timeout=timeout) as resp:
+            return resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code == 302:
+            s3_url = e.headers.get("Location")
+            if s3_url:
+                s3_req = urllib.request.Request(s3_url)
+                with urllib.request.urlopen(s3_req, timeout=timeout) as resp:
+                    return resp.read()
+        raise
 
 
 def get_authority_urls() -> list[str]:
     """Scrape the download page for all local authority ZIP URLs."""
-    req = urllib.request.Request(LIST_URL, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        html = resp.read().decode()
-
+    html = _fetch(LIST_URL, timeout=30).decode()
     paths = re.findall(r'href="(/datasets/inspire/download/[^"]+\.zip)"', html)
     return [f"{BASE_URL}{p}" for p in sorted(set(paths))]
 
@@ -44,9 +100,7 @@ def download_and_extract(url: str, output_dir: Path) -> tuple[Path | None, int]:
         return gml_path, gml_path.stat().st_size
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = resp.read()
+        data = _fetch_with_redirect(url)
 
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             gml_files = [f for f in zf.namelist() if f.endswith(".gml")]

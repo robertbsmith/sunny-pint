@@ -32,10 +32,12 @@ SCHEMA = {
 
 
 class BuildingExtractor(osmium.SimpleHandler):
-    def __init__(self, bbox):
+    """Extract buildings from .pbf and stream directly to GeoPackage."""
+
+    def __init__(self, bbox, dst):
         super().__init__()
         self.bbox = bbox
-        self.buildings = []
+        self.dst = dst
         self.count = 0
 
     def way(self, w):
@@ -53,14 +55,13 @@ class BuildingExtractor(osmium.SimpleHandler):
         if len(nodes) < 3:
             return
 
-        # Check bbox.
         if not any(s <= lat <= n_ and w_ <= lon <= e for lon, lat in nodes):
             return
 
         if nodes[0] != nodes[-1]:
             nodes.append(nodes[0])
 
-        self.buildings.append({
+        self.dst.write({
             "geometry": {"type": "Polygon", "coordinates": [nodes]},
             "properties": {
                 "osm_id": w.id,
@@ -71,7 +72,7 @@ class BuildingExtractor(osmium.SimpleHandler):
             },
         })
         self.count += 1
-        if self.count % 5000 == 0:
+        if self.count % 50000 == 0:
             print(f"  {self.count} buildings...", flush=True)
 
 
@@ -87,14 +88,8 @@ def main():
     print(f"  PBF: {PBF.name}")
     print(f"  Bbox: {'all' if area.bbox is None else area.bbox}")
 
-    t0 = time.time()
-    handler = BuildingExtractor(bbox)
-    handler.apply_file(str(PBF), locations=True)
-    elapsed = time.time() - t0
-    print(f"  Extracted {handler.count} buildings in {elapsed:.0f}s")
-
     TMP = OUT.with_suffix(".gpkg.tmp")
-    print(f"Writing {TMP} ...")
+    print(f"  Streaming to {TMP}...")
     t0 = time.time()
     with fiona.open(
         str(TMP), "w",
@@ -103,10 +98,11 @@ def main():
         crs=CRS.from_epsg(4326),
         layer="buildings",
     ) as dst:
-        for b in handler.buildings:
-            dst.write(b)
+        handler = BuildingExtractor(bbox, dst)
+        handler.apply_file(str(PBF), locations=True)
 
     elapsed = time.time() - t0
+    print(f"  {handler.count} buildings in {elapsed:.0f}s")
     shutil.move(str(TMP), str(OUT))
     size_mb = OUT.stat().st_size / 1e6
     print(f"  Wrote {handler.count} buildings in {elapsed:.1f}s ({size_mb:.1f} MB)")

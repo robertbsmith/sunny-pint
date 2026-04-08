@@ -17,6 +17,7 @@ from pathlib import Path
 import fiona
 from pyproj import Transformer
 from shapely.geometry import shape, Point, Polygon
+from shapely.geometry import Point as ShapelyPoint
 from shapely import prepare, wkb
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
@@ -26,7 +27,7 @@ from areas import parse_area, in_bbox
 DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
 PUBS_OUT = Path(__file__).resolve().parent.parent / "public" / "data" / "pubs.json"
-GML_FILE = DATA / "inspire" / "Land_Registry_Cadastral_Parcels.gml"
+INSPIRE_DIR = DATA / "inspire"
 GPKG_PATH = DATA / "buildings.gpkg"
 
 to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True)
@@ -97,31 +98,72 @@ def osgb_to_wgs_rings(geom):
     return rings
 
 
-def load_parcels():
-    """Load all INSPIRE parcels into a list of prepared shapely geometries."""
-    if not GML_FILE.exists():
-        print(f"  WARNING: {GML_FILE} not found — skipping plot matching")
-        print(f"  Download from: https://use-land-property-data.service.gov.uk/datasets/inspire")
-        return []
+def load_parcels_near_pubs(pubs: list[dict]) -> STRtree | None:
+    """Load INSPIRE parcels from individual GML files, filtered to those near pubs.
 
-    print(f"  Loading parcels from {GML_FILE.name}...", flush=True)
+    Returns an STRtree spatial index of parcels, or None if no GML files found.
+    """
+    gml_files = sorted(INSPIRE_DIR.glob("*.gml"))
+    if not gml_files:
+        print(f"  WARNING: no GML files in {INSPIRE_DIR} — skipping plot matching")
+        print(f"  Run: uv run python scripts/download_inspire.py")
+        return None
+
+    # Build a set of pub points in OSGB for fast proximity checking.
+    pub_points_osgb = []
+    for pub in pubs:
+        if pub.get("polygon") and len(pub["polygon"]) > 2:
+            clat = sum(c[0] for c in pub["polygon"]) / len(pub["polygon"])
+            clng = sum(c[1] for c in pub["polygon"]) / len(pub["polygon"])
+        else:
+            clat, clng = pub["lat"], pub["lng"]
+        x, y = to_osgb.transform(clng, clat)
+        pub_points_osgb.append(ShapelyPoint(x, y))
+
+    pub_tree = STRtree(pub_points_osgb)
+
+    # Buffer distance: 50m should catch the parcel containing any pub.
+    BUF = 50
+
     parcels = []
-    with fiona.open(str(GML_FILE)) as src:
-        for feat in src:
-            geom = shape(feat["geometry"])
-            if geom.is_valid and not geom.is_empty:
-                prepare(geom)
-                parcels.append(geom)
-    print(f"  {len(parcels)} parcels loaded")
-    return parcels
+    total_loaded = 0
+    total_kept = 0
 
+    for i, gml_file in enumerate(gml_files, 1):
+        name = gml_file.stem.replace("_", " ")
+        try:
+            with fiona.open(str(gml_file)) as src:
+                file_count = 0
+                kept = 0
+                for feat in src:
+                    geom = shape(feat["geometry"])
+                    if geom.is_empty or not geom.is_valid:
+                        continue
+                    file_count += 1
 
-def find_containing_parcel(point_osgb, parcels):
-    """Find the parcel containing a point."""
-    for parcel in parcels:
-        if parcel.contains(point_osgb):
-            return parcel
-    return None
+                    # Only keep parcels near a pub.
+                    nearby = pub_tree.query(geom.buffer(BUF))
+                    if len(nearby) == 0:
+                        continue
+
+                    prepare(geom)
+                    parcels.append(geom)
+                    kept += 1
+
+                total_loaded += file_count
+                total_kept += kept
+        except Exception as e:
+            print(f"  [{i}/{len(gml_files)}] {name}: ERROR {e}")
+            continue
+
+        if i % 25 == 0 or i == len(gml_files):
+            print(f"  [{i}/{len(gml_files)}] {total_kept} parcels near pubs (of {total_loaded} total)", flush=True)
+
+    print(f"  {total_kept} parcels near pubs from {len(gml_files)} files")
+    if not parcels:
+        return None
+
+    return STRtree(parcels), parcels
 
 
 def building_polygon_osgb(pub):
@@ -149,20 +191,21 @@ def main():
     pubs = json.loads(PUBS_IN.read_text())
     print(f"  {len(pubs)} pubs loaded")
 
-    parcels = load_parcels()
+    result = load_parcels_near_pubs(pubs)
 
-    if parcels:
+    if result:
+        parcel_tree, all_parcels = result
+
         # Load all buildings for subtracting from plots.
         all_buildings, building_tree = load_buildings_osgb(area)
 
         matched = 0
         outdoor_computed = 0
 
-        for pub in pubs:
+        for pi, pub in enumerate(pubs):
             if not in_bbox(pub["lat"], pub["lng"], area.bbox):
                 continue
 
-            # Use OSM polygon centroid if available.
             if pub.get("polygon") and len(pub["polygon"]) > 2:
                 clat = sum(c[0] for c in pub["polygon"]) / len(pub["polygon"])
                 clng = sum(c[1] for c in pub["polygon"]) / len(pub["polygon"])
@@ -171,7 +214,14 @@ def main():
                 px, py = to_osgb.transform(pub["lng"], pub["lat"])
             pt = Point(px, py)
 
-            parcel = find_containing_parcel(pt, parcels)
+            # Find containing parcel via spatial index.
+            candidates = parcel_tree.query(pt)
+            parcel = None
+            for idx in candidates:
+                if all_parcels[idx].contains(pt):
+                    parcel = all_parcels[idx]
+                    break
+
             if parcel is None:
                 continue
 
@@ -185,7 +235,6 @@ def main():
             else:
                 overlapping = []
 
-            # Fall back to just the pub's own building if no GeoPackage hits.
             if not overlapping:
                 b = building_polygon_osgb(pub)
                 if b and b.is_valid and not b.is_empty:
@@ -202,6 +251,9 @@ def main():
                 pub["outdoor"] = osgb_to_wgs_rings(outdoor)
                 pub["outdoor_area_m2"] = round(outdoor.area, 1)
                 outdoor_computed += 1
+
+            if (pi + 1) % 5000 == 0:
+                print(f"  {pi + 1}/{len(pubs)} pubs processed, {matched} matched...", flush=True)
 
         print(f"\n  {matched}/{len(pubs)} pubs matched to a plot")
         print(f"  {outdoor_computed} outdoor areas computed (plot minus all buildings)")

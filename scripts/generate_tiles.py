@@ -33,7 +33,19 @@ PUBS_PATH = OUTPUT_DIR / "pubs.json"
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
-BUILDING_RADIUS_M = 300
+# Porthole viewport radius in metres (~74m at z18 UK latitudes).
+PORTHOLE_RADIUS_M = 74
+
+# Frontend shadow length cap (matches shadow.ts maxShadowLen).
+SHADOW_CAP_M = 200
+
+# Minimum sun altitude (degrees) worth considering for shadows.
+# At 3° the dayFrac is ~0.5, shadows are clearly visible.
+MIN_SUN_ALT_DEG = 3
+
+# Max possible radius: porthole + shadow cap.
+MAX_RADIUS_M = PORTHOLE_RADIUS_M + SHADOW_CAP_M  # 274m
+
 TILE_ZOOM = 14  # zoom level for individual tile files
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -46,6 +58,18 @@ def gpkg_header_len(blob: bytes) -> int:
     envelope_type = (flags >> 1) & 0x07
     envelope_sizes = {0: 0, 1: 32, 2: 48, 3: 48, 4: 64}
     return 8 + envelope_sizes.get(envelope_type, 0)
+
+
+def shadow_reach_m(height_m: float) -> float:
+    """Max distance a building of given height can cast a shadow into the porthole.
+
+    shadow_length = height / tan(sun_altitude)
+    reach = porthole_radius + min(shadow_length, shadow_cap)
+    """
+    import math
+    shadow_len = height_m / math.tan(math.radians(MIN_SUN_ALT_DEG))
+    shadow_len = min(shadow_len, SHADOW_CAP_M)
+    return PORTHOLE_RADIUS_M + shadow_len
 
 
 def resolve_height(osm_height, levels, lidar_height) -> float:
@@ -295,10 +319,17 @@ def load_pub_points() -> list[ShapelyPoint]:
 
 
 def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
-    """Export buildings near pubs to a single GeoJSON file. Returns feature count."""
+    """Export buildings near pubs to a single GeoJSON file.
+
+    Uses height-dependent radius: short buildings are excluded if they're too
+    far away to cast a shadow into the porthole at low sun angles.
+    Returns feature count.
+    """
     pub_points = load_pub_points()
     pub_tree = STRtree(pub_points)
-    buf_deg = BUILDING_RADIUS_M / 111320.0
+
+    # Use max radius for the initial spatial query, then refine per-building.
+    max_buf_deg = MAX_RADIUS_M / 111320.0
 
     conn = sqlite3.connect(str(GPKG_PATH))
     rows = conn.execute(
@@ -308,6 +339,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
     features = []
     skipped = 0
+    skipped_by_height = 0
 
     for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height in rows:
         try:
@@ -320,12 +352,21 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
             if not in_bbox(centroid.y, centroid.x, area.bbox):
                 continue
 
-            nearby_idxs = pub_tree.query(centroid.buffer(buf_deg))
-            if len(nearby_idxs) == 0:
-                skipped += 1
-                continue
-
+            # Resolve height first so we can compute shadow reach.
             h = resolve_height(osm_height, levels, lidar_height)
+            reach = shadow_reach_m(h)
+            reach_deg = reach / 111320.0
+
+            # Check if any pub is within this building's shadow reach.
+            nearby_idxs = pub_tree.query(centroid.buffer(reach_deg))
+            if len(nearby_idxs) == 0:
+                # Try max radius as fallback — building might be very close but short.
+                # Actually no: if reach_deg found nothing, max_buf_deg won't either
+                # since reach is always >= porthole radius.
+                skipped += 1
+                if reach < MAX_RADIUS_M:
+                    skipped_by_height += 1
+                continue
 
             coords = [list(geom.exterior.coords)]
             for ring in geom.interiors:
@@ -341,7 +382,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
             continue
 
     conn.close()
-    print(f"  {len(features)} buildings near pubs, {skipped} filtered out")
+    print(f"  {len(features)} buildings near pubs, {skipped} filtered out ({skipped_by_height} by height)")
 
     geojson = {"type": "FeatureCollection", "features": features}
     with open(output_path, "w") as f:

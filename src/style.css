@@ -133,17 +133,35 @@ a {
   text-decoration: none;
 }
 
-.kofi-icon {
-  height: 28px;
-  border: 0;
-  opacity: 0.8;
-  transition: opacity 0.15s;
+#kofi-link {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  text-decoration: none;
 }
-.kofi-icon:hover {
-  opacity: 1;
+
+.kofi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: system-ui, sans-serif;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px var(--shadow);
+  transition: background 150ms;
+  border: 1px solid var(--outline-variant);
 }
-html.dark .kofi-icon {
-  filter: brightness(0.85) saturate(0.9);
+.kofi-btn:hover {
+  background: var(--surface-container-high);
+}
+.kofi-btn img {
+  opacity: 0.7;
 }
 
 #btn-locate {

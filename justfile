@@ -51,10 +51,6 @@ download-inspire:
 match-plots:
     uv run python scripts/match_plots.py --area {{area}}
 
-# Fetch pub data from OSM Overpass API (Norwich only, legacy)
-fetch-pubs:
-    uv run python scripts/fetch_pubs.py
-
 # Extract buildings + roads from England .osm.pbf → GeoPackage
 build-gpkg:
     uv run python scripts/build_gpkg.py --area {{area}}
