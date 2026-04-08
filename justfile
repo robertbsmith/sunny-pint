@@ -37,7 +37,7 @@ ci: typecheck lint build
 # ── Data Pipeline ─────────────────────────────────────────────────────
 
 # Run full pipeline: pubs → plots → buildings → heights → tiles
-pipeline: merge-pubs match-plots build-gpkg measure-heights generate-pmtiles
+pipeline: merge-pubs match-plots build-gpkg measure-heights generate-tiles
 
 # Merge pub data from FSA + VOA + OSM
 merge-pubs:
@@ -59,9 +59,9 @@ build-gpkg:
 measure-heights:
     uv run python scripts/measure_heights.py --area {{area}}
 
-# Generate PMTiles from buildings with heights
-generate-pmtiles:
-    uv run python scripts/generate_pmtiles.py --area {{area}}
+# Generate individual vector tile files from buildings with heights
+generate-tiles:
+    uv run python scripts/generate_tiles.py --area {{area}}
 
 # Download EA LiDAR DSM + DTM tiles for Norwich area
 download-lidar:

@@ -1,11 +1,10 @@
 /**
- * Building data loader — PMTiles edition.
+ * Building data loader — static vector tiles edition.
  *
- * Loads buildings on demand from z8-grid PMTiles files via HTTP range requests.
- * Only fetches tiles covering the area around the selected pub.
+ * Loads buildings on demand from individual z14 .pbf tile files.
+ * Each pub's 300m radius spans at most 4 z14 tiles.
  */
 
-import { PMTiles } from "pmtiles";
 import { VectorTile } from "@mapbox/vector-tile";
 import Pbf from "pbf";
 import { state } from "./state";
@@ -15,15 +14,11 @@ import type { Building, Pub } from "./types";
 const LOAD_RADIUS_M = 300;
 const M_PER_DEG_LAT = 111320;
 
-// Z8 tile grid — must match generate_pmtiles.py SPLIT_ZOOM.
-const SPLIT_ZOOM = 8;
+// Tile zoom level — must match generate_tiles.py TILE_ZOOM.
+const TILE_ZOOM = 14;
 
-// Cache open PMTiles instances by z8 key.
-const archiveCache = new Map<string, PMTiles>();
-
-// Tile zoom level to request from the PMTiles archive.
-// z16 gives ~2.4 m/px tiles — good detail for building outlines.
-const QUERY_ZOOM = 16;
+// Cache fetched tiles by key.
+const tileCache = new Map<string, Building[]>();
 
 /** Convert lng/lat to a tile x,y at a given zoom. */
 function lngLatToTile(lng: number, lat: number, z: number): [number, number] {
@@ -34,17 +29,6 @@ function lngLatToTile(lng: number, lat: number, z: number): [number, number] {
     ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
   );
   return [Math.min(x, n - 1), Math.min(y, n - 1)];
-}
-
-/** Get or create a PMTiles instance for a z8 grid cell. */
-function getArchive(z8x: number, z8y: number): PMTiles {
-  const key = `${z8x}-${z8y}`;
-  let archive = archiveCache.get(key);
-  if (!archive) {
-    archive = new PMTiles(`/data/buildings-${key}.pmtiles`);
-    archiveCache.set(key, archive);
-  }
-  return archive;
 }
 
 /** Decode a vector tile buffer into Building objects. */
@@ -59,7 +43,6 @@ function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Buil
     const geojson = feature.toGeoJSON(tx, ty, tz);
     const h = (feature.properties["h"] as number) || 8;
 
-    // toGeoJSON(0,0,0) gives [lng,lat] in degrees. Convert to [lat,lng] for our Building type.
     const geomCoords = geojson.geometry.type === "Polygon"
       ? [geojson.geometry.coordinates]
       : geojson.geometry.type === "MultiPolygon"
@@ -78,7 +61,29 @@ function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Buil
   return buildings;
 }
 
-/** Load buildings near a pub from PMTiles and update state. */
+/** Fetch a single tile, with caching. */
+async function fetchTile(tx: number, ty: number): Promise<Building[]> {
+  const key = `${tx}-${ty}`;
+  const cached = tileCache.get(key);
+  if (cached) return cached;
+
+  try {
+    const resp = await fetch(`/data/tiles/${key}.pbf`);
+    if (!resp.ok) {
+      // 404 = no buildings in this tile, that's fine.
+      tileCache.set(key, []);
+      return [];
+    }
+    const data = await resp.arrayBuffer();
+    const buildings = decodeTile(data, tx, ty, TILE_ZOOM);
+    tileCache.set(key, buildings);
+    return buildings;
+  } catch {
+    return [];
+  }
+}
+
+/** Load buildings near a pub from static tiles and update state. */
 export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   // Use OSM polygon centroid for matching if available.
   let matchLat = pub.lat;
@@ -89,47 +94,25 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
     matchLng = c[1];
   }
 
-  // Determine which z8 archive this pub falls in.
-  const [z8x, z8y] = lngLatToTile(pub.lng, pub.lat, SPLIT_ZOOM);
-
-  // Determine which z16 tiles cover the load radius.
+  // Determine which z14 tiles cover the load radius.
   const dlat = LOAD_RADIUS_M / M_PER_DEG_LAT;
   const dlng = LOAD_RADIUS_M / (M_PER_DEG_LAT * Math.cos((pub.lat * Math.PI) / 180));
 
-  const [minTx, minTy] = lngLatToTile(pub.lng - dlng, pub.lat + dlat, QUERY_ZOOM);
-  const [maxTx, maxTy] = lngLatToTile(pub.lng + dlng, pub.lat - dlat, QUERY_ZOOM);
+  const [minTx, minTy] = lngLatToTile(pub.lng - dlng, pub.lat + dlat, TILE_ZOOM);
+  const [maxTx, maxTy] = lngLatToTile(pub.lng + dlng, pub.lat - dlat, TILE_ZOOM);
 
-  // Fetch all z16 tiles in the bounding box.
-  const archive = getArchive(z8x, z8y);
-  try {
-    const header = await archive.getHeader();
-    console.log(`PMTiles header: z${header.minZoom}-${header.maxZoom}, ${header.numAddressedTiles} tiles`);
-  } catch (err) {
-    console.error("PMTiles header fetch failed:", err);
-  }
-  console.log(`Fetching tiles z${QUERY_ZOOM} x:${minTx}-${maxTx} y:${minTy}-${maxTy}`);
+  // Fetch all z14 tiles in the bounding box (at most 4 tiles).
   const tilePromises: Promise<Building[]>[] = [];
-
   for (let tx = minTx; tx <= maxTx; tx++) {
     for (let ty = minTy; ty <= maxTy; ty++) {
-      const tileX = tx, tileY = ty;
-      tilePromises.push(
-        archive.getZxy(QUERY_ZOOM, tileX, tileY).then((resp) => {
-          if (!resp?.data) return [];
-          return decodeTile(resp.data, tileX, tileY, QUERY_ZOOM);
-        }).catch((err) => {
-          console.error(`PMTiles tile fetch failed (z${QUERY_ZOOM}/${tileX}/${tileY}):`, err);
-          return [];
-        }),
-      );
+      tilePromises.push(fetchTile(tx, ty));
     }
   }
 
   const tileResults = await Promise.all(tilePromises);
   const allBuildings = tileResults.flat();
 
-  // Deduplicate buildings that appear in multiple tiles (tippecanoe can clip
-  // features across tile boundaries). Use centroid as a rough dedup key.
+  // Deduplicate and bbox filter.
   const seen = new Set<string>();
   const nearby: Building[] = [];
   let pubIdx = -1;
@@ -142,13 +125,11 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   const east = pub.lng + dlng;
 
   for (const b of allBuildings) {
-    // Dedup by rounded centroid.
     const c = buildingCentroid(b.coords);
     const dedupKey = `${c[0].toFixed(6)},${c[1].toFixed(6)}`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
 
-    // Bbox filter (tiles may extend beyond our radius).
     let inBbox = false;
     for (const [lat, lng] of b.coords) {
       if (lat >= south && lat <= north && lng >= west && lng <= east) {
@@ -179,7 +160,7 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
 
   state.buildings = nearby;
   state.pubBuildingIndex = pubIdx;
-  console.log(`Loaded ${nearby.length} buildings near ${pub.name} (z8: ${z8x}-${z8y})`);
+  console.log(`Loaded ${nearby.length} buildings near ${pub.name}`);
 }
 
 function buildingCentroid(coords: [number, number][]): [number, number] {
