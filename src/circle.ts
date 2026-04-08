@@ -215,19 +215,9 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  // ── 5. Shadows (fade in with daylight, reduced when cloudy) ──
-  const weatherDim = state.weatherState === "overcast" ? 0 : state.weatherState === "partly-cloudy" ? 0.5 : 1;
-  if (dayFrac > 0 && state.shadowPolys.length > 0 && weatherDim > 0) {
-    drawShadows(ctx, cx, cy, r, W, H, centre, mpp, sun.altitude, dayFrac * weatherDim);
-  }
-
-  // ── 6. Overcast tint ──
-  if (state.weatherState === "overcast" && dayFrac > 0) {
-    ctx.fillStyle = "rgba(180,185,190,0.25)";
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-  } else if (state.weatherState === "partly-cloudy" && dayFrac > 0) {
-    ctx.fillStyle = "rgba(180,185,190,0.10)";
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  // ── 5. Shadows (fade in with daylight) ──
+  if (dayFrac > 0 && state.shadowPolys.length > 0) {
+    drawShadows(ctx, cx, cy, r, W, H, centre, mpp, sun.altitude, dayFrac);
   }
 
   // ── 7. Buildings ──
