@@ -36,12 +36,16 @@ ci: typecheck lint build
 
 # ── Data Pipeline ─────────────────────────────────────────────────────
 
-# Run full pipeline: pubs → plots → buildings → heights → tiles
-pipeline: merge-pubs match-plots build-gpkg measure-heights generate-tiles
+# Run full pipeline: pubs → inspire → buildings → heights → plots → tiles
+pipeline: merge-pubs download-inspire build-gpkg measure-heights match-plots generate-tiles
 
-# Merge pub data from FSA + VOA + OSM
+# Extract pubs from OSM
 merge-pubs:
     uv run python scripts/merge_pubs.py --area {{area}}
+
+# Download all INSPIRE Land Registry plot data (England & Wales)
+download-inspire:
+    uv run python scripts/download_inspire.py
 
 # Match pubs to Land Registry plots, compute outdoor areas → public/data/pubs.json
 match-plots:

@@ -79,13 +79,13 @@ def main():
     area = parse_area()
     bbox = area.bbox
 
+    # bbox=None means no filter (process everything in the .pbf).
     if bbox is None:
-        print("ERROR: --area uk requires a .pbf for the whole UK. Use a specific area.")
-        return
+        bbox = (-90, -180, 90, 180)  # world bbox — effectively no filter
 
     print(f"Extracting buildings for {area.name}")
     print(f"  PBF: {PBF.name}")
-    print(f"  Bbox: {bbox}")
+    print(f"  Bbox: {'all' if area.bbox is None else area.bbox}")
 
     t0 = time.time()
     handler = BuildingExtractor(bbox)
