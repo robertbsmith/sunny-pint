@@ -139,19 +139,46 @@ def sample_heights(
 # ── LiDAR fetching ────────────────────────────────────────────────────────
 
 
+_last_wcs_time = 0.0
+WCS_DELAY_S = 1.5  # minimum seconds between WCS requests
+WCS_MAX_RETRIES = 3
+
+
 def _fetch_tiff_bytes(url: str, timeout: int = 120) -> bytes | None:
-    """Fetch a GeoTIFF from a URL. Returns bytes or None on failure."""
-    try:
-        req = urllib.request.Request(url)
-        req.add_header("User-Agent", "SunPub/0.1")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read()
-        if data[:2] in (b"II", b"MM") and len(data) > 1000:
-            return data
-        return None
-    except Exception as exc:
-        print(f"WCS error: {exc}")
-        return None
+    """Fetch a GeoTIFF from a URL with rate limiting and retry.
+
+    Returns bytes or None on failure.
+    """
+    global _last_wcs_time
+
+    for attempt in range(WCS_MAX_RETRIES):
+        # Rate limit: wait between requests.
+        elapsed = time.time() - _last_wcs_time
+        if elapsed < WCS_DELAY_S:
+            time.sleep(WCS_DELAY_S - elapsed)
+
+        try:
+            req = urllib.request.Request(url)
+            req.add_header("User-Agent", "SunnyPint/0.1 (+https://sunny-pint.co.uk)")
+            _last_wcs_time = time.time()
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read()
+            if data[:2] in (b"II", b"MM") and len(data) > 1000:
+                return data
+            return None
+        except urllib.error.HTTPError as exc:
+            if exc.code in (429, 503, 504) and attempt < WCS_MAX_RETRIES - 1:
+                wait = (attempt + 1) * 5  # 5s, 10s, 15s backoff
+                print(f"  (HTTP {exc.code}, retry in {wait}s)", end="", flush=True)
+                time.sleep(wait)
+                continue
+            print(f"WCS error: {exc}")
+            return None
+        except Exception as exc:
+            print(f"WCS error: {exc}")
+            return None
+
+    return None
 
 
 def _read_tiff_bytes(data: bytes):
