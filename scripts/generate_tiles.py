@@ -333,7 +333,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
     conn = sqlite3.connect(str(GPKG_PATH))
     rows = conn.execute(
-        "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height "
+        "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
         "FROM buildings"
     ).fetchall()
 
@@ -341,7 +341,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
     skipped = 0
     skipped_by_height = 0
 
-    for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height in rows:
+    for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height, ground_elev in rows:
         try:
             hl = gpkg_header_len(blob)
             geom = wkb.loads(blob[hl:])
@@ -377,6 +377,8 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
                 "properties": {"h": round(h, 1)},
                 "geometry": {"type": "Polygon", "coordinates": coords},
             }
+            if ground_elev is not None:
+                feature["properties"]["e"] = round(ground_elev, 1)
             features.append(feature)
         except Exception:
             continue

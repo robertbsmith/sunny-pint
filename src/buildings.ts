@@ -42,6 +42,7 @@ function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Buil
     const feature = layer.feature(i);
     const geojson = feature.toGeoJSON(tx, ty, tz);
     const h = (feature.properties["h"] as number) || 8;
+    const e = (feature.properties["e"] as number) || 0;
 
     const geomCoords = geojson.geometry.type === "Polygon"
       ? [geojson.geometry.coordinates]
@@ -55,7 +56,7 @@ function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Buil
       const coords: [number, number][] = ring.map(
         (c) => [c[1], c[0]] as [number, number],
       );
-      buildings.push({ coords, height: h });
+      buildings.push({ coords, height: h, elev: e });
     }
   }
   return buildings;

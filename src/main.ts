@@ -5,7 +5,7 @@ import type { Pub } from "./types";
 import { initPubList, sortByDistance, renderList } from "./publist";
 import { initCircle, renderCircle } from "./circle";
 import { initSunArc, renderArc } from "./sunarc";
-import { computeShadows } from "./shadow";
+import { computeShadows, isTerrainOccluded } from "./shadow";
 import { loadBuildingsForPub } from "./buildings";
 import { initIcons, updateThemeIcon } from "./icons";
 import { initLocation } from "./location";
@@ -38,7 +38,12 @@ function updateScene(): void {
     altitude: (pos.altitude * 180) / Math.PI,
   };
 
-  state.shadowPolys = computeShadows(state.buildings, sun);
+  // Terrain occlusion: if a hill blocks the sun, no shadows at all.
+  if (isTerrainOccluded(pub, sun)) {
+    state.shadowPolys = [];
+  } else {
+    state.shadowPolys = computeShadows(state.buildings, sun, pub.elev ?? 0);
+  }
 
   const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
   renderCircle(canvas);

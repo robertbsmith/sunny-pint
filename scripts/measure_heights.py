@@ -83,16 +83,18 @@ TILE_SIZE_M = 1000    # iterate by 1km tiles (matches EA LiDAR grid)
 
 def sample_heights(
     ndsm: np.ndarray,
+    dtm: np.ndarray | None,
     transform,
     osgb_polys: list[Polygon],
-) -> list[float | None]:
-    """Sample 90th-percentile height per building from a normalised DSM.
+) -> list[tuple[float | None, float | None]]:
+    """Sample 90th-percentile height and ground elevation per building.
 
-    ndsm = DSM - DTM (height above ground, not above sea level).
-    Rasterizes ALL buildings at once, then extracts per-label heights.
+    ndsm = DSM - DTM (height above ground).
+    dtm = bare ground elevation (above sea level), or None.
+    Returns list of (height, ground_elev) tuples.
     """
     if ndsm is None or ndsm.size == 0:
-        return [None] * len(osgb_polys)
+        return [(None, None)] * len(osgb_polys)
 
     # Rasterize all buildings with unique IDs.
     shapes = [(poly, i + 1) for i, poly in enumerate(osgb_polys)]
@@ -104,27 +106,34 @@ def sample_heights(
         dtype=np.int32,
     )
 
-    heights: list[float | None] = []
+    results: list[tuple[float | None, float | None]] = []
     for i in range(len(osgb_polys)):
         mask = labels == (i + 1)
         if not mask.any():
-            heights.append(None)
+            results.append((None, None))
             continue
+
+        # Ground elevation from DTM (median within footprint).
+        ground = None
+        if dtm is not None:
+            dtm_vals = dtm[mask]
+            valid_dtm = dtm_vals[dtm_vals > -100]
+            if len(valid_dtm) > 0:
+                ground = float(np.median(valid_dtm))
 
         vals = ndsm[mask]
         above = vals[vals > MIN_HEIGHT_M]
         if len(above) > 0:
-            heights.append(float(np.percentile(above, 90)))
+            results.append((float(np.percentile(above, 90)), ground))
         else:
-            # Try lower threshold for short buildings.
             above = vals[vals > 2.0]
             if len(above) > 0:
                 h = float(np.percentile(above, 90))
-                heights.append(h if h >= MIN_HEIGHT_M else None)
+                results.append((h if h >= MIN_HEIGHT_M else None, ground))
             else:
-                heights.append(None)
+                results.append((None, ground))
 
-    return heights
+    return results
 
 
 # ── LiDAR fetching ────────────────────────────────────────────────────────
@@ -214,27 +223,22 @@ def _read_mosaic(paths: list[Path], w, s, e, n):
 
 
 def fetch_local(w, s, e, n):
-    """Fetch DSM and DTM from local tiles. Returns (ndsm, transform) or (None, None).
-
-    Local tiles are named dsm_1m_EASTING_NORTHING.tif. We also look for
-    dtm_1m_EASTING_NORTHING.tif in the same directory.
-    """
+    """Fetch DSM and DTM from local tiles. Returns (ndsm, dtm, transform)."""
     index = _get_tile_index()
     if not index:
-        return None, None
+        return None, None, None
 
     matching_dsm = [
         p for p, b in index
         if b.right > w and b.left < e and b.top > s and b.bottom < n
     ]
     if not matching_dsm:
-        return None, None
+        return None, None, None
 
     dsm, tfm = _read_mosaic(matching_dsm, w, s, e, n)
     if dsm is None:
-        return None, None
+        return None, None, None
 
-    # Try to find matching DTM tiles.
     matching_dtm = [
         Path(str(p).replace("dsm_", "dtm_")) for p in matching_dsm
     ]
@@ -245,27 +249,25 @@ def fetch_local(w, s, e, n):
         if dtm is not None:
             ndsm = dsm - dtm
             ndsm[ndsm < 0] = 0
-            return ndsm, tfm
+            return ndsm, dtm, tfm
 
-    # No local DTM — try EA WCS for DTM only.
     dtm_data = _fetch_tiff_bytes(_ea_wcs_url(EA_DTM_WCS, EA_DTM_COV, w, s, e, n))
     if dtm_data is not None:
         dtm, dtm_tfm = _read_tiff_bytes(dtm_data)
-        # Resample DTM to match DSM grid if shapes differ.
         if dtm.shape == dsm.shape:
             ndsm = dsm - dtm
             ndsm[ndsm < 0] = 0
-            return ndsm, tfm
+            return ndsm, dtm, tfm
 
-    # Fallback: estimate ground from DSM (slow path).
-    return _dsm_with_ground_estimate(dsm, tfm)
+    ndsm, tfm = _dsm_with_ground_estimate(dsm, tfm)
+    return ndsm, None, tfm
 
 
 def fetch_ea_wcs(w, s, e, n):
-    """Fetch DSM and DTM from EA WCS (England). Returns (ndsm, transform)."""
+    """Fetch DSM and DTM from EA WCS (England). Returns (ndsm, dtm, transform)."""
     dsm_data = _fetch_tiff_bytes(_ea_wcs_url(EA_DSM_WCS, EA_DSM_COV, w, s, e, n))
     if dsm_data is None:
-        return None, None
+        return None, None, None
     dsm, tfm = _read_tiff_bytes(dsm_data)
 
     dtm_data = _fetch_tiff_bytes(_ea_wcs_url(EA_DTM_WCS, EA_DTM_COV, w, s, e, n))
@@ -274,13 +276,14 @@ def fetch_ea_wcs(w, s, e, n):
         if dtm.shape == dsm.shape:
             ndsm = dsm - dtm
             ndsm[ndsm < 0] = 0
-            return ndsm, tfm
+            return ndsm, dtm, tfm
 
-    return _dsm_with_ground_estimate(dsm, tfm)
+    ndsm, tfm = _dsm_with_ground_estimate(dsm, tfm)
+    return ndsm, None, tfm
 
 
 def fetch_jncc_wcs(w, s, e, n):
-    """Fetch from JNCC WCS (Scotland). Tries each phase."""
+    """Fetch from JNCC WCS (Scotland). Returns (ndsm, dtm, transform)."""
     for dsm_phase, dtm_phase in zip(JNCC_DSM_PHASES, JNCC_DTM_PHASES):
         dsm_url = (
             f"{JNCC_WCS_BASE}?service=WCS&version=2.0.1&request=GetCoverage"
@@ -305,25 +308,26 @@ def fetch_jncc_wcs(w, s, e, n):
             if dtm.shape == dsm.shape:
                 ndsm = dsm - dtm
                 ndsm[ndsm < 0] = 0
-                return ndsm, tfm
+                return ndsm, dtm, tfm
 
-        return _dsm_with_ground_estimate(dsm, tfm)
+        ndsm, tfm = _dsm_with_ground_estimate(dsm, tfm)
+        return ndsm, None, tfm
 
-    return None, None
+    return None, None, None
 
 
 def fetch_nrw_cog(w, s, e, n):
-    """Fetch from NRW COG (Wales). HTTP range requests."""
+    """Fetch from NRW COG (Wales). Returns (ndsm, dtm, transform)."""
     try:
         with rasterio.open(NRW_DSM_COG) as src:
             win = from_bounds(w, s, e, n, src.transform)
             dsm = src.read(1, window=win).astype(np.float32)
             dsm = np.where(np.isnan(dsm) | (dsm < -100), 0, dsm)
             if dsm.max() < 1.0:
-                return None, None
+                return None, None, None
             tfm = rasterio.windows.transform(win, src.transform)
     except Exception:
-        return None, None
+        return None, None, None
 
     try:
         with rasterio.open(NRW_DTM_COG) as src:
@@ -333,11 +337,12 @@ def fetch_nrw_cog(w, s, e, n):
             if dtm.shape == dsm.shape:
                 ndsm = dsm - dtm
                 ndsm[ndsm < 0] = 0
-                return ndsm, tfm
+                return ndsm, dtm, tfm
     except Exception:
         pass
 
-    return _dsm_with_ground_estimate(dsm, tfm)
+    ndsm, tfm = _dsm_with_ground_estimate(dsm, tfm)
+    return ndsm, None, tfm
 
 
 def _dsm_with_ground_estimate(dsm, tfm):
@@ -358,17 +363,15 @@ def _dsm_with_ground_estimate(dsm, tfm):
 
 
 def fetch_ndsm(w, s, e, n):
-    """Fetch normalised DSM (height above ground) for an OSGB bbox.
+    """Fetch normalised DSM and DTM for an OSGB bbox.
 
     Tries local tiles first, then APIs by country.
-    Returns (ndsm_array, transform) or (None, None).
+    Returns (ndsm_array, dtm_array_or_None, transform) or (None, None, None).
     """
-    # Local tiles first.
-    arr, tfm = fetch_local(w, s, e, n)
+    arr, dtm, tfm = fetch_local(w, s, e, n)
     if arr is not None:
-        return arr, tfm
+        return arr, dtm, tfm
 
-    # Determine country from centre.
     cx, cy = (w + e) / 2, (s + n) / 2
     if cy > 530000:
         return fetch_jncc_wcs(w, s, e, n)
@@ -399,11 +402,13 @@ def register_gpkg_functions(conn: sqlite3.Connection):
     conn.create_function("ST_MaxY", 1, lambda g: 0.0)
 
 
-def ensure_lidar_height_column(conn: sqlite3.Connection):
+def ensure_lidar_columns(conn: sqlite3.Connection):
     cols = [row[1] for row in conn.execute("PRAGMA table_info(buildings)")]
     if "lidar_height" not in cols:
         conn.execute("ALTER TABLE buildings ADD COLUMN lidar_height REAL")
-        conn.commit()
+    if "ground_elev" not in cols:
+        conn.execute("ALTER TABLE buildings ADD COLUMN ground_elev REAL")
+    conn.commit()
 
 
 def fallback_height(osm_height: str, levels: str) -> float:
@@ -427,11 +432,64 @@ def fallback_height(osm_height: str, levels: str) -> float:
 # ── Main: tile-first iteration ────────────────────────────────────────────
 
 
-def load_buildings(conn: sqlite3.Connection, area: Area):
-    """Load buildings from GeoPackage, convert to OSGB, filter by area."""
-    rows = conn.execute(
-        "SELECT fid, geom, height, levels FROM buildings"
-    ).fetchall()
+def find_pub_tiles(area: Area, tile_size=TILE_SIZE_M) -> set[tuple[int, int]]:
+    """Find which 1km OSGB tiles have pubs nearby. Returns set of (tile_e, tile_n)."""
+    import json
+    pubs_path = Path(__file__).resolve().parent.parent / "data" / "pubs_merged.json"
+    if not pubs_path.exists():
+        print(f"  WARNING: {pubs_path} not found, processing all buildings")
+        return set()
+
+    with open(pubs_path) as f:
+        pubs = json.load(f)
+
+    # Buffer: 300m around each pub (shadow reach distance).
+    buf = 300
+    tiles = set()
+    for p in pubs:
+        lat, lng = p["lat"], p["lng"]
+        if not in_bbox(lat, lng, area.bbox):
+            continue
+        cx, cy = to_osgb.transform(lng, lat)
+        # Add all tiles within buffer.
+        for dx in range(-buf, buf + tile_size, tile_size):
+            for dy in range(-buf, buf + tile_size, tile_size):
+                key = (int((cx + dx) // tile_size) * tile_size,
+                       int((cy + dy) // tile_size) * tile_size)
+                tiles.add(key)
+
+    print(f"  {len(pubs)} pubs → {len(tiles)} 1km tiles to process")
+    return tiles
+
+
+def load_buildings_for_tile(conn: sqlite3.Connection, tile_e: int, tile_n: int,
+                            tile_size=TILE_SIZE_M) -> list:
+    """Load buildings from GeoPackage that fall within a 1km OSGB tile.
+
+    Uses the R-tree spatial index for fast bbox queries. Returns list of
+    (fid, osgb_poly, osm_height, levels).
+    """
+    # Convert OSGB tile corners back to WGS84 for the GeoPackage query.
+    from pyproj import Transformer
+    to_wgs = Transformer.from_crs("EPSG:27700", "EPSG:4326", always_xy=True)
+    lng1, lat1 = to_wgs.transform(tile_e, tile_n)
+    lng2, lat2 = to_wgs.transform(tile_e + tile_size, tile_n + tile_size)
+    min_lng, max_lng = min(lng1, lng2), max(lng1, lng2)
+    min_lat, max_lat = min(lat1, lat2), max(lat1, lat2)
+
+    # Use R-tree spatial index if available, otherwise bbox filter in Python.
+    try:
+        rows = conn.execute(
+            "SELECT b.fid, b.geom, b.height, b.levels FROM buildings b "
+            "JOIN rtree_buildings_geom r ON b.fid = r.id "
+            "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+            (min_lng, max_lng, min_lat, max_lat),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # No R-tree index — fall back to full scan with bbox filter.
+        rows = conn.execute(
+            "SELECT fid, geom, height, levels FROM buildings"
+        ).fetchall()
 
     buildings = []
     for fid, blob, osm_height, levels in rows:
@@ -440,10 +498,6 @@ def load_buildings(conn: sqlite3.Connection, area: Area):
             geom = wkb.loads(blob[hl:])
             if geom.is_empty or not geom.is_valid:
                 continue
-            centroid = geom.centroid
-            clng, clat = centroid.x, centroid.y
-            if not in_bbox(clat, clng, area.bbox):
-                continue
             osgb_coords = [to_osgb.transform(x, y) for x, y in geom.exterior.coords]
             osgb_poly = Polygon(osgb_coords)
             if osgb_poly.is_valid and not osgb_poly.is_empty:
@@ -451,17 +505,6 @@ def load_buildings(conn: sqlite3.Connection, area: Area):
         except Exception:
             continue
     return buildings
-
-
-def assign_to_tiles(buildings, tile_size=TILE_SIZE_M):
-    """Assign each building to its 1km OSGB tile. Returns {(tile_e, tile_n): [buildings]}."""
-    tiles = {}
-    for b in buildings:
-        fid, poly, osm_h, levels = b
-        cx, cy = poly.centroid.x, poly.centroid.y
-        key = (int(cx // tile_size) * tile_size, int(cy // tile_size) * tile_size)
-        tiles.setdefault(key, []).append(b)
-    return tiles
 
 
 def main():
@@ -477,23 +520,13 @@ def main():
 
     conn = sqlite3.connect(str(GPKG_PATH))
     register_gpkg_functions(conn)
-    ensure_lidar_height_column(conn)
+    ensure_lidar_columns(conn)
 
-    print("Loading buildings...", flush=True)
-    buildings = load_buildings(conn, area)
-    print(f"  {len(buildings)} buildings in {area.name}")
-
-    # Skip buildings that already have heights.
-    existing = {r[0] for r in conn.execute(
-        "SELECT fid FROM buildings WHERE lidar_height IS NOT NULL"
-    ).fetchall()}
-    todo = [b for b in buildings if b[0] not in existing]
-    print(f"  {len(existing)} already done, {len(todo)} to process")
-
-    if not todo:
-        print("Nothing to do.")
-        conn.close()
-        return
+    # Find which 1km tiles have pubs nearby — only process those.
+    print("Finding tiles near pubs...", flush=True)
+    pub_tiles = find_pub_tiles(area)
+    if not pub_tiles:
+        print("  No pub tiles found (will process all buildings).")
 
     # Index local tiles once.
     index = _get_tile_index()
@@ -501,61 +534,83 @@ def main():
         print(f"  {len(index)} local LiDAR tiles indexed")
     print()
 
-    # Assign buildings to 1km tiles.
-    tiles = assign_to_tiles(todo)
-    print(f"Processing {len(tiles)} tiles ({len(todo)} buildings)...")
+    # Skip tiles where all buildings already have heights.
+    existing_fids = {r[0] for r in conn.execute(
+        "SELECT fid FROM buildings WHERE lidar_height IS NOT NULL"
+    ).fetchall()}
+    print(f"  {len(existing_fids)} buildings already have heights")
     print()
 
     total_measured = 0
     total_fallback = 0
+    total_skipped = 0
     t0 = time.time()
+    sorted_tiles = sorted(pub_tiles)
 
-    for i, ((te, tn), tile_buildings) in enumerate(sorted(tiles.items()), 1):
-        # Tile bbox in OSGB.
+    print(f"Processing {len(sorted_tiles)} tiles near pubs...")
+    print()
+
+    for i, (te, tn) in enumerate(sorted_tiles, 1):
+        # Load buildings for this tile (lazy, per-tile — no bulk load).
+        tile_buildings = load_buildings_for_tile(conn, te, tn)
+
+        # Skip buildings that already have heights.
+        tile_buildings = [b for b in tile_buildings if b[0] not in existing_fids]
+        if not tile_buildings:
+            total_skipped += 1
+            continue
+
         w, s = te, tn
         e, n = te + TILE_SIZE_M, tn + TILE_SIZE_M
 
         print(
-            f"  [{i}/{len(tiles)}] OSGB ({w},{s})–({e},{n}) "
+            f"  [{i}/{len(sorted_tiles)}] OSGB ({w},{s})–({e},{n}) "
             f"({len(tile_buildings)} buildings) ... ",
             end="", flush=True,
         )
 
-        # Fetch normalised DSM for this tile.
-        ndsm, tfm = fetch_ndsm(w, s, e, n)
+        # Fetch normalised DSM + DTM for this tile.
+        ndsm, dtm, tfm = fetch_ndsm(w, s, e, n)
 
-        updates = []
+        height_updates = []
+        elev_updates = []
         if ndsm is not None:
             osgb_polys = [b[1] for b in tile_buildings]
-            heights = sample_heights(ndsm, tfm, osgb_polys)
+            results = sample_heights(ndsm, dtm, tfm, osgb_polys)
 
             measured = 0
             fallback = 0
-            for (fid, _, osm_h, levels), h in zip(tile_buildings, heights):
+            for (fid, _, osm_h, levels), (h, ground) in zip(tile_buildings, results):
                 if h is not None and h >= MIN_HEIGHT_M:
-                    updates.append((round(h, 1), fid))
+                    height_updates.append((round(h, 1), fid))
                     measured += 1
                 else:
-                    updates.append((round(fallback_height(osm_h, levels), 1), fid))
+                    height_updates.append((round(fallback_height(osm_h, levels), 1), fid))
                     fallback += 1
+                if ground is not None:
+                    elev_updates.append((round(ground, 1), fid))
 
             print(f"{measured} measured, {fallback} fallback")
             total_measured += measured
             total_fallback += fallback
         else:
             for fid, _, osm_h, levels in tile_buildings:
-                updates.append((round(fallback_height(osm_h, levels), 1), fid))
+                height_updates.append((round(fallback_height(osm_h, levels), 1), fid))
             print(f"no LiDAR, {len(tile_buildings)} fallback")
             total_fallback += len(tile_buildings)
 
         conn.executemany(
-            "UPDATE buildings SET lidar_height = ? WHERE fid = ?", updates
+            "UPDATE buildings SET lidar_height = ? WHERE fid = ?", height_updates
         )
+        if elev_updates:
+            conn.executemany(
+                "UPDATE buildings SET ground_elev = ? WHERE fid = ?", elev_updates
+            )
         conn.commit()
 
     elapsed = time.time() - t0
     print()
-    print(f"Done in {elapsed:.0f}s! {total_measured} measured, {total_fallback} fallback")
+    print(f"Done in {elapsed:.0f}s! {total_measured} measured, {total_fallback} fallback, {total_skipped} tiles skipped")
 
     row = conn.execute(
         "SELECT count(*), avg(lidar_height), min(lidar_height), max(lidar_height) "

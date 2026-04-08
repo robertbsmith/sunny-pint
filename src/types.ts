@@ -6,6 +6,8 @@ export interface Pub {
   lng: number;
   clat?: number; // OSM building centroid lat (more accurate than geocode)
   clng?: number; // OSM building centroid lng
+  elev?: number; // ground elevation (metres above sea level)
+  horizon?: string; // base64-encoded terrain horizon profile (36 azimuths, uint8 × 0.1°)
   outdoor?: [number, number][][]; // outdoor area [exterior, ...holes] each [[lat,lng],...]
   beer_garden?: string;
   outdoor_seating?: string;
@@ -17,6 +19,7 @@ export interface Pub {
 export interface Building {
   coords: [number, number][]; // [[lat,lng],...]
   height: number; // metres above ground
+  elev: number; // ground elevation (metres above sea level)
 }
 
 /** Shadow quad — four corners of a shadow polygon */
