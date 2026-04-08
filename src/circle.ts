@@ -615,7 +615,6 @@ function updatePubSign(): void {
   if (!signCanvas) {
     signCanvas = document.createElement("canvas");
     signCanvas.id = "pub-sign";
-    // Attach to #viz (the full-width section) so it reaches the left edge.
     const viz = document.getElementById("viz");
     if (viz) {
       viz.style.position = "relative";
@@ -624,14 +623,19 @@ function updatePubSign(): void {
   }
 
   const dpr = window.devicePixelRatio || 1;
-  // Width: from left edge of viz to roughly halfway across the porthole.
   const viz = document.getElementById("viz")!;
   const circleWrap = document.getElementById("circle-wrap")!;
   const vizRect = viz.getBoundingClientRect();
   const circleRect = circleWrap.getBoundingClientRect();
-  const signEndX = circleRect.left - vizRect.left + circleRect.width * 0.05;
-  const w = Math.max(130, Math.round(signEndX));
-  const h = 110;
+  // Available width: from left edge of viz to just past the porthole's left edge.
+  const signEndX = circleRect.left - vizRect.left + circleRect.width * 0.15;
+  const maxW = Math.max(140, Math.round(signEndX));
+
+  // Measure how much space the name needs to determine sign dimensions.
+  const measured = measureSignLayout(pub.name, maxW);
+
+  const w = maxW;
+  const h = measured.canvasH;
   signCanvas.width = w * dpr;
   signCanvas.height = h * dpr;
   signCanvas.style.width = `${w}px`;
@@ -645,7 +649,73 @@ function updatePubSign(): void {
   const ctx = signCanvas.getContext("2d")!;
   ctx.scale(dpr, dpr);
 
-  drawPubSign(ctx, w, h, pub.name);
+  drawPubSign(ctx, w, h, pub.name, measured);
+}
+
+/** Pre-measure sign layout so we can size canvas and sign to fit the name. */
+function measureSignLayout(name: string, maxW: number): {
+  signW: number; signH: number; canvasH: number;
+  fontSize: number; lines: string[];
+} {
+  // Use an offscreen canvas just for measuring text.
+  const mc = document.createElement("canvas").getContext("2d")!;
+
+  const hasCoA = !!getCoatOfArms(name);
+  const shapeIdx = hashStr(name) % 4;
+
+  // Target font size — start at 11 and try to fit in 2 lines.
+  const TARGET_FONT = 11;
+  const MIN_FONT = 8;
+  const MIN_SIGN_W = 100;
+  const MAX_SIGN_W = Math.min(200, maxW * 0.85);
+  const SIDE_INSET = shapeIdx === 3 ? 18 : 8;
+  const TOP_INSET = shapeIdx === 1 || shapeIdx === 3 ? 14 : 8;
+  const BOT_INSET = shapeIdx === 2 ? 20 : shapeIdx === 3 ? 14 : 8;
+  const COA_W = hasCoA ? 32 : 0;
+
+  // Try font sizes from target down, picking the first that fits in ≤2 lines
+  // at a reasonable sign width.
+  let bestFontSize = MIN_FONT;
+  let bestLines: string[] = [name];
+  let bestSignW = MIN_SIGN_W;
+
+  for (let fs = TARGET_FONT; fs >= MIN_FONT; fs--) {
+    mc.font = `700 ${fs}px Georgia, serif`;
+
+    // How wide does the sign need to be for ≤2 lines at this font?
+    // Try wrapping at increasing widths.
+    for (let tw = 60; tw <= MAX_SIGN_W - SIDE_INSET * 2 - COA_W; tw += 10) {
+      const lines = wrapText(mc, name, tw);
+      if (lines.length <= 2) {
+        const neededSignW = tw + SIDE_INSET * 2 + COA_W + 8;
+        const signW = Math.max(MIN_SIGN_W, Math.min(MAX_SIGN_W, neededSignW));
+        if (fs > bestFontSize || (fs === bestFontSize && signW <= bestSignW)) {
+          bestFontSize = fs;
+          bestLines = lines;
+          bestSignW = signW;
+        }
+        break;
+      }
+    }
+    if (bestFontSize === TARGET_FONT) break; // found ideal fit
+  }
+
+  // If still >2 lines at min font, allow 3 lines.
+  if (bestLines.length > 2) {
+    mc.font = `700 ${MIN_FONT}px Georgia, serif`;
+    const tw = MAX_SIGN_W - SIDE_INSET * 2 - COA_W - 8;
+    bestLines = wrapText(mc, name, tw);
+    if (bestLines.length > 3) bestLines = bestLines.slice(0, 3);
+    bestSignW = MAX_SIGN_W;
+  }
+
+  const lineH = bestFontSize + 2;
+  const textBlockH = bestLines.length * lineH;
+  const signH = Math.max(44, textBlockH + TOP_INSET + BOT_INSET + 4);
+  // Canvas needs room for: arm (16px top) + chains (~20px) + sign + margin.
+  const canvasH = 16 + 20 + signH + 6;
+
+  return { signW: bestSignW, signH, canvasH, fontSize: bestFontSize, lines: bestLines };
 }
 
 /** Simple hash from string to number. */
@@ -687,7 +757,10 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function drawPubSign(ctx: CanvasRenderingContext2D, W: number, H: number, name: string): void {
+function drawPubSign(
+  ctx: CanvasRenderingContext2D, W: number, H: number, name: string,
+  layout: { signW: number; signH: number; fontSize: number; lines: string[] },
+): void {
   const colors = pubColor(name);
   const isDark = document.documentElement.classList.contains("dark");
 
@@ -712,16 +785,14 @@ function drawPubSign(ctx: CanvasRenderingContext2D, W: number, H: number, name: 
   const plateX = 0;       // wall = left edge
   const plateW = 6;
   const armY = 16;         // arm height
-  const armStartX = plateX + plateW - 1; // arm starts at right edge of plate
-  const armEndX = W - 6;  // arm tip
+  const armStartX = plateX + plateW - 1;
+  const armEndX = W - 6;
   const armLen = armEndX - armStartX;
 
-  // Sign hangs close to the wall.
-  const signW = Math.min(140, W * 0.8);
-  const signH = 52;
-  const signX = armEndX - signW + 4; // right-aligned to arm end
+  const signW = layout.signW;
+  const signH = layout.signH;
+  const signX = armEndX - signW + 4;
   const signY = H - signH - 4;
-  const signCx = signX + signW / 2;
   const r = 4;
 
   // Chain attachment points on the sign.
@@ -987,7 +1058,6 @@ function drawPubSign(ctx: CanvasRenderingContext2D, W: number, H: number, name: 
   const textW = textRight - textLeft;
   const textCenterX = textLeft + textW / 2;
 
-  // Clip text to sign shape.
   ctx.save();
   ctx.beginPath();
   signPath();
@@ -997,25 +1067,15 @@ function drawPubSign(ctx: CanvasRenderingContext2D, W: number, H: number, name: 
   ctx.textBaseline = "middle";
   ctx.fillStyle = colors.text;
 
-  let fontSize = 12;
+  const { fontSize, lines } = layout;
   ctx.font = `700 ${fontSize}px Georgia, serif`;
-  let lines = wrapText(ctx, name, textW - 2);
-
-  // Shrink until it fits.
-  const maxLines = safeH > 30 ? 3 : 2;
-  while ((lines.length > maxLines || (lines.length === 1 && ctx.measureText(name).width > textW - 2)) && fontSize > 7) {
-    fontSize--;
-    ctx.font = `700 ${fontSize}px Georgia, serif`;
-    lines = wrapText(ctx, name, textW - 2);
-  }
-  if (lines.length > maxLines) lines = lines.slice(0, maxLines);
 
   const lineHeight = fontSize + 2;
   const textBlockH = lines.length * lineHeight;
   const textStartY = safeTop + (safeH - textBlockH) / 2 + lineHeight / 2;
 
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], textCenterX, textStartY + i * lineHeight);
+    ctx.fillText(lines[i]!, textCenterX, textStartY + i * lineHeight);
   }
   ctx.restore();
 }

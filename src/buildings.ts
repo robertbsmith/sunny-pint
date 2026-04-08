@@ -101,6 +101,13 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
 
   // Fetch all z16 tiles in the bounding box.
   const archive = getArchive(z8x, z8y);
+  try {
+    const header = await archive.getHeader();
+    console.log(`PMTiles header: z${header.minZoom}-${header.maxZoom}, ${header.numAddressedTiles} tiles`);
+  } catch (err) {
+    console.error("PMTiles header fetch failed:", err);
+  }
+  console.log(`Fetching tiles z${QUERY_ZOOM} x:${minTx}-${maxTx} y:${minTy}-${maxTy}`);
   const tilePromises: Promise<Building[]>[] = [];
 
   for (let tx = minTx; tx <= maxTx; tx++) {
@@ -110,7 +117,10 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
         archive.getZxy(QUERY_ZOOM, tileX, tileY).then((resp) => {
           if (!resp?.data) return [];
           return decodeTile(resp.data, tileX, tileY, QUERY_ZOOM);
-        }).catch(() => []),
+        }).catch((err) => {
+          console.error(`PMTiles tile fetch failed (z${QUERY_ZOOM}/${tileX}/${tileY}):`, err);
+          return [];
+        }),
       );
     }
   }
