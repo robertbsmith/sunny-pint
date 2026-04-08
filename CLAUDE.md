@@ -2,6 +2,25 @@
 
 Find sunny beer garden seats. Shows real-time shadow maps for pub gardens using LiDAR elevation data, OSM building outlines, and geometric sun projection.
 
+## Status: Migrating to New Stack
+
+The app works as a prototype in `app/static/index.html` (Python FastAPI + single HTML file). We're migrating to a static site architecture:
+
+- **Old stack** (in `app/`): FastAPI backend, single HTML file with inline JS, Leaflet, raster shadows → geometric shadows. This WORKS — the shadow engine, building data pipeline, and circle view are all functional.
+- **New stack** (in `src/`): Vite 8 + TypeScript 6 + MapLibre GL + PMTiles. Module stubs exist, migration in progress.
+
+Read `docs/PROJECT_PLAN.md` for the feature roadmap, `docs/ARCHITECTURE.md` for key technical decisions (with reasoning), and `docs/DATA_PIPELINE.md` for how data flows from raw sources to the app.
+
+## Critical Context for New Sessions
+
+If you're picking this up in a new Claude session, read the docs/ directory first. Key things that aren't obvious:
+- OSGB grid north is rotated 2.6° from true north at Norwich — this breaks any raster overlay that isn't reprojected. Geometric shadow projection sidesteps this.
+- Building heights are 90th percentile of LiDAR within the OSM footprint. Not max (grabs chimneys), not median (underestimates pitched roofs).
+- Shadow quads from overlapping buildings cause opacity stacking — must use offscreen canvas compositing.
+- The shadow max length is capped at 200m to avoid infinite geometry near sunrise/sunset. Shadow opacity fades with sun altitude for smooth transitions.
+- Overpass API is unreliable for bulk queries — use the local GeoPackage (from .pbf extract) instead.
+- CartoDB tile style `rastertiles/voyager_labels_under` works well for the circle background. Needs `rastertiles/` prefix for voyager styles.
+
 ## Quick Start
 
 This project runs in a devcontainer. Open in VS Code with the Dev Containers extension, or use `devcontainer up`.
