@@ -503,26 +503,29 @@ function drawTimeText(
   const mins = total % 60;
   const text = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 
-  // Time follows the sun position — each character individually rotated
-  // around the bezel, bumping outward near N/E/S/W to avoid overlap.
+  // Time follows the sun's azimuth around the bezel.
   const sunAngle = (sun.azimuth - 90) * (Math.PI / 180);
-  const baseTextR = outerR + 16; // same orbit as cardinals + sun
-  const bumpR = 10; // extra radius to clear cardinal labels
-  const charSpacing = 8 / baseTextR; // radians per character
-  const cardinals = [-Math.PI / 2, 0, Math.PI / 2, Math.PI, -Math.PI];
+  const baseTextR = outerR + 16;
+  const bumpR = 10;
+  const charSpacing = 8 / baseTextR;
+  // Four cardinals at canvas angles.
+  const cardinalAngles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
 
-  function textRadiusAt(angle: number): number {
-    if (!state.playing) return baseTextR;
+  // Compute ONE bump radius for the whole text based on its centre angle.
+  function bumpForAngle(angle: number): number {
     let minDist = Math.PI;
-    for (const c of cardinals) {
-      let d = Math.abs(angle - c);
-      if (d > Math.PI) d = 2 * Math.PI - d;
-      if (d < minDist) minDist = d;
+    for (const c of cardinalAngles) {
+      let d = angle - c;
+      // Normalize to -PI..PI.
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      if (Math.abs(d) < minDist) minDist = Math.abs(d);
     }
     const t = Math.max(0, 1 - minDist / 0.5);
-    const smooth = t * t * (3 - 2 * t); // hermite smoothstep
-    return baseTextR + smooth * bumpR;
+    return t * t * (3 - 2 * t) * bumpR;
   }
+
+  const textR = baseTextR + bumpForAngle(sunAngle);
 
   ctx.font = "bold 13px system-ui, sans-serif";
   const isDarkTime = document.documentElement.classList.contains("dark");
@@ -535,9 +538,8 @@ function drawTimeText(
   const startAngle = sunAngle - ((text.length - 1) * charSpacing) / 2;
   for (let i = 0; i < text.length; i++) {
     const a = startAngle + i * charSpacing;
-    const tr = textRadiusAt(a);
-    const tx = cx + tr * Math.cos(a);
-    const ty = cy + tr * Math.sin(a);
+    const tx = cx + textR * Math.cos(a);
+    const ty = cy + textR * Math.sin(a);
     ctx.save();
     ctx.translate(tx, ty);
     ctx.rotate(a + Math.PI / 2);

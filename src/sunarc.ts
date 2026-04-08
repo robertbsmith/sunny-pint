@@ -98,7 +98,7 @@ export function initSunArc(onTimeChange: () => void): void {
   canvas.addEventListener("mousemove", (e) => {
     if (!dragging) return;
     state.timeMins = getTime(e);
-    updateTimeDisplay();
+    onTimeChange();
     renderArc();
   });
   canvas.addEventListener("mouseup", () => {
@@ -126,7 +126,7 @@ export function initSunArc(onTimeChange: () => void): void {
     e.preventDefault();
     if (!dragging) return;
     state.timeMins = getTime(e.touches[0]);
-    updateTimeDisplay();
+    onTimeChange();
     renderArc();
   }, { passive: false });
   canvas.addEventListener("touchend", () => {

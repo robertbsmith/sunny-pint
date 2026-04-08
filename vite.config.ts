@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
-        name: "SunPub",
-        short_name: "SunPub",
-        description: "Find sunny beer gardens",
+        name: "Sunny Pint",
+        short_name: "Sunny Pint",
+        description: "Find sunny beer garden seats",
         theme_color: "#F59E0B",
         background_color: "#ffffff",
         display: "standalone",

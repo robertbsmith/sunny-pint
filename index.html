@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F59E0B" />
-    <meta name="description" content="Find sunny beer garden seats with real-time shadow maps" />
-    <title>SunPub</title>
+    <meta name="description" content="Find sunny beer garden seats — real-time shadow maps for UK pubs" />
+    <title>Sunny Pint</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
   </head>
@@ -18,9 +18,10 @@
           <div class="header-left">
             <button id="btn-locate" title="Use GPS location"></button>
             <span id="location-label">Loading...</span>
+            <button id="btn-search" title="Search location"></button>
           </div>
           <div class="header-right">
-            <span class="brand">SunPub</span>
+            <span class="brand">Sunny Pint</span>
             <button id="btn-theme" title="Toggle theme"></button>
           </div>
         </div>
@@ -60,9 +61,15 @@
 
       <!-- Footer -->
       <footer id="footer">
-        Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>,
-        <a href="https://www.gov.uk/government/organisations/environment-agency">EA LiDAR</a>,
-        <a href="https://www.ordnancesurvey.co.uk/">Land Registry</a> &mdash; OGL v3
+        <div class="footer-attr">
+          Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (ODbL),
+          <a href="https://www.gov.uk/government/organisations/environment-agency">EA LiDAR</a>,
+          <a href="https://use-land-property-data.service.gov.uk/">Land Registry</a>,
+          <a href="https://ratings.food.gov.uk/">FSA</a> (OGL v3),
+          <a href="https://carto.com/attributions">CARTO</a> (CC BY 3.0),
+          <a href="https://github.com/mourner/suncalc">SunCalc</a>,
+          <a href="https://azgaar.github.io/Armoria/">Armoria</a>
+        </div>
       </footer>
 
     </div>

@@ -8,6 +8,8 @@ import { initSunArc } from "./sunarc";
 import { computeShadows } from "./shadow";
 import { loadBuildingsForPub } from "./buildings";
 import { initIcons } from "./icons";
+import { initLocation } from "./location";
+import { readURL, writeURL, writeURLDebounced, setLocationQuery } from "./url";
 import SunCalc from "suncalc";
 
 // Norwich default location.
@@ -38,6 +40,8 @@ function updateScene(): void {
 
   const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
   renderCircle(canvas);
+
+  writeURLDebounced();
 }
 
 async function onPubSelected(pub: Pub): Promise<void> {
@@ -50,9 +54,6 @@ function setLocation(lat: number, lng: number): void {
   state.userLng = lng;
   sortByDistance(lat, lng);
 
-  const label = document.getElementById("location-label")!;
-  label.textContent = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-
   if (state.pubs.length > 0) {
     if (!state.selectedPubId) {
       state.selectedPubId = state.pubs[0].id;
@@ -62,21 +63,6 @@ function setLocation(lat: number, lng: number): void {
   }
 }
 
-function requestGeolocation(): void {
-  if (!navigator.geolocation) {
-    setLocation(DEFAULT_LAT, DEFAULT_LNG);
-    return;
-  }
-
-  const label = document.getElementById("location-label")!;
-  label.textContent = "Locating...";
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => setLocation(pos.coords.latitude, pos.coords.longitude),
-    () => setLocation(DEFAULT_LAT, DEFAULT_LNG),
-    { timeout: 5000, maximumAge: 60000 },
-  );
-}
 
 // ── Theme ────────────────────────────────────────────────────────────
 
@@ -116,6 +102,14 @@ async function init(): Promise<void> {
     // Render icons.
     initIcons();
 
+    // Read URL params (may override defaults).
+    const urlState = readURL();
+
+    // Set time — URL param, or now.
+    const now = new Date();
+    state.timeMins = urlState.time ?? now.getHours() * 60 + now.getMinutes();
+    if (urlState.date) state.date = urlState.date;
+
     // Init UI components.
     initPubList(onPubSelected);
     initCircle();
@@ -125,20 +119,81 @@ async function init(): Promise<void> {
     await loadPubs();
     console.log(`Loaded ${state.pubs.length} pubs`);
 
-    // Set time to now.
-    const now = new Date();
-    state.timeMins = now.getHours() * 60 + now.getMinutes();
+    // Location picker (GPS + search).
+    initLocation((lat, lng) => {
+      setLocation(lat, lng);
+      writeURL();
+    });
 
-    // Render immediately with default location.
-    setLocation(DEFAULT_LAT, DEFAULT_LNG);
+    // If URL specifies a pub, use that pub's location as the sort centre.
+    const urlPub = urlState.pubId ? state.pubs.find((p) => p.id === urlState.pubId) : null;
 
-    // Wire up buttons.
-    document.getElementById("btn-locate")!.addEventListener("click", requestGeolocation);
-    document.getElementById("location-label")!.addEventListener("click", requestGeolocation);
+    if (urlPub) {
+      // Sort from the selected pub's location.
+      setLocation(urlPub.lat, urlPub.lng);
+      state.selectedPubId = urlPub.id;
+      const label = urlState.query || "Norwich";
+      document.getElementById("location-label")!.textContent = `Pubs near ${label}`;
+      if (urlState.query) setLocationQuery(urlState.query);
+      renderList();
+      await onPubSelected(urlPub);
+    } else if (urlState.query) {
+      // Search term but no pub — geocode and sort.
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(urlState.query)}&countrycodes=gb&limit=1`,
+          { headers: { "User-Agent": "SunnyPint/0.1" } },
+        );
+        const results = await resp.json();
+        if (results.length > 0) {
+          setLocation(parseFloat(results[0].lat), parseFloat(results[0].lon));
+        } else {
+          setLocation(DEFAULT_LAT, DEFAULT_LNG);
+        }
+      } catch {
+        setLocation(DEFAULT_LAT, DEFAULT_LNG);
+      }
+      document.getElementById("location-label")!.textContent = `Pubs near ${urlState.query}`;
+      setLocationQuery(urlState.query);
+    } else if (urlState.lat != null && urlState.lng != null) {
+      setLocation(urlState.lat, urlState.lng);
+      document.getElementById("location-label")!.textContent = `Pubs near ${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
+    } else {
+      // No URL params — default to Norwich, try GPS in background.
+      setLocation(DEFAULT_LAT, DEFAULT_LNG);
+      document.getElementById("location-label")!.textContent = "Pubs near Norwich";
+      setLocationQuery("Norwich");
+
+      if (navigator.geolocation) {
+        document.getElementById("location-label")!.textContent = "Finding your location...";
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude, longitude } = pos.coords;
+            setLocation(latitude, longitude);
+            try {
+              const resp = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+                { headers: { "User-Agent": "SunnyPint/0.1" } },
+              );
+              const data = await resp.json();
+              const name = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || "your location";
+              document.getElementById("location-label")!.textContent = `Pubs near ${name}`;
+              setLocationQuery(name);
+            } catch {
+              document.getElementById("location-label")!.textContent = "Pubs near you";
+            }
+            writeURL();
+          },
+          () => {
+            document.getElementById("location-label")!.textContent = "Pubs near Norwich";
+          },
+          { timeout: 5000, maximumAge: 60000 },
+        );
+      }
+    }
+
+    // Theme toggle.
     document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
-
-    // Try GPS in background.
-    requestGeolocation();
   } catch (err) {
     console.error("Init failed:", err);
     document.getElementById("location-label")!.textContent = "Error — check console";

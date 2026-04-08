@@ -32,3 +32,5 @@ ref/
 
 # PWA generated
 dev-dist/
+public/data/buildings.json
+data/pubs_merged.json

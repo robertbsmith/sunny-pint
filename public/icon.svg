@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Amber gradient for the pint -->
+    <linearGradient id="beer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <!-- Foam gradient -->
+    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF9E6"/>
+      <stop offset="100%" stop-color="#FDE68A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sun rays behind the glass -->
+  <g transform="translate(256,200)" fill="#FCD34D" opacity="0.6">
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(0)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(45)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(90)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(135)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(180)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(225)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(270)"/>
+    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(315)"/>
+  </g>
+
+  <!-- Sun disc behind glass -->
+  <circle cx="256" cy="200" r="70" fill="#FBBF24" opacity="0.5"/>
+
+  <!-- Pint glass body -->
+  <path d="M155,140 L145,420 C143,440 160,460 185,460 L327,460 C352,460 369,440 367,420 L357,140 Z"
+    fill="url(#beer)" stroke="#B45309" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Glass highlight (reflection) -->
+  <path d="M175,160 L170,400 C169,410 175,420 185,420 L200,420 L210,160 Z"
+    fill="white" opacity="0.15" rx="4"/>
+
+  <!-- Foam head -->
+  <path d="M150,140
+    C150,110 170,100 195,105
+    C205,85 230,80 256,85
+    C282,80 307,85 317,105
+    C342,100 362,110 362,140 Z"
+    fill="url(#foam)" stroke="#E5B94E" stroke-width="3"/>
+
+  <!-- Handle -->
+  <path d="M357,180 C400,185 415,220 410,270 C405,310 385,330 357,335"
+    fill="none" stroke="#B45309" stroke-width="12" stroke-linecap="round"/>
+  <path d="M357,180 C395,185 408,218 404,265 C400,305 382,325 357,330"
+    fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
+</svg>

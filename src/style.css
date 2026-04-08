@@ -90,6 +90,7 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
+  gap: 16px;
 }
 
 .header-left {
@@ -107,10 +108,12 @@ a {
 }
 
 .brand {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--primary);
+  font-family: Georgia, serif;
+  white-space: nowrap;
 }
 
 #btn-locate,
@@ -140,6 +143,87 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#btn-search {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: none;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 150ms;
+}
+
+#btn-search:hover {
+  opacity: 1;
+}
+
+/* ── Location search ─────────────────────────────────────────────── */
+
+#location-search {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+#location-search input {
+  width: 100%;
+  font-size: 0.8125rem;
+  padding: 6px 12px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-full);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  outline: none;
+}
+
+#location-search input:focus {
+  border-color: var(--primary);
+}
+
+#location-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px var(--shadow-md);
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+#location-results:empty {
+  display: none;
+}
+
+#location-results li {
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  color: var(--on-surface);
+  transition: background 100ms;
+}
+
+#location-results li:hover {
+  background: var(--surface-container);
+}
+
+#location-results li.no-results {
+  color: var(--on-surface-variant);
+  cursor: default;
 }
 
 /* ── Main layout ─────────────────────────────────────────────────── */
@@ -385,13 +469,26 @@ a {
 
 #footer {
   flex-shrink: 0;
-  padding: 8px 16px;
-  font-size: 0.6875rem;
+  padding: 6px 16px;
   text-align: center;
   color: var(--on-surface-variant);
   border-top: 1px solid var(--outline-variant);
   background: var(--surface);
-  opacity: 0.7;
+}
+
+.footer-attr {
+  font-size: 0.55rem;
+  line-height: 1.4;
+  opacity: 0.5;
+}
+
+.footer-attr a {
+  text-decoration: none;
+  color: var(--on-surface-variant);
+}
+
+.footer-attr a:hover {
+  text-decoration: underline;
 }
 
 /* ── Fullscreen overlay ──────────────────────────────────────────── */
