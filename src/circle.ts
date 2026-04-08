@@ -176,8 +176,9 @@ function getOffscreen(w: number, h: number): CanvasRenderingContext2D {
 export function renderCircle(canvas: HTMLCanvasElement): void {
   isRendering = true;
   const ctx = canvas.getContext("2d")!;
-  const W = canvas.width;
-  const H = canvas.height;
+  // Use logical (CSS) size, not physical (DPR-scaled) pixel size.
+  const W = parseInt(canvas.dataset.logicalW || String(canvas.width));
+  const H = parseInt(canvas.dataset.logicalH || String(canvas.height));
   const cx = W / 2;
   // Max extent from circle centre: time text at outerR + 16 (base) + 10 (bump) + 8 (half char width)
   // = r + BEZEL + 34. Must fit in W/2.
@@ -193,7 +194,7 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   const centre = pubCenter();
   const mpp = tileMetresPerPixel(centre.lat, TILE_ZOOM);
 
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // ── 1. Bezel ring ──
   drawBezel(ctx, cx, cy, r, outerR, dayFrac);

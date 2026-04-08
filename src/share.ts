@@ -44,6 +44,8 @@ export async function shareSnapshot(): Promise<void> {
   const portholeH = Math.round(portholeW * 1.2);
   portholeCanvas.width = portholeW;
   portholeCanvas.height = portholeH;
+  portholeCanvas.dataset.logicalW = String(portholeW);
+  portholeCanvas.dataset.logicalH = String(portholeH);
   renderCircle(portholeCanvas);
 
   // Draw porthole centred below title.
