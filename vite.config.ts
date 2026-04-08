@@ -35,9 +35,13 @@ export default defineConfig({
             },
           },
           {
-            // PMTiles — let range requests pass through to network (SW can't handle them)
-            urlPattern: /\.pmtiles/,
-            handler: "NetworkOnly",
+            // Cache building vector tiles
+            urlPattern: /\/data\/tiles\/.+\.pbf$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "building-tiles",
+              expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
           },
           {
             // Cache Armoria coat of arms SVGs

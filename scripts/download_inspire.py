@@ -18,7 +18,6 @@ import zipfile
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "inspire"
-OUTPUT_GML = DATA_DIR / "Land_Registry_Cadastral_Parcels.gml"
 
 BASE_URL = "https://use-land-property-data.service.gov.uk"
 LIST_URL = f"{BASE_URL}/datasets/inspire/download"
@@ -117,53 +116,6 @@ def download_and_extract(url: str, output_dir: Path) -> tuple[Path | None, int]:
         return None, 0
 
 
-def merge_gml_files(gml_files: list[Path], output: Path) -> int:
-    """Merge multiple GML files into one. Returns total feature count."""
-    members = []
-    header = None
-    footer = None
-
-    for i, gml in enumerate(gml_files, 1):
-        if i % 50 == 0 or i == len(gml_files):
-            print(f"  Reading {i}/{len(gml_files)}...", flush=True)
-
-        content = gml.read_text(encoding="utf-8", errors="replace")
-        found = re.findall(
-            r"(<(?:wfs:)?member>.*?</(?:wfs:)?member>)",
-            content,
-            re.DOTALL,
-        )
-        members.extend(found)
-
-        # Grab header/footer from first file.
-        if header is None:
-            header_match = re.search(r"^(.*?)<(?:wfs:)?member>", content, re.DOTALL)
-            footer_match = re.search(r"</(?:wfs:)?member>[^<]*(</.*?)$", content, re.DOTALL)
-            if header_match and footer_match:
-                header = header_match.group(1)
-                footer = footer_match.group(1)
-
-    if not members or not header:
-        print("  WARNING: no features found")
-        return 0
-
-    # Update feature count.
-    header = re.sub(
-        r'numberOfFeatures="[^"]*"',
-        f'numberOfFeatures="{len(members)}"',
-        header,
-    )
-
-    print(f"  Writing {len(members)} features...", flush=True)
-    with open(output, "w", encoding="utf-8") as f:
-        f.write(header)
-        for m in members:
-            f.write(m)
-            f.write("\n")
-        f.write(footer)
-
-    return len(members)
-
 
 def format_time(seconds: float) -> str:
     if seconds < 60:
@@ -234,12 +186,7 @@ def main():
         print("ERROR: no GML files downloaded")
         return
 
-    # Merge into single GML.
-    print("Merging GML files...", flush=True)
-    count = merge_gml_files(gml_files, OUTPUT_GML)
-    size_mb = OUTPUT_GML.stat().st_size / 1e6
-    print(f"\n  {count} parcels, {size_mb:.1f} MB")
-    print(f"  Written to {OUTPUT_GML}")
+    print(f"\n  {len(gml_files)} GML files ready in {DATA_DIR}")
 
 
 if __name__ == "__main__":
