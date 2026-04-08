@@ -309,9 +309,19 @@ function updateSunMarker() {
 }
 
 // ── Canvas circle view ─────────────────────────────────────────────
+// Reusable offscreen canvases for shadow compositing.
+const _offSmall = document.createElement('canvas');
+_offSmall.width = 260; _offSmall.height = 300;
+const _offBig = document.createElement('canvas');
+_offBig.width = 700; _offBig.height = 780;
+
 function drawCircle() {
-  _drawCircleOn(document.getElementById('sun-circle'));
-  _drawCircleOn(document.getElementById('sun-circle-big'));
+  // Only draw the visible canvas.
+  if (document.body.classList.contains('circle-mode')) {
+    _drawCircleOn(document.getElementById('sun-circle-big'), _offBig);
+  } else {
+    _drawCircleOn(document.getElementById('sun-circle'), _offSmall);
+  }
 }
 
 // ── Map tile loader for canvas background ─────────────────────────
@@ -367,7 +377,7 @@ function _drawMapTiles(ctx, cx, cy, r, center, pxPerM, mPerDeg, cosLat, W, H) {
   }
 }
 
-function _drawCircleOn(canvas) {
+function _drawCircleOn(canvas, offCanvas) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
@@ -433,9 +443,8 @@ function _drawCircleOn(canvas) {
   // Shadow polygons.
   if (!isNight && state.shadowPolys.length) {
     const shadowAlpha = Math.min(alt / 8, 0.5);
-    const off = document.createElement('canvas');
-    off.width = W; off.height = H;
-    const ox = off.getContext('2d');
+    offCanvas.width = W; offCanvas.height = H;
+    const ox = offCanvas.getContext('2d');
     ox.beginPath();
     ox.arc(cx, cy, r, 0, 2 * Math.PI);
     ox.clip();
@@ -449,7 +458,7 @@ function _drawCircleOn(canvas) {
       ox.fill();
     });
     ctx.globalAlpha = shadowAlpha;
-    ctx.drawImage(off, 0, 0);
+    ctx.drawImage(offCanvas, 0, 0);
     ctx.globalAlpha = 1;
   }
 
@@ -752,17 +761,23 @@ function computeShadows(buildings, heights, azDeg, altDeg) {
   return quads;
 }
 
+let _lastShadowMins = -999;
+
 function computeAndRender(updateMap = true) {
-  const mins = parseInt(document.getElementById('time-slider').value);
+  const mins = parseFloat(document.getElementById('time-slider').value);
   const hh = String(Math.floor(mins / 60)).padStart(2, '0');
-  const mm = String(mins % 60).padStart(2, '0');
+  const mm = String(Math.floor(mins % 60)).padStart(2, '0');
   document.getElementById('time-display').textContent = hh + ':' + mm;
 
   const {az, alt} = getSunPos();
 
-  state.shadowPolys = computeShadows(
-    state.buildings, state.buildingHeights, az, alt
-  );
+  // Only recompute shadows when time changes meaningfully.
+  if (Math.abs(mins - _lastShadowMins) >= 0.3) {
+    _lastShadowMins = mins;
+    state.shadowPolys = computeShadows(
+      state.buildings, state.buildingHeights, az, alt
+    );
+  }
 
   // Canvas circle — always update (fast).
   drawCircle();
@@ -1028,10 +1043,13 @@ function showStatus(msg) {
 // ── Circle expand/collapse ─────────────────────────────────────────
 document.getElementById('sun-circle').addEventListener('click', () => {
   document.body.classList.add('circle-mode');
+  _lastShadowMins = -999; // force redraw on the big canvas
   drawCircle();
 });
 document.getElementById('circle-expanded').addEventListener('click', () => {
   document.body.classList.remove('circle-mode');
+  _lastShadowMins = -999;
+  drawCircle();
 });
 
 // ── Debug layers ───────────────────────────────────────────────────

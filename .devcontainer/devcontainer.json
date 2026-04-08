@@ -1,0 +1,37 @@
+{
+  "name": "SunPub",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=sunpub_commandhistory,target=/commandhistory,type=volume",
+    "source=sunpub_claude_config,target=/root/.claude,type=volume",
+    "source=sunpub_gh_config,target=/root/.config/gh,type=volume",
+    "source=sunpub_pnpm_store,target=/root/.local/share/pnpm/store,type=volume"
+  ],
+  "initializeCommand": "docker volume create sunpub_commandhistory >/dev/null 2>&1; docker volume create sunpub_claude_config >/dev/null 2>&1; docker volume create sunpub_gh_config >/dev/null 2>&1; docker volume create sunpub_pnpm_store >/dev/null 2>&1; true",
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "biomejs.biome",
+        "bradlc.vscode-tailwindcss"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "SunPub Dev",
+      "onAutoForward": "notify"
+    }
+  },
+  "remoteUser": "root"
+}
