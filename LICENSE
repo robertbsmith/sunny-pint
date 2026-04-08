@@ -1,0 +1,33 @@
+MIT License
+
+Copyright (c) 2026 Sunny Pint Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+This software uses data from the following sources:
+
+- OpenStreetMap contributors (ODbL) — pub locations, building footprints
+- Environment Agency LiDAR Composite DSM/DTM (OGL v3) — building heights
+- HM Land Registry INSPIRE Index Polygons (OGL v3) — property boundaries
+- Food Standards Agency FHRS (OGL v3) — pub listings
+- CARTO basemap tiles (CC BY 3.0) — map backgrounds
+- SunCalc (BSD) — sun position calculations
+- Armoria (MIT) — procedural coat of arms generation
