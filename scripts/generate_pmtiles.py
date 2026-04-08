@@ -1,21 +1,24 @@
 """Convert buildings GeoPackage (with heights) to PMTiles for static serving.
 
-Exports buildings to GeoJSON, then uses tippecanoe to produce vector tiles
-in PMTiles format.
+Exports buildings to GeoJSON, filters to buildings near pubs, then uses
+tippecanoe to produce vector tiles in PMTiles format — split into z8 grid
+files so each stays under 25 MB for Cloudflare Pages.
 
 Usage:
     uv run python scripts/generate_pmtiles.py --area norwich
 """
 
 import json
+import math
 import shutil
 import sqlite3
 import subprocess
 import tempfile
 from pathlib import Path
 
-from pyproj import Transformer
 from shapely import wkb
+from shapely.strtree import STRtree
+from shapely.geometry import Point as ShapelyPoint
 
 from areas import parse_area, in_bbox, Area
 
@@ -24,8 +27,18 @@ from areas import parse_area, in_bbox, Area
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "public" / "data"
+PUBS_PATH = OUTPUT_DIR / "pubs.json"
 
-# ── GeoPackage helpers ─────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────────────────────────────
+
+# Max distance a building can be from a pub and still cast a shadow into the
+# porthole view.  Porthole radius (~74 m at z18) + shadow cap (200 m) + margin.
+BUILDING_RADIUS_M = 300
+
+# Z8 tile grid for splitting output files.
+SPLIT_ZOOM = 8
+
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 
 def gpkg_header_len(blob: bytes) -> int:
@@ -37,22 +50,72 @@ def gpkg_header_len(blob: bytes) -> int:
     return 8 + envelope_sizes.get(envelope_type, 0)
 
 
+def lng_lat_to_z8(lng: float, lat: float) -> tuple[int, int]:
+    """Convert lng/lat to z8 tile x,y."""
+    n = 2 ** SPLIT_ZOOM
+    x = int((lng + 180.0) / 360.0 * n)
+    lat_rad = math.radians(lat)
+    y = int((1.0 - math.log(math.tan(lat_rad) + 1.0 / math.cos(lat_rad)) / math.pi) / 2.0 * n)
+    return (min(x, n - 1), min(y, n - 1))
+
+
+def resolve_height(osm_height, levels, lidar_height) -> float:
+    """Pick best available height for a building."""
+    h = lidar_height
+    if h is None or h <= 0:
+        if osm_height:
+            try:
+                h = float(osm_height.replace("m", "").strip())
+            except ValueError:
+                h = None
+    if h is None or h <= 0:
+        if levels:
+            try:
+                h = int(levels) * 3.0
+            except ValueError:
+                h = None
+    if h is None or h <= 0:
+        h = 8.0
+    return h
+
+
 # ── Main ──────────────────────────────────────────────────────────────────
 
 
-def export_geojson(area: Area, output_path: Path) -> int:
-    """Export buildings from GeoPackage to GeoJSON file.
+def load_pub_points() -> list[ShapelyPoint]:
+    """Load pub locations and return as Shapely points."""
+    with open(PUBS_PATH) as f:
+        pubs = json.load(f)
+    points = []
+    for p in pubs:
+        points.append(ShapelyPoint(p["lng"], p["lat"]))
+    print(f"  {len(points)} pubs loaded")
+    return points
 
-    Returns number of features exported.
+
+def export_geojson_near_pubs(area: Area, output_dir: Path) -> dict[str, Path]:
+    """Export buildings near pubs, split into per-z8-tile GeoJSON files.
+
+    Returns dict of z8 key -> geojson path.
     """
-    conn = sqlite3.connect(str(GPKG_PATH))
+    # Build spatial index of pub locations.
+    pub_points = load_pub_points()
+    pub_tree = STRtree(pub_points)
 
+    # Buffer distance in degrees (approximate).
+    buf_deg = BUILDING_RADIUS_M / 111320.0
+
+    conn = sqlite3.connect(str(GPKG_PATH))
     rows = conn.execute(
         "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height "
         "FROM buildings"
     ).fetchall()
 
-    features = []
+    # Collect features per z8 tile.
+    tile_features: dict[str, list] = {}
+    kept = 0
+    skipped = 0
+
     for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height in rows:
         try:
             hl = gpkg_header_len(blob)
@@ -64,86 +127,79 @@ def export_geojson(area: Area, output_path: Path) -> int:
             if not in_bbox(centroid.y, centroid.x, area.bbox):
                 continue
 
-            # Use lidar_height if available, else parse OSM height, else levels * 3.
-            h = lidar_height
-            if h is None or h <= 0:
-                if osm_height:
-                    try:
-                        h = float(osm_height.replace("m", "").strip())
-                    except ValueError:
-                        h = None
-            if h is None or h <= 0:
-                if levels:
-                    try:
-                        h = int(levels) * 3.0
-                    except ValueError:
-                        h = None
-            if h is None or h <= 0:
-                h = 8.0  # default
+            # Check if any pub is within BUILDING_RADIUS_M of this building.
+            # Use buffered centroid query on the spatial index.
+            nearby_idxs = pub_tree.query(centroid.buffer(buf_deg))
+            if len(nearby_idxs) == 0:
+                skipped += 1
+                continue
 
-            # GeoJSON coordinates are [lng, lat] (already in WGS84 from gpkg).
+            h = resolve_height(osm_height, levels, lidar_height)
+
             coords = [list(geom.exterior.coords)]
             for ring in geom.interiors:
                 coords.append(list(ring.coords))
 
             feature = {
                 "type": "Feature",
-                "properties": {
-                    "h": round(h, 1),
-                },
-                "geometry": {
-                    "type": "Polygon",
-                    "coordinates": coords,
-                },
+                "properties": {"h": round(h, 1)},
+                "geometry": {"type": "Polygon", "coordinates": coords},
             }
-
-            # Only include non-empty optional properties to keep file small.
             if name:
                 feature["properties"]["name"] = name
             if building_type and building_type != "yes":
                 feature["properties"]["type"] = building_type
 
-            features.append(feature)
+            # Assign to z8 tile based on centroid.
+            tx, ty = lng_lat_to_z8(centroid.x, centroid.y)
+            key = f"{tx}-{ty}"
+            if key not in tile_features:
+                tile_features[key] = []
+            tile_features[key].append(feature)
+            kept += 1
+
         except Exception:
             continue
 
     conn.close()
+    print(f"  {kept} buildings near pubs, {skipped} filtered out")
+    print(f"  Split across {len(tile_features)} z8 tiles")
 
-    geojson = {"type": "FeatureCollection", "features": features}
+    # Write per-tile GeoJSON files.
+    geojson_paths: dict[str, Path] = {}
+    for key, features in tile_features.items():
+        geojson = {"type": "FeatureCollection", "features": features}
+        path = output_dir / f"buildings-{key}.geojson"
+        with open(path, "w") as f:
+            json.dump(geojson, f)
+        geojson_paths[key] = path
 
-    with open(output_path, "w") as f:
-        json.dump(geojson, f)
-
-    return len(features)
+    return geojson_paths
 
 
-def run_tippecanoe(geojson_path: Path, output_path: Path):
+def run_tippecanoe(geojson_path: Path, output_path: Path) -> bool:
     """Run tippecanoe to convert GeoJSON to PMTiles."""
     tippecanoe = shutil.which("tippecanoe")
     if tippecanoe is None:
         print("ERROR: tippecanoe not found. Install it or add to PATH.")
-        print("  Build from source: https://github.com/felt/tippecanoe")
         return False
 
     cmd = [
         tippecanoe,
         "-o", str(output_path),
-        "-z", "16",       # max zoom
-        "-Z", "10",       # min zoom
-        "-l", "buildings", # layer name
-        "--drop-densest-as-needed",  # reduce density at low zooms
+        "-z", "16",       # max zoom (porthole uses z18 mpp but tiles at z16 are fine)
+        "-Z", "14",       # min zoom (only need high zoom for nearby building detail)
+        "-l", "buildings",
+        "--drop-densest-as-needed",
         "--extend-zooms-if-still-dropping",
-        "--force",         # overwrite output
+        "--force",
         str(geojson_path),
     ]
 
-    print(f"  Running: {' '.join(cmd[-4:])}")
     result = subprocess.run(cmd, capture_output=True, text=True)
-
     if result.returncode != 0:
         print(f"  tippecanoe failed: {result.stderr}")
         return False
-
     return True
 
 
@@ -157,37 +213,57 @@ def main():
         print("ERROR: buildings.gpkg not found. Run build_gpkg.py first.")
         return
 
+    if not PUBS_PATH.exists():
+        print("ERROR: pubs.json not found. Run match_plots.py first.")
+        return
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Export to temporary GeoJSON.
-    with tempfile.NamedTemporaryFile(suffix=".geojson", delete=False) as tmp:
-        geojson_path = Path(tmp.name)
+    # Clean old buildings files.
+    for old in OUTPUT_DIR.glob("buildings*.pmtiles"):
+        old.unlink()
+    for old in OUTPUT_DIR.glob("buildings*.geojson"):
+        old.unlink()
 
-    print("Exporting buildings to GeoJSON...", flush=True)
-    count = export_geojson(area, geojson_path)
-    size_mb = geojson_path.stat().st_size / 1e6
-    print(f"  {count} buildings, {size_mb:.1f} MB")
-    print()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
 
-    # Run tippecanoe.
-    output_path = OUTPUT_DIR / "buildings.pmtiles"
-    print("Converting to PMTiles...", flush=True)
-    success = run_tippecanoe(geojson_path, output_path)
+        print("Exporting buildings near pubs to GeoJSON...", flush=True)
+        geojson_paths = export_geojson_near_pubs(area, tmp)
+        print()
 
-    # Clean up temp file.
-    geojson_path.unlink(missing_ok=True)
+        if not geojson_paths:
+            print("No buildings found near pubs.")
+            return
 
-    if success:
-        size_mb = output_path.stat().st_size / 1e6
-        print(f"\nDone! {output_path} ({size_mb:.1f} MB)")
-    else:
-        print("\nFailed to generate PMTiles.")
-        # Keep the GeoJSON as fallback.
-        fallback = OUTPUT_DIR / "buildings.geojson"
-        print(f"Exporting GeoJSON fallback to {fallback}...")
-        export_geojson(area, fallback)
-        size_mb = fallback.stat().st_size / 1e6
-        print(f"  {fallback} ({size_mb:.1f} MB)")
+        # Convert each z8 tile to PMTiles.
+        print("Converting to PMTiles...", flush=True)
+        total_size = 0
+        max_size = 0
+        success_count = 0
+
+        for key, geojson_path in sorted(geojson_paths.items()):
+            output_path = OUTPUT_DIR / f"buildings-{key}.pmtiles"
+            gj_size = geojson_path.stat().st_size / 1e6
+            feat_count = len(json.load(open(geojson_path))["features"])
+            print(f"  {key}: {feat_count} buildings ({gj_size:.1f} MB GeoJSON)", end="", flush=True)
+
+            if run_tippecanoe(geojson_path, output_path):
+                size = output_path.stat().st_size
+                size_mb = size / 1e6
+                total_size += size
+                max_size = max(max_size, size)
+                success_count += 1
+                print(f" → {size_mb:.2f} MB")
+            else:
+                print(" → FAILED")
+
+        print()
+        print(f"Done! {success_count} PMTiles files")
+        print(f"  Total: {total_size / 1e6:.1f} MB")
+        print(f"  Largest: {max_size / 1e6:.2f} MB")
+        if max_size > 25e6:
+            print(f"  WARNING: largest file exceeds 25 MB Cloudflare Pages limit!")
 
 
 if __name__ == "__main__":
