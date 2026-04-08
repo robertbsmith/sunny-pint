@@ -47,6 +47,8 @@ function updateScene(): void {
 }
 
 async function onPubSelected(pub: Pub): Promise<void> {
+  // Close mobile drawer.
+  document.getElementById("pubs")?.classList.remove("open");
   await loadBuildingsForPub(pub);
   updateScene();
 }
@@ -213,6 +215,11 @@ async function init(): Promise<void> {
 
     // Theme toggle.
     document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
+
+    // Mobile pub drawer toggle.
+    document.getElementById("pubs-handle")!.addEventListener("click", () => {
+      document.getElementById("pubs")!.classList.toggle("open");
+    });
 
     // Share button.
     document.getElementById("btn-share")!.addEventListener("click", () => shareSnapshot());
