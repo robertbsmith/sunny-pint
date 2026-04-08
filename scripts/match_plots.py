@@ -101,27 +101,34 @@ def main():
             if not in_bbox(pub["lat"], pub["lng"], area.bbox):
                 continue
 
-            px, py = to_osgb.transform(pub["lng"], pub["lat"])
+            # Use OSM polygon centroid if available (more accurate than FSA geocode).
+            if pub.get("polygon") and len(pub["polygon"]) > 2:
+                clat = sum(c[0] for c in pub["polygon"]) / len(pub["polygon"])
+                clng = sum(c[1] for c in pub["polygon"]) / len(pub["polygon"])
+                px, py = to_osgb.transform(clng, clat)
+            else:
+                px, py = to_osgb.transform(pub["lng"], pub["lat"])
             pt = Point(px, py)
 
             parcel = find_containing_parcel(pt, parcels)
             if parcel is None:
                 continue
 
+            # Only useful if we have a building to subtract from the parcel.
+            building = building_polygon_osgb(pub)
+            if not building or not building.is_valid or building.is_empty:
+                continue
+
             matched += 1
             pub["plot"] = osgb_to_wgs_polygon(parcel)
 
-            building = building_polygon_osgb(pub)
-            if building and building.is_valid and not building.is_empty:
-                outdoor = parcel.difference(building)
-                if not outdoor.is_empty:
-                    if outdoor.geom_type == "MultiPolygon":
-                        outdoor = max(outdoor.geoms, key=lambda g: g.area)
-                    pub["outdoor"] = osgb_to_wgs_polygon(outdoor)
-                    pub["outdoor_area_m2"] = round(outdoor.area, 1)
-                    outdoor_computed += 1
-            else:
-                pub["outdoor"] = pub["plot"]
+            outdoor = parcel.difference(building)
+            if not outdoor.is_empty:
+                if outdoor.geom_type == "MultiPolygon":
+                    outdoor = max(outdoor.geoms, key=lambda g: g.area)
+                pub["outdoor"] = osgb_to_wgs_polygon(outdoor)
+                pub["outdoor_area_m2"] = round(outdoor.area, 1)
+                outdoor_computed += 1
 
         print(f"\n  {matched}/{len(pubs)} pubs matched to a plot")
         print(f"  {outdoor_computed} outdoor areas computed (plot minus building)")
