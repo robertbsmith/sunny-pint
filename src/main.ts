@@ -10,6 +10,8 @@ import { loadBuildingsForPub } from "./buildings";
 import { initIcons } from "./icons";
 import { initLocation } from "./location";
 import { readURL, writeURL, writeURLDebounced, setLocationQuery } from "./url";
+import { shareSnapshot } from "./share";
+import { getWeather, weatherEmoji, weatherLabel } from "./weather";
 import SunCalc from "suncalc";
 
 // Norwich default location.
@@ -54,6 +56,9 @@ function setLocation(lat: number, lng: number): void {
   state.userLng = lng;
   sortByDistance(lat, lng);
 
+  // Fetch weather in background.
+  fetchWeather(lat, lng);
+
   if (state.pubs.length > 0) {
     if (!state.selectedPubId) {
       state.selectedPubId = state.pubs[0].id;
@@ -63,6 +68,20 @@ function setLocation(lat: number, lng: number): void {
   }
 }
 
+
+// ── Weather ──────────────────────────────────────────────────────────
+
+async function fetchWeather(lat: number, lng: number): Promise<void> {
+  const ws = await getWeather(lat, lng);
+  state.weatherState = ws;
+  const badge = document.getElementById("weather-badge");
+  if (badge) {
+    badge.textContent = `${weatherEmoji(ws)} ${weatherLabel(ws)}`;
+    badge.title = weatherLabel(ws);
+  }
+  // Re-render porthole with weather state.
+  updateScene();
+}
 
 // ── Theme ────────────────────────────────────────────────────────────
 
@@ -194,6 +213,17 @@ async function init(): Promise<void> {
 
     // Theme toggle.
     document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
+
+    // Share button.
+    document.getElementById("btn-share")!.addEventListener("click", () => shareSnapshot());
+
+    // Directions button — opens selected pub in maps.
+    document.getElementById("btn-directions")!.addEventListener("click", () => {
+      const pub = selectedPub();
+      if (!pub) return;
+      const query = encodeURIComponent(`${pub.name}, ${pub.postcode || "UK"}`);
+      window.open(`https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`, "_blank");
+    });
   } catch (err) {
     console.error("Init failed:", err);
     document.getElementById("location-label")!.textContent = "Error — check console";

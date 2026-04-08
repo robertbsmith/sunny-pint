@@ -107,6 +107,12 @@ a {
   gap: 12px;
 }
 
+.weather-badge {
+  font-size: 0.7rem;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
 .brand {
   font-size: 1.05rem;
   font-weight: 800;
@@ -331,6 +337,32 @@ a {
   color: var(--on-surface);
 }
 
+.arc-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#btn-share,
+#btn-directions {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms;
+}
+
+#btn-share:hover,
+#btn-directions:hover {
+  background: var(--surface-container-high);
+}
+
 #btn-date {
   font-size: 0.8125rem;
   color: var(--on-surface-variant);
@@ -489,6 +521,95 @@ a {
 
 .footer-attr a:hover {
   text-decoration: underline;
+}
+
+/* ── Share dialog ────────────────────────────────────────────────── */
+
+#share-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.share-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.share-dialog-content {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.share-dialog-content img {
+  width: 100%;
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.share-dialog-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.share-dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.share-dialog-actions button {
+  flex: 1;
+  padding: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.share-btn-copy {
+  background: var(--primary);
+  color: #fff;
+}
+
+.share-btn-download {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.share-dialog-actions button:hover {
+  opacity: 0.85;
+}
+
+.share-dialog-link {
+  width: 100%;
+  font-size: 0.7rem;
+  padding: 6px 10px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  outline: none;
+  font-family: ui-monospace, monospace;
 }
 
 /* ── Fullscreen overlay ──────────────────────────────────────────── */

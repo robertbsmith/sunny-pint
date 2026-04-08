@@ -33,6 +33,9 @@ export interface SunPosition {
   altitude: number; // degrees above horizon
 }
 
+/** Weather state */
+export type WeatherState = "sunny" | "partly-cloudy" | "overcast" | "unknown";
+
 /** App state */
 export interface AppState {
   pubs: Pub[];
@@ -43,6 +46,7 @@ export interface AppState {
   timeMins: number; // minutes from midnight
   date: Date;
   playing: boolean;
+  weatherState: WeatherState;
   userLat: number | null;
   userLng: number | null;
 }

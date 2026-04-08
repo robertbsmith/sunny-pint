@@ -14,6 +14,7 @@ export const state: AppState = {
   timeMins: 720, // noon
   date: new Date(),
   playing: false,
+  weatherState: "unknown",
   userLat: null,
   userLng: null,
 };

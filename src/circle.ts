@@ -214,18 +214,28 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  // ── 5. Shadows (fade in with daylight) ──
-  if (dayFrac > 0 && state.shadowPolys.length > 0) {
-    drawShadows(ctx, cx, cy, r, W, H, centre, mpp, sun.altitude, dayFrac);
+  // ── 5. Shadows (fade in with daylight, reduced when cloudy) ──
+  const weatherDim = state.weatherState === "overcast" ? 0 : state.weatherState === "partly-cloudy" ? 0.5 : 1;
+  if (dayFrac > 0 && state.shadowPolys.length > 0 && weatherDim > 0) {
+    drawShadows(ctx, cx, cy, r, W, H, centre, mpp, sun.altitude, dayFrac * weatherDim);
   }
 
-  // ── 6. Buildings ──
+  // ── 6. Overcast tint ──
+  if (state.weatherState === "overcast" && dayFrac > 0) {
+    ctx.fillStyle = "rgba(180,185,190,0.25)";
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  } else if (state.weatherState === "partly-cloudy" && dayFrac > 0) {
+    ctx.fillStyle = "rgba(180,185,190,0.10)";
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  }
+
+  // ── 7. Buildings ──
   drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
 
-  // ── 7. Outdoor area ──
+  // ── 8. Outdoor area ──
   drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
 
-  // ── 8. Pub marker ──
+  // ── 9. Pub marker ──
   ctx.beginPath();
   ctx.arc(cx, cy, 4, 0, Math.PI * 2);
   ctx.fillStyle = COLORS.pubMarker;
@@ -236,19 +246,19 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
 
   ctx.restore(); // unclip
 
-  // ── 9. Compass ticks + labels ──
+  // ── 10. Compass ticks + labels ──
   drawCompass(ctx, cx, cy, r, outerR, dayFrac);
 
-  // ── 10. Sun/moon icon on bezel ──
+  // ── 11. Sun/moon icon on bezel ──
   drawSunIcon(ctx, cx, cy, r, outerR, sun, dayFrac);
 
-  // ── 11. Time text ──
+  // ── 12. Time text ──
   drawTimeText(ctx, cx, cy, r, outerR, sun, dayFrac);
 
-  // ── 12. Sun % text ──
+  // ── 13. Sun % text ──
   drawSunPct(ctx, cx, cy, r, sun, dayFrac);
 
-  // ── 13. Pub sign ──
+  // ── 14. Pub sign ──
   updatePubSign();
 
   isRendering = false;

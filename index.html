@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F59E0B" />
     <meta name="description" content="Find sunny beer garden seats — real-time shadow maps for UK pubs" />
+    <meta property="og:title" content="Sunny Pint" />
+    <meta property="og:description" content="Find sunny beer garden seats — real-time shadow maps for UK pubs" />
+    <meta property="og:image" content="https://sunny-pint.co.uk/banner.png" />
+    <meta property="og:url" content="https://sunny-pint.co.uk" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
     <title>Sunny Pint</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
@@ -43,9 +49,13 @@
                 </button>
                 <span id="time-display">12:00</span>
               </div>
-              <button id="btn-date">Today</button>
+              <div class="arc-right">
+                <span id="weather-badge" class="weather-badge"></span>
+                <button id="btn-share" title="Share"></button>
+                <button id="btn-directions" title="Get directions"></button>
+                <button id="btn-date">Today</button>
+              </div>
               <input type="date" id="date-input" />
-            </div>
           </div>
         </section>
 

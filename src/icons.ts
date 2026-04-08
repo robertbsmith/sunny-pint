@@ -2,9 +2,9 @@
  * Lucide icon rendering — only imports the icons we use.
  */
 
-import { createIcons, MapPin, Play, Pause, Search, Sun, Moon, Monitor } from "lucide";
+import { createIcons, MapPin, Play, Pause, Search, Sun, Moon, Monitor, Navigation, Share2 } from "lucide";
 
-const usedIcons = { MapPin, Play, Pause, Search, Sun, Moon, Monitor };
+const usedIcons = { MapPin, Play, Pause, Search, Sun, Moon, Monitor, Navigation, Share2 };
 
 export function initIcons(): void {
   const theme = localStorage.getItem("theme") || "system";
@@ -22,6 +22,16 @@ export function initIcons(): void {
   const searchIcon = document.getElementById("search-icon");
   if (searchIcon) {
     searchIcon.innerHTML = '<i data-lucide="search"></i>';
+  }
+
+  const shareBtn = document.getElementById("btn-share");
+  if (shareBtn) {
+    shareBtn.innerHTML = '<i data-lucide="share-2"></i>';
+  }
+
+  const directionsBtn = document.getElementById("btn-directions");
+  if (directionsBtn) {
+    directionsBtn.innerHTML = '<i data-lucide="navigation"></i>';
   }
 
   const searchBtn = document.getElementById("btn-search");
