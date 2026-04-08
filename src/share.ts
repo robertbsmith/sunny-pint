@@ -92,9 +92,16 @@ export async function shareSnapshot(): Promise<void> {
   const file = new File([blob], `sunny-pint-${pub.name.toLowerCase().replace(/\s+/g, "-")}.png`, { type: "image/png" });
 
   // Build share text.
-  const shareText = isDay
-    ? `${emoji} ${pub.name} is ${weather.toLowerCase()} right now! Pint? 🍺`
-    : `Checking out ${pub.name} for later 🍺`;
+  let shareText: string;
+  if (!isDay) {
+    shareText = `🌙 ${pub.name}`;
+  } else if (state.weatherState === "sunny") {
+    shareText = `☀️ ${pub.name} — sun's out, pints out? 🍺`;
+  } else if (state.weatherState === "partly-cloudy") {
+    shareText = `⛅ ${pub.name} — not bad out there. Pint? 🍺`;
+  } else {
+    shareText = `☁️ ${pub.name} — bit grey but sod it. Pint? 🍺`;
+  }
 
   // Try Web Share API (mobile native share sheet).
   if (navigator.share) {
