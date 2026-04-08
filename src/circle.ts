@@ -411,19 +411,22 @@ function drawOutdoorArea(
 ): void {
   const pub = selectedPub();
   if (!pub) return;
-  if (!pub.outdoor) return;
+  if (!pub.outdoor || pub.outdoor.length === 0) return;
 
   ctx.beginPath();
-  for (let i = 0; i < pub.outdoor.length; i++) {
-    const p = toPixel(pub.outdoor[i][0], pub.outdoor[i][1], centre, mpp);
-    if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
-    else ctx.lineTo(cx + p.x, cy + p.y);
+  // Draw exterior ring and any interior rings (holes).
+  for (const ring of pub.outdoor) {
+    for (let i = 0; i < ring.length; i++) {
+      const p = toPixel(ring[i]![0], ring[i]![1], centre, mpp);
+      if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
+      else ctx.lineTo(cx + p.x, cy + p.y);
+    }
+    ctx.closePath();
   }
-  ctx.closePath();
 
   const greenAlpha = 0.12 + 0.12 * dayFrac;
   ctx.fillStyle = `rgba(39,174,96,${greenAlpha.toFixed(2)})`;
-  ctx.fill();
+  ctx.fill("evenodd");
   ctx.setLineDash([6, 4]);
   ctx.strokeStyle = "#27AE60";
   ctx.lineWidth = 2.5;

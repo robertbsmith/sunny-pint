@@ -1,20 +1,14 @@
-/** A pub from the merged pub list (FSA + VOA + OSM) */
+/** A pub from OSM */
 export interface Pub {
   id: string;
   name: string;
   lat: number;
   lng: number;
-  postcode: string;
-  in_fsa: boolean;
-  in_osm: boolean;
-  in_voa: boolean;
-  osm_id?: string;
   polygon?: [number, number][]; // building footprint [[lat,lng],...]
-  outdoor?: [number, number][]; // outdoor area [[lat,lng],...]
+  outdoor?: [number, number][][]; // outdoor area [exterior, ...holes] each [[lat,lng],...]
   beer_garden?: string;
   outdoor_seating?: string;
   opening_hours?: string;
-  rateable_value?: number;
   distance?: number; // computed client-side, metres
 }
 

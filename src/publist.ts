@@ -44,7 +44,7 @@ export function renderList(): void {
 
     const dist = pub.distance != null ? formatDistance(pub.distance) : "";
     const sunInfo = getSunInfo(pub);
-    const query = encodeURIComponent(`${pub.name}, ${pub.postcode || "UK"}`);
+    const query = encodeURIComponent(pub.name);
     const mapsUrl = `https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`;
 
     li.innerHTML = `

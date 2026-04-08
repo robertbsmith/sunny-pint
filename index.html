@@ -22,13 +22,24 @@
       <header id="header">
         <div class="header-inner">
           <div class="header-left">
+            <img src="/icon.svg" alt="" class="header-logo" width="28" height="28" />
+            <a href="/" class="brand">sunny-pint.co.uk</a>
+          </div>
+          <div class="header-center">
             <button id="btn-locate" title="Use GPS location"></button>
             <span id="location-label">Loading...</span>
             <button id="btn-search" title="Search location"></button>
           </div>
           <div class="header-right">
-            <span class="brand">Sunny Pint</span>
-            <button id="btn-theme" title="Toggle theme"></button>
+            <a href="https://ko-fi.com/Q5Q11XGHQF" target="_blank" rel="noopener" title="Buy me a pint"><img class="kofi-icon" src="https://storage.ko-fi.com/cdn/kofi1.png?v=6" alt="Buy me a pint" height="28" loading="lazy" /></a>
+            <div class="theme-select-wrap">
+              <span id="theme-icon"></span>
+              <select id="theme-select" title="Theme">
+                <option value="system">Auto</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
           </div>
         </div>
       </header>
@@ -80,7 +91,6 @@
           Data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> (ODbL),
           <a href="https://www.gov.uk/government/organisations/environment-agency">EA LiDAR</a>,
           <a href="https://use-land-property-data.service.gov.uk/">Land Registry</a>,
-          <a href="https://ratings.food.gov.uk/">FSA</a> (OGL v3),
           <a href="https://carto.com/attributions">CARTO</a> (CC BY 3.0),
           <a href="https://github.com/mourner/suncalc">SunCalc</a>,
           <a href="https://azgaar.github.io/Armoria/">Armoria</a>

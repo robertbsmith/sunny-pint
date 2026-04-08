@@ -7,7 +7,7 @@ import { initCircle, renderCircle } from "./circle";
 import { initSunArc, renderArc } from "./sunarc";
 import { computeShadows } from "./shadow";
 import { loadBuildingsForPub } from "./buildings";
-import { initIcons } from "./icons";
+import { initIcons, updateThemeIcon } from "./icons";
 import { initLocation } from "./location";
 import { readURL, writeURL, writeURLDebounced, setLocationQuery } from "./url";
 import { shareSnapshot } from "./share";
@@ -100,13 +100,9 @@ function applyTheme(theme: Theme): void {
   localStorage.setItem("theme", theme);
 }
 
-function cycleTheme(): void {
-  const order: Theme[] = ["system", "light", "dark"];
-  const current = getStoredTheme();
-  const next = order[(order.indexOf(current) + 1) % order.length];
-  applyTheme(next);
-  initIcons();
-  // Re-render canvas with new theme colors.
+function setTheme(theme: Theme): void {
+  applyTheme(theme);
+  updateThemeIcon();
   updateScene();
 }
 
@@ -213,8 +209,10 @@ async function init(): Promise<void> {
       }
     }
 
-    // Theme toggle.
-    document.getElementById("btn-theme")!.addEventListener("click", cycleTheme);
+    // Theme select.
+    document.getElementById("theme-select")!.addEventListener("change", (e) => {
+      setTheme((e.target as HTMLSelectElement).value as Theme);
+    });
 
     // Now button — reset time to current.
     document.getElementById("btn-now")!.addEventListener("click", () => {
@@ -237,7 +235,7 @@ async function init(): Promise<void> {
     document.getElementById("btn-directions")!.addEventListener("click", () => {
       const pub = selectedPub();
       if (!pub) return;
-      const query = encodeURIComponent(`${pub.name}, ${pub.postcode || "UK"}`);
+      const query = encodeURIComponent(pub.name);
       window.open(`https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`, "_blank");
     });
   } catch (err) {

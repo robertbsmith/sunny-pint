@@ -1,7 +1,7 @@
 """Match pubs to Land Registry INSPIRE plots and compute outdoor areas.
 
 For each pub, finds the cadastral parcel containing it, then subtracts
-the building footprint (from OSM) to get the outdoor area polygon.
+all building footprints (from OSM GeoPackage) to get the outdoor area polygon.
 
 Runs after merge_pubs.py — enriches data/pubs_merged.json with plot/outdoor
 fields, then copies result to public/data/pubs.json.
@@ -11,13 +11,15 @@ Usage:
 """
 
 import json
-import shutil
+import sqlite3
 from pathlib import Path
 
 import fiona
 from pyproj import Transformer
 from shapely.geometry import shape, Point, Polygon
-from shapely import prepare
+from shapely import prepare, wkb
+from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 from areas import parse_area, in_bbox
 
@@ -25,18 +27,74 @@ DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
 PUBS_OUT = Path(__file__).resolve().parent.parent / "public" / "data" / "pubs.json"
 GML_FILE = DATA / "inspire" / "Land_Registry_Cadastral_Parcels.gml"
+GPKG_PATH = DATA / "buildings.gpkg"
 
 to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True)
 to_wgs = Transformer.from_crs("EPSG:27700", "EPSG:4326", always_xy=True)
 
 
-def osgb_to_wgs_polygon(geom):
-    """Convert a shapely polygon from OSGB to WGS84 as [[lat,lng], ...]."""
-    coords = []
+def gpkg_header_len(blob: bytes) -> int:
+    if len(blob) < 8:
+        return 0
+    flags = blob[3]
+    envelope_type = (flags >> 1) & 0x07
+    envelope_sizes = {0: 0, 1: 32, 2: 48, 3: 48, 4: 64}
+    return 8 + envelope_sizes.get(envelope_type, 0)
+
+
+def load_buildings_osgb(area):
+    """Load building polygons from GeoPackage, converted to OSGB, with spatial index."""
+    if not GPKG_PATH.exists():
+        print(f"  WARNING: {GPKG_PATH} not found — can't subtract buildings from plots")
+        return [], None
+
+    conn = sqlite3.connect(str(GPKG_PATH))
+    rows = conn.execute("SELECT geom FROM buildings").fetchall()
+    conn.close()
+
+    buildings = []
+    for (blob,) in rows:
+        try:
+            hl = gpkg_header_len(blob)
+            geom = wkb.loads(blob[hl:])
+            if geom.is_empty or not geom.is_valid:
+                continue
+            centroid = geom.centroid
+            if not in_bbox(centroid.y, centroid.x, area.bbox):
+                continue
+            # Convert WGS84 polygon to OSGB.
+            osgb_coords = [to_osgb.transform(x, y) for x, y in geom.exterior.coords]
+            poly = Polygon(osgb_coords)
+            if poly.is_valid and not poly.is_empty:
+                buildings.append(poly)
+        except Exception:
+            continue
+
+    tree = STRtree(buildings) if buildings else None
+    print(f"  {len(buildings)} buildings loaded for plot subtraction")
+    return buildings, tree
+
+
+def osgb_to_wgs_rings(geom):
+    """Convert a shapely polygon from OSGB to WGS84 as [exterior, ...holes].
+
+    Each ring is [[lat,lng], ...]. First ring is exterior, rest are holes.
+    """
+    rings = []
+    # Exterior ring.
+    exterior = []
     for x, y in geom.exterior.coords:
         lng, lat = to_wgs.transform(x, y)
-        coords.append([round(lat, 6), round(lng, 6)])
-    return coords
+        exterior.append([round(lat, 6), round(lng, 6)])
+    rings.append(exterior)
+    # Interior rings (holes from subtracted buildings).
+    for interior in geom.interiors:
+        hole = []
+        for x, y in interior.coords:
+            lng, lat = to_wgs.transform(x, y)
+            hole.append([round(lat, 6), round(lng, 6)])
+        rings.append(hole)
+    return rings
 
 
 def load_parcels():
@@ -94,6 +152,9 @@ def main():
     parcels = load_parcels()
 
     if parcels:
+        # Load all buildings for subtracting from plots.
+        all_buildings, building_tree = load_buildings_osgb(area)
+
         matched = 0
         outdoor_computed = 0
 
@@ -101,7 +162,7 @@ def main():
             if not in_bbox(pub["lat"], pub["lng"], area.bbox):
                 continue
 
-            # Use OSM polygon centroid if available (more accurate than FSA geocode).
+            # Use OSM polygon centroid if available.
             if pub.get("polygon") and len(pub["polygon"]) > 2:
                 clat = sum(c[0] for c in pub["polygon"]) / len(pub["polygon"])
                 clng = sum(c[1] for c in pub["polygon"]) / len(pub["polygon"])
@@ -114,24 +175,36 @@ def main():
             if parcel is None:
                 continue
 
-            # Only useful if we have a building to subtract from the parcel.
-            building = building_polygon_osgb(pub)
-            if not building or not building.is_valid or building.is_empty:
+            matched += 1
+            pub["plot"] = osgb_to_wgs_rings(parcel)[0]
+
+            # Subtract ALL buildings that intersect this parcel.
+            if building_tree:
+                hit_idxs = building_tree.query(parcel)
+                overlapping = [all_buildings[i] for i in hit_idxs if all_buildings[i].intersects(parcel)]
+            else:
+                overlapping = []
+
+            # Fall back to just the pub's own building if no GeoPackage hits.
+            if not overlapping:
+                b = building_polygon_osgb(pub)
+                if b and b.is_valid and not b.is_empty:
+                    overlapping = [b]
+
+            if not overlapping:
                 continue
 
-            matched += 1
-            pub["plot"] = osgb_to_wgs_polygon(parcel)
-
-            outdoor = parcel.difference(building)
+            buildings_union = unary_union(overlapping)
+            outdoor = parcel.difference(buildings_union)
             if not outdoor.is_empty:
                 if outdoor.geom_type == "MultiPolygon":
                     outdoor = max(outdoor.geoms, key=lambda g: g.area)
-                pub["outdoor"] = osgb_to_wgs_polygon(outdoor)
+                pub["outdoor"] = osgb_to_wgs_rings(outdoor)
                 pub["outdoor_area_m2"] = round(outdoor.area, 1)
                 outdoor_computed += 1
 
         print(f"\n  {matched}/{len(pubs)} pubs matched to a plot")
-        print(f"  {outdoor_computed} outdoor areas computed (plot minus building)")
+        print(f"  {outdoor_computed} outdoor areas computed (plot minus all buildings)")
     else:
         print("  No parcels — skipping plot matching")
 

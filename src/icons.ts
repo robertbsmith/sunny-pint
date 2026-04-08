@@ -2,13 +2,11 @@
  * Lucide icon rendering — only imports the icons we use.
  */
 
-import { createIcons, MapPin, Play, Pause, Search, Sun, Moon, Monitor, Navigation, Share2 } from "lucide";
+import { createIcons, MapPin, Play, Pause, Search, Sun, Moon, SunMoon, Navigation, Share2 } from "lucide";
 
-const usedIcons = { MapPin, Play, Pause, Search, Sun, Moon, Monitor, Navigation, Share2 };
+const usedIcons = { MapPin, Play, Pause, Search, Sun, Moon, SunMoon, Navigation, Share2 };
 
 export function initIcons(): void {
-  const theme = localStorage.getItem("theme") || "system";
-
   const locateBtn = document.getElementById("btn-locate");
   if (locateBtn) {
     locateBtn.innerHTML = '<i data-lucide="map-pin"></i>';
@@ -39,12 +37,22 @@ export function initIcons(): void {
     searchBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`;
   }
 
-  const themeBtn = document.getElementById("btn-theme");
-  if (themeBtn) {
-    const iconName = theme === "dark" ? "moon" : theme === "light" ? "sun" : "monitor";
-    themeBtn.innerHTML = `<i data-lucide="${iconName}"></i>`;
-  }
+  updateThemeIcon();
 
+  createIcons({ icons: usedIcons, attrs: { width: 18, height: 18, "stroke-width": 2 } });
+}
+
+export function updateThemeIcon(): void {
+  const theme = localStorage.getItem("theme") || "system";
+  const themeIcon = document.getElementById("theme-icon");
+  if (themeIcon) {
+    const iconName = theme === "dark" ? "moon" : theme === "light" ? "sun" : "sun-moon";
+    themeIcon.innerHTML = `<i data-lucide="${iconName}"></i>`;
+  }
+  const themeSelect = document.getElementById("theme-select") as HTMLSelectElement | null;
+  if (themeSelect) {
+    themeSelect.value = theme;
+  }
   createIcons({ icons: usedIcons, attrs: { width: 18, height: 18, "stroke-width": 2 } });
 }
 
