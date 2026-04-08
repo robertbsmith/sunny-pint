@@ -1,0 +1,4 @@
+/data/*.pmtiles
+  Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: Content-Length, Content-Range, Accept-Ranges
+  Content-Type: application/octet-stream

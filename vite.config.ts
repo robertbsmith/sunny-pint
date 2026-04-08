@@ -35,13 +35,9 @@ export default defineConfig({
             },
           },
           {
-            // Cache PMTiles range requests
-            urlPattern: /\.pmtiles$/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "pmtiles",
-              expiration: { maxEntries: 1000, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
+            // PMTiles — let range requests pass through to network (SW can't handle them)
+            urlPattern: /\.pmtiles/,
+            handler: "NetworkOnly",
           },
           {
             // Cache Armoria coat of arms SVGs
