@@ -85,14 +85,9 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
 
 /** Load buildings near a pub from static tiles and update state. */
 export async function loadBuildingsForPub(pub: Pub): Promise<void> {
-  // Use OSM polygon centroid for matching if available.
-  let matchLat = pub.lat;
-  let matchLng = pub.lng;
-  if (pub.polygon && pub.polygon.length > 0) {
-    const c = buildingCentroid(pub.polygon);
-    matchLat = c[0];
-    matchLng = c[1];
-  }
+  // Use OSM building centroid for matching if available (more accurate than geocode).
+  const matchLat = pub.clat ?? pub.lat;
+  const matchLng = pub.clng ?? pub.lng;
 
   // Determine which z14 tiles cover the load radius.
   const dlat = LOAD_RADIUS_M / M_PER_DEG_LAT;

@@ -4,7 +4,8 @@ export interface Pub {
   name: string;
   lat: number;
   lng: number;
-  polygon?: [number, number][]; // building footprint [[lat,lng],...]
+  clat?: number; // OSM building centroid lat (more accurate than geocode)
+  clng?: number; // OSM building centroid lng
   outdoor?: [number, number][][]; // outdoor area [exterior, ...holes] each [[lat,lng],...]
   beer_garden?: string;
   outdoor_seating?: string;

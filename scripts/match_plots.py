@@ -260,10 +260,22 @@ def main():
     else:
         print("  No parcels — skipping plot matching")
 
-    # Write enriched data to public/data/pubs.json.
+    # Write to public/data/pubs.json — strip polygon (replaced with centroid) to save bandwidth.
     PUBS_OUT.parent.mkdir(parents=True, exist_ok=True)
-    PUBS_OUT.write_text(json.dumps(pubs, indent=2))
-    print(f"  Written to {PUBS_OUT}")
+    output_pubs = []
+    for pub in pubs:
+        out = dict(pub)
+        # Replace full polygon with centroid for the public file.
+        if "polygon" in out and out["polygon"] and len(out["polygon"]) > 2:
+            out["clat"] = round(sum(c[0] for c in out["polygon"]) / len(out["polygon"]), 6)
+            out["clng"] = round(sum(c[1] for c in out["polygon"]) / len(out["polygon"]), 6)
+        # Remove plot (only used during pipeline) and polygon from public output.
+        out.pop("polygon", None)
+        out.pop("plot", None)
+        output_pubs.append(out)
+    PUBS_OUT.write_text(json.dumps(output_pubs))
+    size_mb = PUBS_OUT.stat().st_size / 1e6
+    print(f"  Written to {PUBS_OUT} ({size_mb:.1f} MB)")
 
 
 if __name__ == "__main__":
