@@ -93,8 +93,8 @@ export async function shareSnapshot(): Promise<void> {
 
   // Build share text.
   const shareText = isDay
-    ? `${emoji} ${pub.name} — ${weather.toLowerCase()} right now! Check the sun at sunny-pint.co.uk`
-    : `Checking out ${pub.name} on Sunny Pint — sunny-pint.co.uk`;
+    ? `${emoji} ${pub.name} is ${weather.toLowerCase()} right now! Pint? 🍺`
+    : `Checking out ${pub.name} for later 🍺`;
 
   // Try Web Share API (mobile native share sheet).
   if (navigator.share) {
