@@ -56,7 +56,8 @@ Key modules:
 - `icons.ts` — Lucide DOM icons
 
 ### Data Pipeline (`scripts/`)
-- `merge_pubs.py` — FSA + VOA + OSM → unified pub list
+- `merge_pubs.py` — FSA + VOA + OSM → unified pub list (`data/pubs_merged.json`)
+- `match_plots.py` — Land Registry INSPIRE plots → outdoor areas, writes `public/data/pubs.json`
 - `build_gpkg.py` — OSM .pbf → GeoPackage with buildings
 - `measure_heights.py` — LiDAR DSM/DTM → building heights
 - `generate_pmtiles.py` — GeoPackage → PMTiles

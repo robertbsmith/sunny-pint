@@ -36,12 +36,16 @@ ci: typecheck lint build
 
 # ── Data Pipeline ─────────────────────────────────────────────────────
 
-# Run full pipeline: pubs → buildings → heights → PMTiles
-pipeline: merge-pubs build-gpkg measure-heights generate-pmtiles
+# Run full pipeline: pubs → plots → buildings → heights → tiles
+pipeline: merge-pubs match-plots build-gpkg measure-heights generate-pmtiles
 
 # Merge pub data from FSA + VOA + OSM
 merge-pubs:
     uv run python scripts/merge_pubs.py --area {{area}}
+
+# Match pubs to Land Registry plots, compute outdoor areas → public/data/pubs.json
+match-plots:
+    uv run python scripts/match_plots.py --area {{area}}
 
 # Fetch pub data from OSM Overpass API (Norwich only, legacy)
 fetch-pubs:
