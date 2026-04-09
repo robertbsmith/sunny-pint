@@ -18,6 +18,7 @@ import { initPubList, renderList, sortByDistance } from "./publist";
 import { computeShadows, isTerrainOccluded } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
+import { type LocationSource, loadLocation, saveLocation } from "./storage";
 import { initSunArc, renderArc } from "./sunarc";
 import { largeSunBadgeHtml } from "./sunbadge";
 import type { Pub } from "./types";
@@ -33,6 +34,7 @@ import {
   writeURLDebounced,
 } from "./url";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
+import { maybeShowWelcome } from "./welcome";
 
 async function loadPubs(): Promise<void> {
   const resp = await fetch("/data/pubs.json");
@@ -175,13 +177,30 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function setLocation(lat: number, lng: number, opts: { keepPub?: boolean } = {}): void {
+function setLocation(
+  lat: number,
+  lng: number,
+  opts: { keepPub?: boolean; persistAs?: LocationSource; label?: string } = {},
+): void {
   state.userLat = lat;
   state.userLng = lng;
   sortByDistance(lat, lng);
 
   // Fetch weather in background.
   fetchWeather(lat, lng);
+
+  // Persist if the caller explicitly opted in. We only do this for
+  // user-initiated location choices (GPS, search) — not for app defaults
+  // or pub-page hydration where the coords aren't necessarily "where the
+  // user is".
+  if (opts.persistAs) {
+    saveLocation({
+      lat,
+      lng,
+      label: opts.label ?? `${lat.toFixed(3)}, ${lng.toFixed(3)}`,
+      source: opts.persistAs,
+    });
+  }
 
   if (state.pubs.length > 0) {
     // Auto-select the closest pub on every location change unless explicitly
@@ -258,6 +277,17 @@ function parseFloatOrNull(s: string): number | null {
  * default centroid until they tap the location button themselves.
  */
 async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> {
+  // Returning visitor with a saved location → use that immediately and
+  // don't fall through to Norwich or auto-GPS. They've already told us
+  // where they want to look from.
+  const saved = loadLocation();
+  if (saved) {
+    setLocation(saved.lat, saved.lng);
+    if (labelEl) labelEl.textContent = saved.label;
+    setLocationQuery(saved.label);
+    return;
+  }
+
   setLocation(DEFAULT_LAT, DEFAULT_LNG);
   if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
   setLocationQuery(DEFAULT_LOCATION_NAME);
@@ -282,7 +312,7 @@ async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> 
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const { latitude, longitude } = pos.coords;
-      setLocation(latitude, longitude);
+      let locationLabel = "Your location";
       try {
         const resp = await fetch(
           `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`,
@@ -293,13 +323,16 @@ async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> 
         const local =
           addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet || addr.city_district;
         const main = addr.city || addr.town || addr.village || addr.municipality;
-        const name =
-          local && main && local !== main ? `${local}, ${main}` : local || main || "your location";
-        if (labelEl) labelEl.textContent = name;
-        setLocationQuery(name);
+        locationLabel =
+          local && main && local !== main ? `${local}, ${main}` : local || main || "Your location";
       } catch {
-        if (labelEl) labelEl.textContent = "Your location";
+        // Reverse-geocode failed — keep the generic label.
       }
+      // Persist the auto-GPS hit so the next visit hydrates from storage
+      // and skips the permission prompt entirely.
+      setLocation(latitude, longitude, { persistAs: "gps", label: locationLabel });
+      if (labelEl) labelEl.textContent = locationLabel;
+      setLocationQuery(locationLabel);
       writeURL();
     },
     () => {
@@ -364,9 +397,14 @@ async function init(): Promise<void> {
     await loadPubs();
     console.log(`Loaded ${state.pubs.length} pubs`);
 
-    // Location picker (GPS + search).
+    // Location picker (GPS + search). Both paths route through here, and
+    // both represent an explicit user choice — so persist the location to
+    // localStorage so the next visit hydrates from it instead of defaulting
+    // to Norwich. The label is read off the header element which the
+    // location module updates synchronously before this callback fires.
     initLocation((lat, lng) => {
-      setLocation(lat, lng);
+      const label = document.getElementById("location-label")?.textContent ?? undefined;
+      setLocation(lat, lng, { persistAs: "search", label });
       writeURL();
     });
 
@@ -433,14 +471,25 @@ async function init(): Promise<void> {
       urlState.route.lat != null &&
       urlState.route.lng != null
     ) {
-      // Shared GPS coords URL.
-      setLocation(urlState.route.lat, urlState.route.lng);
-      if (labelEl) {
-        labelEl.textContent = `${urlState.route.lat.toFixed(3)}, ${urlState.route.lng.toFixed(3)}`;
-      }
+      // Shared GPS coords URL — adopt the shared coords as if the user
+      // had picked them, so a returning visit to "/" hydrates here too.
+      const coordLabel = `${urlState.route.lat.toFixed(3)}, ${urlState.route.lng.toFixed(3)}`;
+      setLocation(urlState.route.lat, urlState.route.lng, {
+        persistAs: "search",
+        label: coordLabel,
+      });
+      if (labelEl) labelEl.textContent = coordLabel;
     } else {
-      // Plain homepage — default centre, GPS in background.
+      // Plain homepage — default centre, GPS in background. Also show
+      // the welcome modal on the very first visit so people understand
+      // what they're looking at instead of staring at a random Norwich
+      // pub. The modal is suppressed on landing pages (city/theme/pub)
+      // because those URLs already have explicit intent.
       defaultHomeHydration(labelEl);
+      // Defer slightly so the porthole has a chance to paint underneath
+      // and the modal feels like an overlay on a real page rather than
+      // a popup on a blank screen.
+      setTimeout(() => maybeShowWelcome(), 150);
     }
 
     // Theme toggle in footer.

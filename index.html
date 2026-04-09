@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F59E0B" />
     <title>Sunny Pint — Find sunny beer gardens at UK pubs</title>
-    <meta name="description" content="Real-time shadow maps for UK pub gardens. See exactly which beer gardens are in the sun right now, computed from LiDAR and OpenStreetMap data. Norwich, London, Bristol and growing." />
+    <meta name="description" content="Find sunny beer gardens at UK pubs. Sunny Pint shows which pub gardens catch the sun right now so you can pick the best seat for your pint." />
+    <meta name="application-name" content="Sunny Pint" />
     <link rel="canonical" href="https://sunny-pint.co.uk/" />
 
     <!-- Routing hints — generated landing pages override these to point the
@@ -17,7 +18,7 @@
     <!-- Open Graph / social cards -->
     <meta property="og:site_name" content="Sunny Pint" />
     <meta property="og:title" content="Sunny Pint — Find sunny beer gardens at UK pubs" />
-    <meta property="og:description" content="Real-time shadow maps for UK pub gardens. See which beer gardens are in the sun right now." />
+    <meta property="og:description" content="Find sunny beer gardens at UK pubs — see which pub gardens catch the sun right now." />
     <meta property="og:image" content="https://sunny-pint.co.uk/banner.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -26,10 +27,12 @@
     <meta property="og:locale" content="en_GB" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Sunny Pint — Find sunny beer gardens at UK pubs" />
-    <meta name="twitter:description" content="Real-time shadow maps for UK pub gardens." />
+    <meta name="twitter:description" content="Find sunny beer gardens at UK pubs — see which pub gardens catch the sun right now." />
     <meta name="twitter:image" content="https://sunny-pint.co.uk/banner.png" />
 
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192-v2.png" />
+    <link rel="icon" sizes="any" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon-192-v2.png" />
 
     <!-- Preload pubs.json so the fetch starts in parallel with the main JS
@@ -49,7 +52,7 @@
       "@type": "WebSite",
       "name": "Sunny Pint",
       "url": "https://sunny-pint.co.uk/",
-      "description": "Real-time shadow maps for UK pub gardens — find which beer gardens are in the sun right now.",
+      "description": "Find sunny beer gardens at UK pubs — see which pub gardens catch the sun right now.",
       "inLanguage": "en-GB",
       "potentialAction": {
         "@type": "SearchAction",
@@ -70,7 +73,7 @@
         <div class="header-inner">
           <a href="/" class="brand">
             <img src="/icon.svg" alt="Sunny Pint logo" class="header-logo" width="40" height="40" />
-            <span class="brand-text">sunny-pint.co.uk</span>
+            <span class="brand-text">Sunny Pint</span>
           </a>
           <button type="button" id="btn-location" class="location-button" title="Change location">
             <span id="location-label">Loading...</span>
@@ -111,7 +114,7 @@
            crawlers index but doesn't dominate the user experience. -->
       <section id="seo-intro" class="seo-intro sr-only">
         <h1>Find sunny beer gardens at UK pubs</h1>
-        <p>Real-time shadow maps for pub gardens. Pick a pub, see exactly which seats are in the sun right now — computed from LiDAR elevation and OpenStreetMap building data.</p>
+        <p>Pick a pub, see exactly which seats catch the sun right now — and where the shadows will fall as the afternoon goes on.</p>
       </section>
 
       <!-- Main content -->

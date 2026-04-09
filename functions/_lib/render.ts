@@ -360,9 +360,8 @@ export function renderCityPage(template: string, ctx: CityContext): string {
 
   const title = `Sunny beer gardens in ${town} — Sunny Pint`;
   const description =
-    `Real-time shadow maps for ${pubs.length} pub gardens in ${town}. ` +
-    `Average Sunny Rating ${avgScore}/100. Find which beer gardens are in the ` +
-    `sun right now, computed from LiDAR elevation and OpenStreetMap building data.`;
+    `${pubs.length} pub gardens in ${town} ranked by Sunny Rating (average ${avgScore}/100). ` +
+    `Find the sunniest beer gardens, the best evening sun spots, and pick the best seat for your pint.`;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
@@ -440,8 +439,8 @@ export function renderPubPage(template: string, ctx: PubContext): string {
   const description = pub.sun
     ? `${pub.name}${town ? ` in ${town}` : ""}. ${ratingText}` +
       (pub.sun.best_window ? `, best sun ${pub.sun.best_window}` : "") +
-      `. Real-time shadow map computed from LiDAR elevation and OpenStreetMap building data.`
-    : `${pub.name}${town ? ` in ${town}` : ""}. Real-time shadow map computed from LiDAR elevation and OpenStreetMap building data.`;
+      `. See exactly which seats catch the sun across the day.`
+    : `${pub.name}${town ? ` in ${town}` : ""}. See exactly which seats catch the sun across the day.`;
 
   const townSlug = slugify(town);
   const countrySlug = slugify(country);
@@ -507,7 +506,7 @@ export function renderPubPage(template: string, ctx: PubContext): string {
         minValue: 0,
         maxValue: 100,
         description:
-          "Average percentage of the outdoor seating area in direct sun across the daylight hours of the spring equinox. Computed from LiDAR-derived building heights and OpenStreetMap building footprints.",
+          "Average percentage of the outdoor seating area in direct sun across the daylight hours of the spring equinox.",
       },
     ];
   }
@@ -573,8 +572,7 @@ export const THEMES: ThemeDef[] = [
     name: "Pubs with evening sun",
     blurb: (town, count) =>
       `${count} pub gardens in ${town} that catch the sun in the evening — ` +
-      `the after-work pint window. Computed from real building geometry, not just ` +
-      `compass orientation.`,
+      `the after-work pint window. The best spots when the rest of town is in shadow.`,
     filter: (p) => Boolean(p.sun?.evening_sun),
     sort: (a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0),
     limit: 40,
@@ -597,9 +595,8 @@ export const THEMES: ThemeDef[] = [
     slug: "biggest",
     name: "Biggest beer gardens",
     blurb: (town, count) =>
-      `${count} pub gardens in ${town} ranked by measured outdoor seating area, ` +
-      `from cadastral data + building footprints. Bigger isn't always sunnier ` +
-      `— check the Sunny Rating before you commit.`,
+      `${count} pub gardens in ${town} ranked by outdoor seating area. ` +
+      `Bigger isn't always sunnier — check the Sunny Rating before you commit.`,
     filter: (p) => Boolean(p.outdoor_area_m2),
     sort: (a, b) => (b.outdoor_area_m2 ?? 0) - (a.outdoor_area_m2 ?? 0),
     limit: 30,
@@ -630,8 +627,8 @@ export function renderThemePage(template: string, ctx: ThemeContext): string {
 
   const title = `${theme.name} in ${town} — Sunny Pint`;
   const description =
-    `${matched.length} pub gardens in ${town} matching the "${theme.name.toLowerCase()}" criteria, ` +
-    `computed from LiDAR elevation and OpenStreetMap building data.`;
+    `${matched.length} pub gardens in ${town} matching "${theme.name.toLowerCase()}". ` +
+    `Pick the best beer garden for your pint.`;
 
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },

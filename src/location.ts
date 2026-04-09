@@ -74,6 +74,16 @@ export function initLocation(callback: (lat: number, lng: number) => void): void
   }
 }
 
+/**
+ * Trigger the browser's GPS prompt, reverse-geocode the result, and route
+ * it through the location callback registered in `initLocation`. Exported
+ * so the welcome modal can drive the same flow without duplicating the
+ * Nominatim + label-update plumbing.
+ */
+export function requestGPSLocation(): void {
+  requestGPS();
+}
+
 function requestGPS(): void {
   const label = document.getElementById("location-label");
   if (!label || !navigator.geolocation) return;

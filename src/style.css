@@ -1389,6 +1389,136 @@ html.dark .status-closed {
   box-shadow: 0 1px 3px var(--shadow);
 }
 
+/* ── Welcome modal ───────────────────────────────────────────────── */
+
+/* First-visit overlay introducing the app and asking for a location.
+   Built dynamically by welcome.ts and removed from the DOM on dismiss,
+   so this only renders when actually present. */
+#welcome-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 110; /* above the location overlay (z-index ~100) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.welcome-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.welcome-content {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 28px 28px 22px;
+  max-width: min(440px, 92vw);
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.welcome-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.welcome-logo {
+  width: 56px;
+  height: 56px;
+}
+
+.welcome-content h2 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -0.5px;
+}
+
+.welcome-blurb {
+  margin: 0 0 18px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+}
+
+.welcome-question {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.welcome-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity 150ms ease, transform 80ms ease;
+}
+
+.welcome-actions button:active {
+  transform: translateY(1px);
+}
+
+.welcome-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.welcome-primary:hover {
+  opacity: 0.92;
+}
+
+.welcome-secondary {
+  background: var(--surface-container);
+  color: var(--on-surface);
+  border-color: var(--outline-variant);
+}
+
+.welcome-secondary:hover {
+  background: var(--surface-container-high);
+}
+
+.welcome-skip {
+  background: none;
+  border: none;
+  font-size: 0.85rem;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 6px 10px;
+  text-decoration: underline;
+  text-decoration-color: var(--outline);
+  text-underline-offset: 3px;
+}
+
+.welcome-skip:hover {
+  color: var(--on-surface);
+}
+
 /* ── Share dialog ────────────────────────────────────────────────── */
 
 #share-dialog {
@@ -1412,8 +1542,11 @@ html.dark .status-closed {
   background: var(--surface);
   border-radius: var(--radius-lg);
   padding: 20px;
-  max-width: 380px;
-  width: 90%;
+  /* The share image is landscape 1200×630 (1.9:1), so we want a wide
+     dialog on desktop to actually show what the user is about to share.
+     Capped at 90vw so narrow viewports still get a sensible reflow. */
+  max-width: min(820px, 90vw);
+  width: 100%;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
 }
 
