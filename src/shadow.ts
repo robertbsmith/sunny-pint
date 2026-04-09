@@ -2,86 +2,93 @@
  * Geometric shadow projection with terrain awareness.
  *
  * For each building, projects each wall segment as a shadow quadrilateral
- * based on building height (adjusted for elevation difference from pub)
- * and sun position. Pure geometry — no raster.
+ * based on building height (adjusted for elevation difference from the pub)
+ * and the sun's azimuth/altitude. Pure geometry — no raster.
  *
  * Terrain horizon occlusion: if the pub has a pre-computed horizon profile,
- * checks whether terrain blocks the sun at its current azimuth/altitude.
+ * checks whether terrain blocks the sun at its current azimuth/altitude
+ * before computing any shadows.
  */
 
+import { M_PER_DEG_LAT, SHADOW_CAP_M } from "./config";
+import { mPerDegLng, toRad } from "./geo";
 import type { Building, Pub, ShadowPoly, SunPosition } from "./types";
-
-const M_PER_DEG_LAT = 111_320;
 
 /** Decode a base64 terrain horizon profile into elevation angles (degrees). */
 function decodeHorizon(b64: string): Float32Array {
   const binary = atob(b64);
   const angles = new Float32Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
-    angles[i] = binary.charCodeAt(i) * 0.1; // uint8 × 0.1° resolution
+    angles[i] = binary.charCodeAt(i) * 0.1; // uint8 × 0.1°
   }
   return angles;
 }
 
-/** Check if terrain blocks the sun at the given azimuth/altitude.
- *  Returns true if the sun is occluded by terrain. */
+/**
+ * Check if terrain blocks the sun at the given azimuth/altitude.
+ * Returns true if the sun is occluded.
+ */
 export function isTerrainOccluded(pub: Pub, sun: SunPosition): boolean {
   if (!pub.horizon) return false;
   const angles = decodeHorizon(pub.horizon);
+  if (angles.length === 0) return false;
+
   const step = 360 / angles.length;
-  // Interpolate between two nearest azimuth samples.
-  const idx = ((sun.azimuth % 360) + 360) % 360 / step;
+  const idx = (((sun.azimuth % 360) + 360) % 360) / step;
   const i0 = Math.floor(idx) % angles.length;
   const i1 = (i0 + 1) % angles.length;
   const frac = idx - Math.floor(idx);
-  const horizonAngle = angles[i0]! * (1 - frac) + angles[i1]! * frac;
+  const a0 = angles[i0] ?? 0;
+  const a1 = angles[i1] ?? 0;
+  const horizonAngle = a0 * (1 - frac) + a1 * frac;
   return sun.altitude < horizonAngle;
 }
 
-export function computeShadows(
-  buildings: Building[],
-  sun: SunPosition,
-  pubElev = 0,
-  maxShadowLen = 200,
-): ShadowPoly[] {
+/**
+ * Compute shadow polygons cast by all given buildings at the sun position.
+ *
+ * Each building wall segment produces one shadow quadrilateral; the
+ * projected roof footprint and the original footprint are also added so the
+ * building's own area is darkened along with its cast shadow.
+ *
+ * @param pubElev Ground elevation of the pub in metres above sea level. Used
+ *                to adjust each building's effective height by the elevation
+ *                difference (uphill buildings cast longer shadows).
+ */
+export function computeShadows(buildings: Building[], sun: SunPosition, pubElev = 0): ShadowPoly[] {
   if (sun.altitude <= 0 || buildings.length === 0) return [];
 
-  const azRad = (sun.azimuth * Math.PI) / 180;
-  const tanAlt = Math.tan((sun.altitude * Math.PI) / 180);
+  const azRad = toRad(sun.azimuth);
+  const tanAlt = Math.tan(toRad(sun.altitude));
 
-  // Approximate metres-per-degree-longitude at this latitude.
   const midLat = buildings[0]?.coords[0]?.[0] ?? 52.6;
-  const mPerDegLng = M_PER_DEG_LAT * Math.cos((midLat * Math.PI) / 180);
+  const mPerDegLngLocal = mPerDegLng(midLat);
 
   const quads: ShadowPoly[] = [];
 
   for (const { coords, height, elev } of buildings) {
     if (height <= 0 || coords.length < 3) continue;
 
-    // Adjust height for elevation difference: uphill building is effectively taller.
     const effectiveHeight = height + (elev - pubElev);
     if (effectiveHeight <= 0) continue;
 
-    const shadowLen = Math.min(effectiveHeight / tanAlt, maxShadowLen);
+    const shadowLen = Math.min(effectiveHeight / tanAlt, SHADOW_CAP_M);
     const dlat = (-shadowLen * Math.cos(azRad)) / M_PER_DEG_LAT;
-    const dlng = (-shadowLen * Math.sin(azRad)) / mPerDegLng;
+    const dlng = (-shadowLen * Math.sin(azRad)) / mPerDegLngLocal;
 
-    // Each wall segment → shadow quad.
     for (let i = 0; i < coords.length - 1; i++) {
-      const [y1, x1] = coords[i]!;
-      const [y2, x2] = coords[i + 1]!;
+      const a = coords[i];
+      const b = coords[i + 1];
+      if (!a || !b) continue;
       quads.push([
-        [y1, x1],
-        [y2, x2],
-        [y2 + dlat, x2 + dlng],
-        [y1 + dlat, x1 + dlng],
+        [a[0], a[1]],
+        [b[0], b[1]],
+        [b[0] + dlat, b[1] + dlng],
+        [a[0] + dlat, a[1] + dlng],
       ]);
     }
 
-    // Projected footprint (roof shadow on ground).
     quads.push(coords.map(([y, x]) => [y + dlat, x + dlng]));
-
-    // Original footprint.
     quads.push([...coords]);
   }
 

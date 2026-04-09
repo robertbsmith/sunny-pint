@@ -1,23 +1,27 @@
 import "./style.css";
 
-import { state, selectedPub } from "./state";
-import type { Pub } from "./types";
-import { initPubList, sortByDistance, renderList } from "./publist";
-import { initCircle, renderCircle } from "./circle";
-import { initSunArc, renderArc } from "./sunarc";
-import { computeShadows, isTerrainOccluded } from "./shadow";
+import SunCalc from "suncalc";
 import { loadBuildingsForPub } from "./buildings";
+import { initCircle, renderCircle } from "./circle";
+import {
+  DEFAULT_LAT,
+  DEFAULT_LNG,
+  DEFAULT_LOCATION_NAME,
+  googleMapsUrl,
+  NOMINATIM_URL,
+  USER_AGENT,
+} from "./config";
+import { parseHours } from "./hours";
 import { initIcons, updateThemeIcon } from "./icons";
 import { initLocation } from "./location";
-import { readURL, writeURL, writeURLDebounced, setLocationQuery } from "./url";
+import { initPubList, renderList, sortByDistance } from "./publist";
+import { computeShadows, isTerrainOccluded } from "./shadow";
 import { shareSnapshot } from "./share";
+import { selectedPub, state } from "./state";
+import { initSunArc, renderArc } from "./sunarc";
+import type { Pub } from "./types";
+import { readURL, setLocationQuery, writeURL, writeURLDebounced } from "./url";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
-import { parseHours } from "./hours";
-import SunCalc from "suncalc";
-
-// Norwich default location.
-const DEFAULT_LAT = 52.6309;
-const DEFAULT_LNG = 1.2974;
 
 async function loadPubs(): Promise<void> {
   const resp = await fetch("/data/pubs.json");
@@ -61,23 +65,27 @@ async function onPubSelected(pub: Pub): Promise<void> {
 }
 
 function updatePubInfo(pub: Pub): void {
-  const card = document.getElementById("pub-info")!;
+  const card = document.getElementById("pub-info");
+  if (!card) return;
   card.hidden = false;
 
   // Name + status.
   const hours = parseHours(pub.opening_hours);
-  const nameEl = document.getElementById("pub-info-name")!;
-  if (hours) {
-    const cls = hours.isOpen ? "status-open" : "status-closed";
-    nameEl.innerHTML = `${pub.name} <span class="${cls}">${hours.statusLabel}</span>`;
-  } else {
-    nameEl.textContent = pub.name;
+  const nameEl = document.getElementById("pub-info-name");
+  if (nameEl) {
+    if (hours) {
+      const cls = hours.isOpen ? "status-open" : "status-closed";
+      nameEl.innerHTML = `${escapeHtml(pub.name)} <span class="${cls}">${hours.statusLabel}</span>`;
+    } else {
+      nameEl.textContent = pub.name;
+    }
   }
 
   // Brand + next change.
   const brandParts = [pub.brand, pub.brewery].filter(Boolean);
   if (hours?.nextChangeLabel) brandParts.push(hours.nextChangeLabel);
-  document.getElementById("pub-info-brand")!.textContent = brandParts.join(" · ");
+  const brandEl = document.getElementById("pub-info-brand");
+  if (brandEl) brandEl.textContent = brandParts.join(" · ");
 
   // Attribute grid.
   function fmtVal(v: string | undefined): { text: string; cls: string } {
@@ -92,36 +100,56 @@ function updatePubInfo(pub: Pub): void {
     return `<div class="pub-info-cell"><span class="cell-label">${label}</span><span class="cell-value ${v.cls}">${v.text}</span></div>`;
   }
 
-  document.getElementById("pub-info-grid")!.innerHTML =
-    cell("Real ale", pub.real_ale) +
-    cell("Outdoor", pub.outdoor_seating || pub.beer_garden) +
-    cell("Food", pub.food) +
-    cell("Dogs", pub.dog) +
-    cell("Wheelchair", pub.wheelchair) +
-    cell("WiFi", pub.wifi);
+  const gridEl = document.getElementById("pub-info-grid");
+  if (gridEl) {
+    gridEl.innerHTML =
+      cell("Real ale", pub.real_ale) +
+      cell("Outdoor", pub.outdoor_seating || pub.beer_garden) +
+      cell("Food", pub.food) +
+      cell("Dogs", pub.dog) +
+      cell("Wheelchair", pub.wheelchair) +
+      cell("WiFi", pub.wifi);
+  }
 
   // Hours — weekly table or raw string.
-  const hoursEl = document.getElementById("pub-info-hours")!;
-  if (hours?.weeklyTable) {
-    hoursEl.innerHTML = `<table class="hours-table">${hours.weeklyTable.map((r) =>
-      `<tr class="${r.isToday ? "hours-today" : ""}"><td>${r.day}</td><td>${r.hours}</td></tr>`
-    ).join("")}</table>`;
-  } else if (pub.opening_hours) {
-    hoursEl.innerHTML = `<span class="cell-label">Hours</span> ${pub.opening_hours}`;
-  } else {
-    hoursEl.innerHTML = `<span class="cell-label">Hours</span> <span class="val-unknown">\u2013</span>`;
+  const hoursEl = document.getElementById("pub-info-hours");
+  if (hoursEl) {
+    if (hours?.weeklyTable) {
+      hoursEl.innerHTML = `<table class="hours-table">${hours.weeklyTable
+        .map(
+          (r) =>
+            `<tr class="${r.isToday ? "hours-today" : ""}"><td>${escapeHtml(r.day)}</td><td>${escapeHtml(r.hours)}</td></tr>`,
+        )
+        .join("")}</table>`;
+    } else if (pub.opening_hours) {
+      hoursEl.innerHTML = `<span class="cell-label">Hours</span> ${escapeHtml(pub.opening_hours)}`;
+    } else {
+      hoursEl.innerHTML = `<span class="cell-label">Hours</span> <span class="val-unknown">\u2013</span>`;
+    }
   }
 
   // Links.
   const links: string[] = [];
-  if (pub.phone) links.push(`<a href="tel:${pub.phone}">${pub.phone}</a>`);
+  if (pub.phone) links.push(`<a href="tel:${escapeHtml(pub.phone)}">${escapeHtml(pub.phone)}</a>`);
   if (pub.website) {
     const domain = pub.website.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    links.push(`<a href="${pub.website}" target="_blank" rel="noopener">${domain}</a>`);
+    links.push(
+      `<a href="${escapeHtml(pub.website)}" target="_blank" rel="noopener">${escapeHtml(domain)}</a>`,
+    );
   }
-  const query = encodeURIComponent(pub.name);
-  links.push(`<a href="https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z" target="_blank" rel="noopener">Directions</a>`);
-  document.getElementById("pub-info-links")!.innerHTML = links.join(" · ");
+  links.push(
+    `<a href="${googleMapsUrl(pub.name, pub.lat, pub.lng)}" target="_blank" rel="noopener">Directions</a>`,
+  );
+  const linksEl = document.getElementById("pub-info-links");
+  if (linksEl) linksEl.innerHTML = links.join(" · ");
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function setLocation(lat: number, lng: number, opts: { keepPub?: boolean } = {}): void {
@@ -143,7 +171,6 @@ function setLocation(lat: number, lng: number, opts: { keepPub?: boolean } = {})
     renderList();
   }
 }
-
 
 // ── Weather ──────────────────────────────────────────────────────────
 
@@ -169,7 +196,8 @@ function getStoredTheme(): Theme {
 
 function applyTheme(theme: Theme): void {
   const isDark =
-    theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    theme === "dark" ||
+    (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", isDark);
   localStorage.setItem("theme", theme);
 }
@@ -231,12 +259,13 @@ async function init(): Promise<void> {
       // Search term but no pub — geocode and sort.
       try {
         const resp = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(urlState.query)}&countrycodes=gb&limit=1`,
-          { headers: { "User-Agent": "SunnyPint/0.1" } },
+          `${NOMINATIM_URL}/search?format=json&q=${encodeURIComponent(urlState.query)}&countrycodes=gb&limit=1`,
+          { headers: { "User-Agent": USER_AGENT } },
         );
-        const results = await resp.json();
-        if (results.length > 0) {
-          setLocation(parseFloat(results[0].lat), parseFloat(results[0].lon));
+        const results = (await resp.json()) as Array<{ lat: string; lon: string }>;
+        const first = results[0];
+        if (first) {
+          setLocation(parseFloat(first.lat), parseFloat(first.lon));
         } else {
           setLocation(DEFAULT_LAT, DEFAULT_LNG);
         }
@@ -247,35 +276,42 @@ async function init(): Promise<void> {
       setLocationQuery(urlState.query);
     } else if (urlState.lat != null && urlState.lng != null) {
       setLocation(urlState.lat, urlState.lng);
-      document.getElementById("location-label")!.textContent = `Pubs near ${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
+      document.getElementById("location-label")!.textContent =
+        `Pubs near ${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
     } else {
       // No URL params — default to Norwich, try GPS in background.
       setLocation(DEFAULT_LAT, DEFAULT_LNG);
-      document.getElementById("location-label")!.textContent = "Pubs near Norwich";
-      setLocationQuery("Norwich");
+      const labelEl = document.getElementById("location-label");
+      if (labelEl) labelEl.textContent = `Pubs near ${DEFAULT_LOCATION_NAME}`;
+      setLocationQuery(DEFAULT_LOCATION_NAME);
 
       if (navigator.geolocation) {
-        document.getElementById("location-label")!.textContent = "Finding your location...";
+        if (labelEl) labelEl.textContent = "Finding your location...";
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             const { latitude, longitude } = pos.coords;
             setLocation(latitude, longitude);
             try {
               const resp = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
-                { headers: { "User-Agent": "SunnyPint/0.1" } },
+                `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+                { headers: { "User-Agent": USER_AGENT } },
               );
-              const data = await resp.json();
-              const name = data.address?.city || data.address?.town || data.address?.village || data.address?.suburb || "your location";
-              document.getElementById("location-label")!.textContent = `Pubs near ${name}`;
+              const data = (await resp.json()) as { address?: Record<string, string> };
+              const name =
+                data.address?.city ||
+                data.address?.town ||
+                data.address?.village ||
+                data.address?.suburb ||
+                "your location";
+              if (labelEl) labelEl.textContent = `Pubs near ${name}`;
               setLocationQuery(name);
             } catch {
-              document.getElementById("location-label")!.textContent = "Pubs near you";
+              if (labelEl) labelEl.textContent = "Pubs near you";
             }
             writeURL();
           },
           () => {
-            document.getElementById("location-label")!.textContent = "Pubs near Norwich";
+            if (labelEl) labelEl.textContent = `Pubs near ${DEFAULT_LOCATION_NAME}`;
           },
           { timeout: 5000, maximumAge: 60000 },
         );
@@ -304,16 +340,16 @@ async function init(): Promise<void> {
     // Share button.
     document.getElementById("btn-share")!.addEventListener("click", () => shareSnapshot());
 
-    // Directions button — opens selected pub in maps.
-    document.getElementById("btn-directions")!.addEventListener("click", () => {
+    // Directions button — opens selected pub in Google Maps.
+    document.getElementById("btn-directions")?.addEventListener("click", () => {
       const pub = selectedPub();
       if (!pub) return;
-      const query = encodeURIComponent(pub.name);
-      window.open(`https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`, "_blank");
+      window.open(googleMapsUrl(pub.name, pub.lat, pub.lng), "_blank");
     });
   } catch (err) {
     console.error("Init failed:", err);
-    document.getElementById("location-label")!.textContent = "Error — check console";
+    const labelEl = document.getElementById("location-label");
+    if (labelEl) labelEl.textContent = "Error — check console";
   }
 }
 

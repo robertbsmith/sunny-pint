@@ -83,4 +83,19 @@ export default defineConfig({
       "@": "/src",
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id: string): string | undefined {
+          // Split heavy opening_hours.js + i18next into a separate chunk so
+          // the main bundle stays small.
+          if (id.includes("opening_hours") || id.includes("i18next")) {
+            return "opening-hours";
+          }
+          return undefined;
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
 });

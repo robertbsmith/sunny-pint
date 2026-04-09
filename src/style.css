@@ -3,20 +3,20 @@
 /* ── Theme tokens (Material 3 inspired) ─────────────────────────── */
 
 :root {
-  --surface: #FAFAF8;
-  --surface-dim: #F0EEEB;
-  --surface-container: #EAEAE6;
-  --surface-container-high: #E0DEDA;
-  --on-surface: #1C1B1A;
-  --on-surface-variant: #5C5955;
-  --outline: #C4C0BB;
-  --outline-variant: #E0DCDA;
-  --primary: #D97706;
-  --primary-container: #FEF3C7;
-  --on-primary-container: #78350F;
-  --secondary: #625B71;
-  --tertiary: #7D5260;
-  --error: #B3261E;
+  --surface: #fafaf8;
+  --surface-dim: #f0eeeb;
+  --surface-container: #eaeae6;
+  --surface-container-high: #e0deda;
+  --on-surface: #1c1b1a;
+  --on-surface-variant: #5c5955;
+  --outline: #c4c0bb;
+  --outline-variant: #e0dcda;
+  --primary: #d97706;
+  --primary-container: #fef3c7;
+  --on-primary-container: #78350f;
+  --secondary: #625b71;
+  --tertiary: #7d5260;
+  --error: #b3261e;
   --shadow: rgba(0, 0, 0, 0.08);
   --shadow-md: rgba(0, 0, 0, 0.12);
   --radius-sm: 8px;
@@ -27,17 +27,17 @@
 }
 
 .dark {
-  --surface: #1A1A1A;
+  --surface: #1a1a1a;
   --surface-dim: #121212;
   --surface-container: #242424;
-  --surface-container-high: #2E2E2E;
-  --on-surface: #E8E4E0;
-  --on-surface-variant: #9E9892;
+  --surface-container-high: #2e2e2e;
+  --on-surface: #e8e4e0;
+  --on-surface-variant: #9e9892;
   --outline: #444040;
-  --outline-variant: #2E2A2A;
-  --primary: #F59E0B;
-  --primary-container: #3D2800;
-  --on-primary-container: #FFD980;
+  --outline-variant: #2e2a2a;
+  --primary: #f59e0b;
+  --primary-container: #3d2800;
+  --on-primary-container: #ffd980;
   --shadow: rgba(0, 0, 0, 0.5);
   --shadow-md: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -346,7 +346,6 @@ a {
   max-width: min(400px, calc(100vw - 32px));
 }
 
-
 #arc-wrap {
   width: 100%;
   max-width: min(400px, calc(100vw - 32px));
@@ -520,7 +519,6 @@ a {
     border-radius: 0;
     box-shadow: none;
     width: 340px;
-    flex-shrink: 0;
     flex: none;
   }
 
@@ -660,7 +658,9 @@ a {
   width: 100%;
 }
 
-.pub-info[hidden] { display: none; }
+.pub-info[hidden] {
+  display: none;
+}
 
 .pub-info-header {
   margin-bottom: 12px;
@@ -732,10 +732,21 @@ html.dark .status-open {
   font-size: 0.82rem;
 }
 
-.val-yes { color: #16a34a; }
-.val-no { color: var(--on-surface-variant); opacity: 0.6; }
-.val-limited { color: #ca8a04; }
-.val-unknown { color: var(--on-surface-variant); opacity: 0.3; font-weight: 400; }
+.val-yes {
+  color: #16a34a;
+}
+.val-no {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
+}
+.val-limited {
+  color: #ca8a04;
+}
+.val-unknown {
+  color: var(--on-surface-variant);
+  opacity: 0.3;
+  font-weight: 400;
+}
 
 .pub-info-hours {
   font-size: 0.85rem;

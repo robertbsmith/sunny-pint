@@ -19,6 +19,9 @@
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn"
       },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
       "suspicious": {
         "noExplicitAny": "warn"
       }
@@ -32,6 +35,6 @@
     }
   },
   "files": {
-    "ignore": ["dist", "node_modules", "public/data"]
+    "includes": ["**", "!dist", "!node_modules", "!public/data", "!public/*.html", "!data"]
   }
 }

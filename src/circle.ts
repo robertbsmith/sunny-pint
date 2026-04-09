@@ -1,82 +1,35 @@
 /**
- * Porthole circle canvas renderer.
+ * Porthole canvas renderer.
  *
- * Draws the main visualisation: map tiles as background, building polygons,
- * shadow polygons, porthole bezel with compass, sun/moon icon, and overlays.
+ * Composites the main visualisation: CARTO basemap tiles, building polygons,
+ * geometric shadows, outdoor area outline, bezel ring with compass, sun/moon
+ * icon and time text, plus the hanging pub sign above the porthole.
+ *
+ * All shadow polygons are drawn to an offscreen canvas first then composited
+ * with a single alpha blit, which gives uniform shadow opacity regardless of
+ * how many overlapping building shadows are stacked.
  */
 
-import { state, selectedPub, pubCenter } from "./state";
-import { drawSunCanvas, drawMoonCanvas } from "./canvas-icons";
 import SunCalc from "suncalc";
+import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
+import { DAY_FRAC_OFFSET, DAY_FRAC_RANGE, TILE_ZOOM, TWILIGHT_DAY, TWILIGHT_NIGHT } from "./config";
+import { lngLatToTile, tileMetresPerPixel, toPixel } from "./geo";
+import { drawPubSign, measureSignLayout, type SignLayout, setCoaLoadCallback } from "./sign";
+import { pubCenter, selectedPub, state } from "./state";
+import { isDark, lerpColor } from "./theme";
+import { loadTile, setSuppressTileRedraw, setTileRedrawCallback } from "./tiles";
+import type { SunPosition } from "./types";
 
-// ── Tile loading ──────────────────────────────────────────────────────────
+// ── Drawing constants ─────────────────────────────────────────────────────
 
-const TILE_URL =
-  "https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager_labels_under/{z}/{x}/{y}.png";
-const TILE_ZOOM = 18;
-const tileCache = new Map<string, HTMLImageElement>();
-
-let pendingRedraw: number | null = null;
-let isRendering = false;
-
-function loadTile(z: number, x: number, y: number, canvas: HTMLCanvasElement): HTMLImageElement | null {
-  const key = `${z}_${x}_${y}`;
-  const cached = tileCache.get(key);
-  if (cached) return cached.complete ? cached : null;
-
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
-    // Only redraw if we're not already mid-render (prevents loops).
-    if (isRendering) return;
-    if (pendingRedraw != null) cancelAnimationFrame(pendingRedraw);
-    pendingRedraw = requestAnimationFrame(() => {
-      pendingRedraw = null;
-      renderCircle(canvas);
-    });
-  };
-  img.onerror = () => {
-    // Remove failed tiles so we don't retry endlessly.
-    tileCache.delete(key);
-  };
-  img.src = TILE_URL.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
-  tileCache.set(key, img);
-  return null;
-}
-
-// ── Coordinate conversions ────────────────────────────────────────────────
-
-const M_PER_DEG_LAT = 111320;
-
-function mPerDegLng(lat: number): number {
-  return M_PER_DEG_LAT * Math.cos((lat * Math.PI) / 180);
-}
-
-/** Convert lat/lng to pixel position relative to circle centre. */
-function toPixel(
-  lat: number,
-  lng: number,
-  centreLatLng: { lat: number; lng: number },
-  metersPerPixel: number,
-): { x: number; y: number } {
-  const dx = (lng - centreLatLng.lng) * mPerDegLng(centreLatLng.lat);
-  const dy = (lat - centreLatLng.lat) * M_PER_DEG_LAT;
-  return { x: dx / metersPerPixel, y: -dy / metersPerPixel }; // y inverted for canvas
-}
-
-/** Lat/lng to Web Mercator tile coordinates. */
-function lngLatToTile(lng: number, lat: number, z: number): { tx: number; ty: number; px: number; py: number } {
-  const n = 2 ** z;
-  const tx = ((lng + 180) / 360) * n;
-  const latRad = (lat * Math.PI) / 180;
-  const ty = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n;
-  return {
-    tx: Math.floor(tx),
-    ty: Math.floor(ty),
-    px: (tx - Math.floor(tx)) * 256,
-    py: (ty - Math.floor(ty)) * 256,
-  };
-}
+const BEZEL = 14;
+const COLORS = {
+  shadowFill: "#1E1E3C",
+  pubMarker: "#E53E3E",
+  northTick: "#E53E3E",
+  nightTint: "rgba(26,26,46,",
+  moon: "#94A3B8",
+};
 
 // ── Sun position ──────────────────────────────────────────────────────────
 
@@ -87,72 +40,9 @@ function getSunPosition(): SunPosition {
   d.setMinutes(state.timeMins);
   const pos = SunCalc.getPosition(d, centre.lat, centre.lng);
   return {
-    azimuth: ((pos.azimuth * 180) / Math.PI + 180) % 360, // convert to compass bearing
+    azimuth: ((pos.azimuth * 180) / Math.PI + 180) % 360,
     altitude: (pos.altitude * 180) / Math.PI,
   };
-}
-
-function getSunTimes(): { sunrise: number; sunset: number } {
-  const centre = pubCenter();
-  const times = SunCalc.getTimes(state.date, centre.lat, centre.lng);
-  const toMins = (d: Date) => d.getHours() * 60 + d.getMinutes();
-  return { sunrise: toMins(times.sunrise), sunset: toMins(times.sunset) };
-}
-
-// ── Drawing constants ─────────────────────────────────────────────────────
-
-const BEZEL = 14;
-const OUTER_PAD = 22; // space outside bezel for compass labels + time text
-
-/** Metres per pixel at a given latitude and zoom level (Web Mercator). */
-function tileMetresPerPixel(lat: number, z: number): number {
-  return (156543.03 * Math.cos((lat * Math.PI) / 180)) / 2 ** z;
-}
-
-const COLORS = {
-  bezelDay: ["#E2E8F0", "#CBD5E0", "#94A3B8"],
-  bezelNight: ["#4A5568", "#2D3748", "#1A202C"],
-  buildingFill: "rgba(140,150,165,0.85)",
-  buildingStroke: "#6B7280",
-  pubFill: "rgba(217,119,6,0.65)",
-  pubStroke: "#B45309",
-  buildingNightFill: "rgba(40,40,60,0.9)",
-  buildingNightStroke: "#4A5568",
-  pubNightFill: "rgba(180,100,50,0.7)",
-  pubNightStroke: "#B45C32",
-  shadowFill: "#1E1E3C",
-  outdoorFill: "rgba(39,174,96,0.18)",
-  outdoorStroke: "#27AE60",
-  nightTint: "rgba(26,26,46,",
-  pubMarker: "#E53E3E",
-  sun: "#F59E0B",
-  sunStroke: "#D97706",
-  moon: "#94A3B8",
-  northTick: "#E53E3E",
-  tickDay: "#94A3B8",
-  tickNight: "#4A5568",
-  textDay: "#4A5568",
-  textNight: "#64748B",
-  sunPctDay: "rgba(214,158,46,0.9)",
-  nameDay: "#2D3748",
-  nameNight: "#94A3B8",
-};
-
-// ── Color interpolation ───────────────────────────────────────────────────
-
-/** Lerp between two hex colors by t (0=a, 1=b). */
-function lerpColor(a: string, b: string, t: number): string {
-  const parse = (c: string) => [
-    parseInt(c.slice(1, 3), 16),
-    parseInt(c.slice(3, 5), 16),
-    parseInt(c.slice(5, 7), 16),
-  ];
-  const ca = parse(a);
-  const cb = parse(b);
-  const r = Math.round(ca[0] + (cb[0] - ca[0]) * t);
-  const g = Math.round(ca[1] + (cb[1] - ca[1]) * t);
-  const bl = Math.round(ca[2] + (cb[2] - ca[2]) * t);
-  return `rgb(${r},${g},${bl})`;
 }
 
 // ── Offscreen shadow canvas ───────────────────────────────────────────────
@@ -165,67 +55,62 @@ function getOffscreen(w: number, h: number): CanvasRenderingContext2D {
     offscreenCanvas = document.createElement("canvas");
     offscreenCanvas.width = w;
     offscreenCanvas.height = h;
-    offscreenCtx = offscreenCanvas.getContext("2d")!;
+    offscreenCtx = offscreenCanvas.getContext("2d");
+    if (!offscreenCtx) throw new Error("Failed to get 2d context");
   }
-  return offscreenCtx!;
+  return offscreenCtx as CanvasRenderingContext2D;
 }
 
 // ── Main render function ──────────────────────────────────────────────────
 
+/** Render the porthole canvas at its current state. */
 export function renderCircle(canvas: HTMLCanvasElement): void {
-  isRendering = true;
-  const ctx = canvas.getContext("2d")!;
-  // Use logical (CSS) size, not physical (DPR-scaled) pixel size.
-  const W = parseInt(canvas.dataset.logicalW || String(canvas.width));
-  const H = parseInt(canvas.dataset.logicalH || String(canvas.height));
+  setSuppressTileRedraw(true);
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const W = parseInt(canvas.dataset.logicalW || String(canvas.width), 10);
+  const H = parseInt(canvas.dataset.logicalH || String(canvas.height), 10);
   const cx = W / 2;
-  // Max extent from circle centre: time text at outerR + 16 (base) + 10 (bump) + 8 (half char width)
-  // = r + BEZEL + 34. Must fit in W/2.
   const MARGIN = BEZEL + 34;
   const r = W / 2 - MARGIN - 2;
   const outerR = r + BEZEL;
   const cy = outerR + MARGIN + 4;
 
   const sun = getSunPosition();
-  // dayFrac: 0 = full night, 1 = full day. Smooth transition over -2° to +8° altitude.
-  const dayFrac = Math.min(Math.max((sun.altitude + 2) / 10, 0), 1);
+  const dayFrac = Math.min(Math.max((sun.altitude + DAY_FRAC_OFFSET) / DAY_FRAC_RANGE, 0), 1);
+  const dark = isDark();
 
   const centre = pubCenter();
   const mpp = tileMetresPerPixel(centre.lat, TILE_ZOOM);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // ── 1. Bezel ring ──
-  drawBezel(ctx, cx, cy, r, outerR, dayFrac);
+  drawBezel(ctx, cx, cy, r, outerR, dayFrac, dark);
 
-  // ── 2. Clip to inner circle ──
+  // Clip to inner circle for the map content.
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
 
-  // ── 3. Map tile background ──
-  drawTiles(ctx, cx, cy, r, centre);
+  drawTiles(ctx, cx, cy, centre);
 
-  // ── 4. Night tint — smooth fade ──
   if (dayFrac < 1) {
     const alpha = (1 - dayFrac) * 0.6;
     ctx.fillStyle = `${COLORS.nightTint}${alpha.toFixed(3)})`;
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  // ── 5. Shadows (fade in with daylight) ──
   if (dayFrac > 0 && state.shadowPolys.length > 0) {
-    drawShadows(ctx, cx, cy, r, W, H, centre, mpp, sun.altitude, dayFrac);
+    drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
   }
 
-  // ── 7. Buildings ──
   drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
-
-  // ── 8. Outdoor area ──
   drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
 
-  // ── 9. Pub marker ──
+  // Pub marker dot.
   ctx.beginPath();
   ctx.arc(cx, cy, 4, 0, Math.PI * 2);
   ctx.fillStyle = COLORS.pubMarker;
@@ -236,50 +121,41 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
 
   ctx.restore(); // unclip
 
-  // ── 10. Compass ticks + labels ──
-  drawCompass(ctx, cx, cy, r, outerR, dayFrac);
+  drawCompass(ctx, cx, cy, r, outerR, dayFrac, dark);
+  drawSunIcon(ctx, cx, cy, r, sun, dayFrac);
+  drawTimeText(ctx, cx, cy, outerR, sun, dayFrac, dark);
+  drawSunPctMoon(ctx, cx, cy, r, dayFrac);
 
-  // ── 11. Sun/moon icon on bezel ──
-  drawSunIcon(ctx, cx, cy, r, outerR, sun, dayFrac);
-
-  // ── 12. Time text ──
-  drawTimeText(ctx, cx, cy, r, outerR, sun, dayFrac);
-
-  // ── 13. Sun % text ──
-  drawSunPct(ctx, cx, cy, r, sun, dayFrac);
-
-  // ── 14. Pub sign ──
   updatePubSign();
 
-  isRendering = false;
+  setSuppressTileRedraw(false);
 }
 
 // ── Sub-renderers ─────────────────────────────────────────────────────────
 
 function drawBezel(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number, outerR: number,
+  cx: number,
+  cy: number,
+  r: number,
+  outerR: number,
   dayFrac: number,
+  dark: boolean,
 ): void {
-  // Outer drop shadow for depth.
   ctx.save();
   ctx.shadowColor = `rgba(0,0,0,${0.1 + 0.1 * (1 - dayFrac)})`;
   ctx.shadowBlur = 12;
   ctx.shadowOffsetY = 4;
   ctx.beginPath();
   ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-  const isDarkTheme = document.documentElement.classList.contains("dark");
-  if (isDarkTheme) {
-    ctx.fillStyle = lerpColor("#1A1A1A", "#3A3A3A", dayFrac);
-  } else {
-    ctx.fillStyle = lerpColor("#D0CCC6", "#E8E6E2", dayFrac);
-  }
+  ctx.fillStyle = dark
+    ? lerpColor("#1A1A1A", "#3A3A3A", dayFrac)
+    : lerpColor("#D0CCC6", "#E8E6E2", dayFrac);
   ctx.fill();
   ctx.restore();
 
-  // Main bezel ring.
   const grad = ctx.createRadialGradient(cx, cy - outerR * 0.3, r * 0.8, cx, cy, outerR);
-  if (isDarkTheme) {
+  if (dark) {
     grad.addColorStop(0, lerpColor("#2A2A2A", "#484440", dayFrac));
     grad.addColorStop(0.4, lerpColor("#1E1E1E", "#383430", dayFrac));
     grad.addColorStop(1, lerpColor("#111111", "#282420", dayFrac));
@@ -295,17 +171,16 @@ function drawBezel(
   ctx.fillStyle = grad;
   ctx.fill();
 
-  // Inner rim — subtle amber highlight in daylight, cool in night.
   ctx.beginPath();
   ctx.arc(cx, cy, r + 0.5, 0, Math.PI * 2);
   const rimAlpha = 0.08 + 0.15 * dayFrac;
-  ctx.strokeStyle = dayFrac > 0.5
-    ? `rgba(245,158,11,${rimAlpha.toFixed(2)})`
-    : `rgba(200,200,200,${rimAlpha.toFixed(2)})`;
+  ctx.strokeStyle =
+    dayFrac > 0.5
+      ? `rgba(245,158,11,${rimAlpha.toFixed(2)})`
+      : `rgba(200,200,200,${rimAlpha.toFixed(2)})`;
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Outer rim.
   ctx.beginPath();
   ctx.arc(cx, cy, outerR - 0.5, 0, Math.PI * 2);
   ctx.strokeStyle = "rgba(0,0,0,0.4)";
@@ -315,20 +190,16 @@ function drawBezel(
 
 function drawTiles(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number,
+  cx: number,
+  cy: number,
   centre: { lat: number; lng: number },
 ): void {
-  const z = TILE_ZOOM;
-  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, z);
-
-  // Draw 3×3 grid of tiles.
+  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, TILE_ZOOM);
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
-      const img = loadTile(z, tx + dx, ty + dy, ctx.canvas);
+      const img = loadTile(TILE_ZOOM, tx + dx, ty + dy);
       if (img) {
-        const drawX = cx - px + dx * 256;
-        const drawY = cy - py + dy * 256;
-        ctx.drawImage(img, drawX, drawY, 256, 256);
+        ctx.drawImage(img, cx - px + dx * 256, cy - py + dy * 256, 256, 256);
       }
     }
   }
@@ -336,10 +207,14 @@ function drawTiles(
 
 function drawShadows(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number,
-  W: number, H: number,
+  cx: number,
+  cy: number,
+  W: number,
+  H: number,
   centre: { lat: number; lng: number },
-  mpp: number, altitude: number, dayFrac: number,
+  mpp: number,
+  altitude: number,
+  dayFrac: number,
 ): void {
   const offCtx = getOffscreen(W, H);
   offCtx.clearRect(0, 0, W, H);
@@ -348,7 +223,9 @@ function drawShadows(
   for (const poly of state.shadowPolys) {
     offCtx.beginPath();
     for (let i = 0; i < poly.length; i++) {
-      const p = toPixel(poly[i][0], poly[i][1], centre, mpp);
+      const point = poly[i];
+      if (!point) continue;
+      const p = toPixel(point[0], point[1], centre, mpp);
       if (i === 0) offCtx.moveTo(cx + p.x, cy + p.y);
       else offCtx.lineTo(cx + p.x, cy + p.y);
     }
@@ -356,20 +233,20 @@ function drawShadows(
     offCtx.fill();
   }
 
-  // Composite — opacity fades smoothly with dayFrac.
   const alpha = dayFrac * Math.min(altitude / 8, 0.5);
   ctx.globalAlpha = alpha;
-  ctx.drawImage(offscreenCanvas!, 0, 0);
+  if (offscreenCanvas) ctx.drawImage(offscreenCanvas, 0, 0);
   ctx.globalAlpha = 1;
 }
 
 function drawBuildings(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number,
+  cx: number,
+  cy: number,
   centre: { lat: number; lng: number },
-  mpp: number, dayFrac: number,
+  mpp: number,
+  dayFrac: number,
 ): void {
-  // Interpolate building colors based on day/night.
   const bFillR = Math.round(40 + 100 * dayFrac);
   const bFillG = Math.round(40 + 110 * dayFrac);
   const bFillB = Math.round(60 + 105 * dayFrac);
@@ -384,11 +261,14 @@ function drawBuildings(
 
   for (let i = 0; i < state.buildings.length; i++) {
     const b = state.buildings[i];
+    if (!b) continue;
     const isPub = i === state.pubBuildingIndex;
 
     ctx.beginPath();
     for (let j = 0; j < b.coords.length; j++) {
-      const p = toPixel(b.coords[j][0], b.coords[j][1], centre, mpp);
+      const coord = b.coords[j];
+      if (!coord) continue;
+      const p = toPixel(coord[0], coord[1], centre, mpp);
       if (j === 0) ctx.moveTo(cx + p.x, cy + p.y);
       else ctx.lineTo(cx + p.x, cy + p.y);
     }
@@ -404,19 +284,21 @@ function drawBuildings(
 
 function drawOutdoorArea(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number,
+  cx: number,
+  cy: number,
   centre: { lat: number; lng: number },
-  mpp: number, dayFrac: number,
+  mpp: number,
+  dayFrac: number,
 ): void {
   const pub = selectedPub();
-  if (!pub) return;
-  if (!pub.outdoor || pub.outdoor.length === 0) return;
+  if (!pub?.outdoor || pub.outdoor.length === 0) return;
 
   ctx.beginPath();
-  // Draw exterior ring and any interior rings (holes).
   for (const ring of pub.outdoor) {
     for (let i = 0; i < ring.length; i++) {
-      const p = toPixel(ring[i]![0], ring[i]![1], centre, mpp);
+      const point = ring[i];
+      if (!point) continue;
+      const p = toPixel(point[0], point[1], centre, mpp);
       if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
       else ctx.lineTo(cx + p.x, cy + p.y);
     }
@@ -435,8 +317,12 @@ function drawOutdoorArea(
 
 function drawCompass(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number, outerR: number,
+  cx: number,
+  cy: number,
+  r: number,
+  outerR: number,
   dayFrac: number,
+  dark: boolean,
 ): void {
   const labels = ["N", "E", "S", "W"];
   const tickColor = lerpColor("#4A5568", "#94A3B8", dayFrac);
@@ -455,7 +341,6 @@ function drawCompass(
     ctx.stroke();
   }
 
-  // Cardinal labels — outside the bezel.
   ctx.font = "bold 15px system-ui, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -465,19 +350,22 @@ function drawCompass(
     const angle = (i * 90 - 90) * (Math.PI / 180);
     const x = cx + Math.cos(angle) * labelR;
     const y = cy + Math.sin(angle) * labelR;
-    const isDark = document.documentElement.classList.contains("dark");
-    const labelColor = isDark
+    const labelColor = dark
       ? lerpColor("#D4D0CC", "#F0ECE8", dayFrac)
       : lerpColor("#2A2825", "#1A1815", dayFrac);
-    ctx.fillStyle = i === 0 ? "#E53E3E" : labelColor;
-    ctx.fillText(labels[i], x, y);
+    ctx.fillStyle = i === 0 ? COLORS.northTick : labelColor;
+    const label = labels[i];
+    if (label) ctx.fillText(label, x, y);
   }
 }
 
 function drawSunIcon(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number, outerR: number,
-  sun: SunPosition, dayFrac: number,
+  cx: number,
+  cy: number,
+  r: number,
+  sun: SunPosition,
+  dayFrac: number,
 ): void {
   const angle = (sun.azimuth - 90) * (Math.PI / 180);
   const iconR = r + BEZEL * 0.5;
@@ -485,13 +373,12 @@ function drawSunIcon(
   const y = cy + Math.sin(angle) * iconR;
   const iconSize = 10;
 
-  if (dayFrac < 0.3) {
+  if (dayFrac < TWILIGHT_NIGHT) {
     drawMoonCanvas(ctx, x, y, iconSize);
-  } else if (dayFrac > 0.7) {
+  } else if (dayFrac > TWILIGHT_DAY) {
     drawSunCanvas(ctx, x, y, iconSize);
   } else {
-    // Twilight crossfade.
-    const t = (dayFrac - 0.3) / 0.4;
+    const t = (dayFrac - TWILIGHT_NIGHT) / (TWILIGHT_DAY - TWILIGHT_NIGHT);
     drawMoonCanvas(ctx, x, y, iconSize, 1 - t);
     drawSunCanvas(ctx, x, y, iconSize, t);
   }
@@ -499,28 +386,28 @@ function drawSunIcon(
 
 function drawTimeText(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number, outerR: number,
-  sun: SunPosition, dayFrac: number,
+  cx: number,
+  cy: number,
+  outerR: number,
+  sun: SunPosition,
+  dayFrac: number,
+  dark: boolean,
 ): void {
   const total = Math.round(state.timeMins);
   const hours = Math.floor(total / 60) % 24;
   const mins = total % 60;
   const text = `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 
-  // Time follows the sun's azimuth around the bezel.
   const sunAngle = (sun.azimuth - 90) * (Math.PI / 180);
   const baseTextR = outerR + 16;
   const bumpR = 10;
   const charSpacing = 8 / baseTextR;
-  // Four cardinals at canvas angles.
   const cardinalAngles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
 
-  // Compute ONE bump radius for the whole text based on its centre angle.
   function bumpForAngle(angle: number): number {
     let minDist = Math.PI;
     for (const c of cardinalAngles) {
       let d = angle - c;
-      // Normalize to -PI..PI.
       while (d > Math.PI) d -= 2 * Math.PI;
       while (d < -Math.PI) d += 2 * Math.PI;
       if (Math.abs(d) < minDist) minDist = Math.abs(d);
@@ -532,8 +419,7 @@ function drawTimeText(
   const textR = baseTextR + bumpForAngle(sunAngle);
 
   ctx.font = "bold 13px system-ui, sans-serif";
-  const isDarkTime = document.documentElement.classList.contains("dark");
-  ctx.fillStyle = isDarkTime
+  ctx.fillStyle = dark
     ? lerpColor("#D4D0CC", "#F0ECE8", dayFrac)
     : lerpColor("#2A2825", "#1A1815", dayFrac);
   ctx.textAlign = "center";
@@ -547,69 +433,43 @@ function drawTimeText(
     ctx.save();
     ctx.translate(tx, ty);
     ctx.rotate(a + Math.PI / 2);
-    ctx.fillText(text[i], 0, 0);
+    const ch = text[i];
+    if (ch) ctx.fillText(ch, 0, 0);
     ctx.restore();
   }
 }
 
-function drawSunPct(
+function drawSunPctMoon(
   ctx: CanvasRenderingContext2D,
-  cx: number, cy: number, r: number,
-  sun: SunPosition, dayFrac: number,
+  cx: number,
+  cy: number,
+  r: number,
+  dayFrac: number,
 ): void {
-  if (dayFrac < 0.3) {
+  if (dayFrac < TWILIGHT_NIGHT) {
     ctx.font = "bold 20px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = COLORS.moon;
-    ctx.globalAlpha = 1 - dayFrac / 0.3; // fade out as dawn approaches
+    ctx.globalAlpha = 1 - dayFrac / TWILIGHT_NIGHT;
     ctx.fillText("\u263D", cx, cy - r + 22);
     ctx.globalAlpha = 1;
   }
-  // TODO: compute actual sun percentage on outdoor area
 }
 
-// ── Coat of arms (Armoria API) ─────────────────────────────────────────────
-
-const coaCache = new Map<string, HTMLImageElement | null>();
-
-function getCoatOfArms(name: string): HTMLImageElement | null {
-  if (coaCache.has(name)) {
-    const img = coaCache.get(name)!;
-    return img?.complete ? img : null;
-  }
-
-  // Mark as loading.
-  coaCache.set(name, null);
-
-  const seed = encodeURIComponent(name);
-  const url = `https://armoria.herokuapp.com/?seed=${seed}&format=svg&size=80`;
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
-    coaCache.set(name, img);
-    // Trigger re-render of sign.
-    lastSignPubId = null;
-    const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
-    if (canvas) renderCircle(canvas);
-  };
-  img.onerror = () => {
-    // Failed — don't retry.
-    coaCache.set(name, null);
-  };
-  img.src = url;
-  return null;
-}
-
-// ── Pub sign (hanging sign above porthole) ────────────────────────────────
+// ── Pub sign ──────────────────────────────────────────────────────────────
 
 let signCanvas: HTMLCanvasElement | null = null;
-let lastSignPubId: string | null = null;
+let lastSignKey: string | null = null;
 
 function updatePubSign(): void {
   const pub = selectedPub();
   if (!pub) return;
-  if (pub.id === lastSignPubId) return; // no change
-  lastSignPubId = pub.id;
+
+  // Cache key includes theme so dark/light toggle redraws.
+  const themeKey = isDark() ? "d" : "l";
+  const cacheKey = `${pub.id}-${themeKey}`;
+  if (cacheKey === lastSignKey) return;
+  lastSignKey = cacheKey;
 
   if (!signCanvas) {
     signCanvas = document.createElement("canvas");
@@ -622,19 +482,18 @@ function updatePubSign(): void {
   }
 
   const dpr = window.devicePixelRatio || 1;
-  const viz = document.getElementById("viz")!;
-  const circleWrap = document.getElementById("circle-wrap")!;
+  const viz = document.getElementById("viz");
+  const circleWrap = document.getElementById("circle-wrap");
+  if (!viz || !circleWrap) return;
   const vizRect = viz.getBoundingClientRect();
   const circleRect = circleWrap.getBoundingClientRect();
-  // Available width: from left edge of viz to just past the porthole's left edge.
   const signEndX = circleRect.left - vizRect.left + circleRect.width * 0.15;
   const maxW = Math.max(140, Math.round(signEndX));
 
-  // Measure how much space the name needs to determine sign dimensions.
-  const measured = measureSignLayout(pub.name, maxW);
+  const layout: SignLayout = measureSignLayout(pub.name, maxW);
 
   const w = maxW;
-  const h = measured.canvasH;
+  const h = layout.canvasH;
   signCanvas.width = w * dpr;
   signCanvas.height = h * dpr;
   signCanvas.style.width = `${w}px`;
@@ -645,442 +504,16 @@ function updatePubSign(): void {
   signCanvas.style.pointerEvents = "none";
   signCanvas.style.zIndex = "10";
 
-  const ctx = signCanvas.getContext("2d")!;
+  const ctx = signCanvas.getContext("2d");
+  if (!ctx) return;
   ctx.scale(dpr, dpr);
 
-  drawPubSign(ctx, w, h, pub.name, measured);
-}
-
-/** Pre-measure sign layout so we can size canvas and sign to fit the name. */
-function measureSignLayout(name: string, maxW: number): {
-  signW: number; signH: number; canvasH: number;
-  fontSize: number; lines: string[];
-} {
-  // Use an offscreen canvas just for measuring text.
-  const mc = document.createElement("canvas").getContext("2d")!;
-
-  const hasCoA = !!getCoatOfArms(name);
-  const shapeIdx = hashStr(name) % 4;
-
-  // Target font size — start at 11 and try to fit in 2 lines.
-  const TARGET_FONT = 11;
-  const MIN_FONT = 8;
-  const MIN_SIGN_W = 100;
-  const MAX_SIGN_W = Math.min(200, maxW * 0.85);
-  const SIDE_INSET = shapeIdx === 3 ? 18 : 8;
-  const TOP_INSET = shapeIdx === 1 || shapeIdx === 3 ? 14 : 8;
-  const BOT_INSET = shapeIdx === 2 ? 20 : shapeIdx === 3 ? 14 : 8;
-  const COA_W = hasCoA ? 32 : 0;
-
-  // Try font sizes from target down, picking the first that fits in ≤2 lines
-  // at a reasonable sign width.
-  let bestFontSize = MIN_FONT;
-  let bestLines: string[] = [name];
-  let bestSignW = MIN_SIGN_W;
-
-  for (let fs = TARGET_FONT; fs >= MIN_FONT; fs--) {
-    mc.font = `700 ${fs}px Georgia, serif`;
-
-    // How wide does the sign need to be for ≤2 lines at this font?
-    // Try wrapping at increasing widths.
-    for (let tw = 60; tw <= MAX_SIGN_W - SIDE_INSET * 2 - COA_W; tw += 10) {
-      const lines = wrapText(mc, name, tw);
-      if (lines.length <= 2) {
-        const neededSignW = tw + SIDE_INSET * 2 + COA_W + 8;
-        const signW = Math.max(MIN_SIGN_W, Math.min(MAX_SIGN_W, neededSignW));
-        if (fs > bestFontSize || (fs === bestFontSize && signW <= bestSignW)) {
-          bestFontSize = fs;
-          bestLines = lines;
-          bestSignW = signW;
-        }
-        break;
-      }
-    }
-    if (bestFontSize === TARGET_FONT) break; // found ideal fit
-  }
-
-  // If still >2 lines at min font, allow 3 lines.
-  if (bestLines.length > 2) {
-    mc.font = `700 ${MIN_FONT}px Georgia, serif`;
-    const tw = MAX_SIGN_W - SIDE_INSET * 2 - COA_W - 8;
-    bestLines = wrapText(mc, name, tw);
-    if (bestLines.length > 3) bestLines = bestLines.slice(0, 3);
-    bestSignW = MAX_SIGN_W;
-  }
-
-  const lineH = bestFontSize + 2;
-  const textBlockH = bestLines.length * lineH;
-  const signH = Math.max(44, textBlockH + TOP_INSET + BOT_INSET + 4);
-  // Canvas needs room for: arm (16px top) + chains (~20px) + sign + margin.
-  const canvasH = 16 + 20 + signH + 6;
-
-  return { signW: bestSignW, signH, canvasH, fontSize: bestFontSize, lines: bestLines };
-}
-
-/** Simple hash from string to number. */
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-/** Generate a warm hue from pub name for the sign background. */
-function pubColor(name: string): { bg: string; accent: string; text: string } {
-  const h = hashStr(name);
-  // Warm hues: 15-50 (oranges/browns/ambers).
-  const hue = 15 + (h % 40);
-  const sat = 30 + (h % 25);
-  return {
-    bg: `hsl(${hue}, ${sat}%, 22%)`,
-    accent: `hsl(${hue}, ${sat + 10}%, 35%)`,
-    text: `hsl(${hue}, ${sat - 10}%, 85%)`,
-  };
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = test;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-function drawPubSign(
-  ctx: CanvasRenderingContext2D, W: number, H: number, name: string,
-  layout: { signW: number; signH: number; fontSize: number; lines: string[] },
-): void {
-  const colors = pubColor(name);
-  const isDark = document.documentElement.classList.contains("dark");
-
-  const iron = isDark ? "#5A5550" : "#3E3A35";
-  const ironHi = isDark ? "#7A756E" : "#5A5550";
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  function ironBar(lineW: number = 3): void {
-    ctx.strokeStyle = iron;
-    ctx.lineWidth = lineW;
-    ctx.stroke();
-    ctx.strokeStyle = ironHi;
-    ctx.lineWidth = lineW * 0.3;
-    ctx.globalAlpha = 0.35;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  // ── Key positions (all relative to W and H) ──
-  const plateX = 0;       // wall = left edge
-  const plateW = 6;
-  const armY = 16;         // arm height
-  const armStartX = plateX + plateW - 1;
-  const armEndX = W - 6;
-  const armLen = armEndX - armStartX;
-
-  const signW = layout.signW;
-  const signH = layout.signH;
-  const signX = armEndX - signW + 4;
-  const signY = H - signH - 4;
-  const r = 4;
-
-  // Chain attachment points on the sign.
-  const hookL = signX + 14;
-  const hookR = signX + signW - 14;
-
-  // ── 1. Backplate ──
-  ctx.fillStyle = iron;
-  ctx.beginPath();
-  ctx.rect(plateX, armY - 16, plateW, 46);
-  ctx.fill();
-  // Bolts.
-  ctx.fillStyle = ironHi;
-  for (const by of [armY - 11, armY + 1, armY + 13, armY + 24]) {
-    ctx.beginPath();
-    ctx.arc(plateW / 2, by, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = iron;
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(plateW / 2 - 1.5, by);
-    ctx.lineTo(plateW / 2 + 1.5, by);
-    ctx.stroke();
-  }
-
-  // ── 2. Main arm (plate → armEnd) ──
-  ctx.beginPath();
-  ctx.moveTo(armStartX, armY);
-  ctx.bezierCurveTo(
-    armStartX + armLen * 0.3, armY - 4,
-    armStartX + armLen * 0.7, armY - 2,
-    armEndX, armY,
-  );
-  ironBar(3.5);
-
-  // ── 3. Top scroll (curls up from plate near arm junction) ──
-  const scrollW = Math.min(armLen * 0.35, 35);
-  ctx.beginPath();
-  ctx.moveTo(armStartX, armY - 1);
-  ctx.bezierCurveTo(
-    armStartX + scrollW * 0.3, armY - 12,
-    armStartX + scrollW * 0.8, armY - 14,
-    armStartX + scrollW, armY - 8,
-  );
-  ctx.bezierCurveTo(
-    armStartX + scrollW * 1.05, armY - 4,
-    armStartX + scrollW * 0.85, armY - 1,
-    armStartX + scrollW * 0.65, armY - 1,
-  );
-  ironBar(2);
-
-  // ── 4. Bottom brace (plate → curves down → back up to arm) ──
-  const braceDropY = armY + Math.min(28, H * 0.28);
-  ctx.beginPath();
-  ctx.moveTo(armStartX, armY + 6);
-  ctx.bezierCurveTo(
-    armStartX + armLen * 0.1, braceDropY,
-    armStartX + armLen * 0.3, braceDropY + 2,
-    armStartX + armLen * 0.5, braceDropY - 10,
-  );
-  ctx.bezierCurveTo(
-    armStartX + armLen * 0.7, armY + 6,
-    armStartX + armLen * 0.85, armY + 2,
-    armEndX - 4, armY + 1,
-  );
-  ironBar(2.5);
-
-  // ── 5. Fill scroll (between arm and brace, near wall) ──
-  const fs1x = armStartX + armLen * 0.12;
-  ctx.beginPath();
-  ctx.moveTo(fs1x, armY + 4);
-  ctx.bezierCurveTo(fs1x + 6, armY + 14, fs1x + 16, armY + 12, fs1x + 12, armY + 4);
-  ironBar(1.5);
-
-  // ── 6. Finial (ball + point at arm tip) ──
-  ctx.fillStyle = iron;
-  ctx.beginPath();
-  ctx.arc(armEndX + 2, armY, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(armEndX + 5, armY);
-  ctx.lineTo(armEndX + 9, armY - 1.5);
-  ctx.lineTo(armEndX + 9, armY + 1.5);
-  ctx.closePath();
-  ctx.fill();
-
-  // ── 7. Hooks (under the arm at chain points) ──
-  for (const hx of [hookL, hookR]) {
-    // Vertical stub down from arm.
-    ctx.strokeStyle = iron;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(hx, armY + 1);
-    ctx.lineTo(hx, armY + 6);
-    ctx.stroke();
-    // Small hook curl.
-    ctx.beginPath();
-    ctx.arc(hx, armY + 6, 2.5, 0, Math.PI);
-    ctx.stroke();
-  }
-
-  // ── 8. Chains (hooks → sign rings) ──
-  const chainTop = armY + 9;
-  const chainBot = signY - 1;
-  const chainLen = chainBot - chainTop;
-  const linkCount = Math.max(2, Math.round(chainLen / 8));
-
-  for (const cx of [hookL, hookR]) {
-    const dy = chainLen / linkCount;
-    for (let i = 0; i < linkCount; i++) {
-      const ly = chainTop + i * dy + dy / 2;
-      ctx.beginPath();
-      ctx.ellipse(cx, ly, 2.5, dy * 0.35, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = i % 2 === 0 ? iron : ironHi;
-      ctx.lineWidth = 1.1;
-      ctx.stroke();
-    }
-  }
-
-  // ── 9. Sign rings (at top of sign board) ──
-  for (const rx of [hookL, hookR]) {
-    ctx.beginPath();
-    ctx.arc(rx, signY + 2, 3, 0, Math.PI * 2);
-    ctx.strokeStyle = iron;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-  }
-
-  // ── 10. Sign board — shape varies by pub name ──
-  const shapeIdx = hashStr(name) % 4;
-
-  function signPath(): void {
-    const cx = signX + signW / 2;
-    switch (shapeIdx) {
-      case 1: // Arched top.
-        ctx.moveTo(signX, signY + signH);
-        ctx.lineTo(signX, signY + signH * 0.35);
-        ctx.quadraticCurveTo(signX, signY, cx, signY);
-        ctx.quadraticCurveTo(signX + signW, signY, signX + signW, signY + signH * 0.35);
-        ctx.lineTo(signX + signW, signY + signH);
-        ctx.closePath();
-        break;
-      case 2: // Pointed bottom (pennant).
-        ctx.roundRect(signX, signY, signW, signH * 0.75, r);
-        ctx.moveTo(signX, signY + signH * 0.74);
-        ctx.lineTo(cx, signY + signH);
-        ctx.lineTo(signX + signW, signY + signH * 0.74);
-        break;
-      case 3: // Oval.
-        ctx.ellipse(cx, signY + signH / 2, signW / 2, signH / 2, 0, 0, Math.PI * 2);
-        break;
-      default: // Rectangle.
-        ctx.roundRect(signX, signY, signW, signH, r);
-    }
-  }
-
-  function signFramePath(): void {
-    const cx = signX + signW / 2;
-    const i = 4; // inset
-    const l = signX + i;
-    const rr = signX + signW - i;
-    const t = signY + i;
-    const b = signY + signH - i;
-    switch (shapeIdx) {
-      case 1: // Arched top.
-        ctx.moveTo(l, b);
-        ctx.lineTo(l, t + signH * 0.3);
-        ctx.quadraticCurveTo(l, t, cx, t);
-        ctx.quadraticCurveTo(rr, t, rr, t + signH * 0.3);
-        ctx.lineTo(rr, b);
-        ctx.closePath();
-        break;
-      case 2: // Pennant.
-        ctx.moveTo(l + r, t);
-        ctx.lineTo(rr - r, t);
-        ctx.arcTo(rr, t, rr, t + r, r - 1);
-        ctx.lineTo(rr, signY + signH * 0.72);
-        ctx.lineTo(cx, b);
-        ctx.lineTo(l, signY + signH * 0.72);
-        ctx.lineTo(l, t + r);
-        ctx.arcTo(l, t, l + r, t, r - 1);
-        break;
-      case 3: // Oval.
-        ctx.ellipse(cx, signY + signH / 2, signW / 2 - i, signH / 2 - i, 0, 0, Math.PI * 2);
-        break;
-      default: // Rectangle.
-        ctx.roundRect(l, t, signW - i * 2, signH - i * 2, r - 1);
-    }
-  }
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.4)";
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 3;
-  ctx.beginPath();
-  signPath();
-  ctx.fillStyle = colors.bg;
-  ctx.fill();
-  ctx.restore();
-
-  // Wood grain.
-  ctx.save();
-  ctx.beginPath();
-  signPath();
-  ctx.clip();
-  ctx.globalAlpha = 0.05;
-  ctx.strokeStyle = colors.text;
-  ctx.lineWidth = 0.5;
-  const hash = hashStr(name);
-  for (let i = 0; i < 10; i++) {
-    const gy = signY + 3 + (i * (signH - 6)) / 10 + ((hash >> i) % 2);
-    ctx.beginPath();
-    ctx.moveTo(signX, gy);
-    ctx.lineTo(signX + signW, gy);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // ── Safe text area per shape (inset from edges where text won't clip) ──
-  // [top, bottom, left, right] insets from sign bounds.
-  const safeInset = (() => {
-    switch (shapeIdx) {
-      case 1: return { top: 14, bot: 6, side: 8 };  // arched: more top room for curve
-      case 2: return { top: 8, bot: signH * 0.32, side: 8 }; // pennant: avoid pointed bottom
-      case 3: return { top: 14, bot: 14, side: 18 }; // oval: tight all around
-      default: return { top: 8, bot: 8, side: 8 };  // rect: even padding
-    }
-  })();
-
-  const safeTop = signY + safeInset.top;
-  const safeBot = signY + signH - safeInset.bot;
-  const safeH = safeBot - safeTop;
-  const safeLeft = signX + safeInset.side;
-  const safeRight = signX + signW - safeInset.side;
-
-  // Coat of arms (loaded async from Armoria).
-  const coaImg = getCoatOfArms(name);
-  const coaSize = Math.min(safeH - 4, 36); // cap size to safe height
-  let coaActualW = 0;
-
-  if (coaImg) {
-    const coaX = safeLeft;
-    const coaY = safeTop + (safeH - coaSize) / 2;
-    ctx.save();
-    ctx.beginPath();
-    signPath();
-    ctx.clip();
-    ctx.drawImage(coaImg, coaX, coaY, coaSize, coaSize);
-    ctx.restore();
-    coaActualW = coaSize + 4;
-  }
-
-  // Gold frame.
-  ctx.beginPath();
-  signFramePath();
-  ctx.strokeStyle = colors.accent;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // ── 11. Pub name — clipped to sign, positioned in safe area ──
-  const textLeft = safeLeft + coaActualW;
-  const textRight = safeRight;
-  const textW = textRight - textLeft;
-  const textCenterX = textLeft + textW / 2;
-
-  ctx.save();
-  ctx.beginPath();
-  signPath();
-  ctx.clip();
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = colors.text;
-
-  const { fontSize, lines } = layout;
-  ctx.font = `700 ${fontSize}px Georgia, serif`;
-
-  const lineHeight = fontSize + 2;
-  const textBlockH = lines.length * lineHeight;
-  const textStartY = safeTop + (safeH - textBlockH) / 2 + lineHeight / 2;
-
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i]!, textCenterX, textStartY + i * lineHeight);
-  }
-  ctx.restore();
+  drawPubSign(ctx, w, h, pub.name, layout);
 }
 
 // ── Canvas sizing ─────────────────────────────────────────────────────────
 
+/** Size the porthole canvas to fit its container, with DPR scaling. */
 export function sizeCanvas(canvas: HTMLCanvasElement, container: HTMLElement): void {
   const w = Math.min(container.clientWidth, 500);
   const margin = BEZEL + 34;
@@ -1091,22 +524,30 @@ export function sizeCanvas(canvas: HTMLCanvasElement, container: HTMLElement): v
   canvas.height = h * dpr;
   canvas.style.width = `${w}px`;
   canvas.style.height = `${h}px`;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   ctx.scale(dpr, dpr);
-  // Store logical size for rendering.
   canvas.dataset.logicalW = String(w);
   canvas.dataset.logicalH = String(h);
 }
 
-/** Init the circle canvas — call once on startup. */
+/** Init the porthole canvas — call once on startup. */
 export function initCircle(): void {
-  const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
-  const wrap = document.getElementById("circle-wrap")!;
+  const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement | null;
+  const wrap = document.getElementById("circle-wrap");
+  if (!canvas || !wrap) return;
 
-  const resize = () => {
+  const resize = (): void => {
     sizeCanvas(canvas, wrap);
+    lastSignKey = null;
     renderCircle(canvas);
   };
+
+  setTileRedrawCallback(() => renderCircle(canvas));
+  setCoaLoadCallback(() => {
+    lastSignKey = null;
+    renderCircle(canvas);
+  });
 
   window.addEventListener("resize", resize);
   resize();

@@ -3,10 +3,10 @@
  * Uses Web Share API on mobile, fallback to download.
  */
 
-import { state, selectedPub, pubCenter } from "./state";
-import { renderCircle } from "./circle";
-import { weatherLabel, weatherEmoji } from "./weather";
 import SunCalc from "suncalc";
+import { renderCircle } from "./circle";
+import { selectedPub, state } from "./state";
+import { weatherEmoji, weatherLabel } from "./weather";
 
 /** Generate a share image and trigger share/download. */
 export async function shareSnapshot(): Promise<void> {
@@ -73,9 +73,7 @@ export async function shareSnapshot(): Promise<void> {
   ctx.font = "400 18px system-ui, sans-serif";
   ctx.fillStyle = "#9E9892";
   ctx.textAlign = "left";
-  const statusText = isDay
-    ? `${emoji} ${weather} at ${timeStr}`
-    : `Night at ${timeStr}`;
+  const statusText = isDay ? `${emoji} ${weather} at ${timeStr}` : `Night at ${timeStr}`;
   ctx.fillText(statusText, 16, h - 16);
 
   // Domain.
@@ -89,7 +87,9 @@ export async function shareSnapshot(): Promise<void> {
     canvas.toBlob((b) => resolve(b!), "image/png");
   });
 
-  const file = new File([blob], `sunny-pint-${pub.name.toLowerCase().replace(/\s+/g, "-")}.png`, { type: "image/png" });
+  const file = new File([blob], `sunny-pint-${pub.name.toLowerCase().replace(/\s+/g, "-")}.png`, {
+    type: "image/png",
+  });
 
   // Build share text.
   let shareText: string;
@@ -121,10 +121,10 @@ export async function shareSnapshot(): Promise<void> {
   }
 
   // Desktop fallback: show dialog with image + copyable link.
-  showShareDialog(blob, shareText, pub.name);
+  showShareDialog(blob, pub.name);
 }
 
-function showShareDialog(imageBlob: Blob, shareText: string, pubName: string): void {
+function showShareDialog(imageBlob: Blob, pubName: string): void {
   // Remove existing dialog.
   document.getElementById("share-dialog")?.remove();
 
@@ -160,7 +160,9 @@ function showShareDialog(imageBlob: Blob, shareText: string, pubName: string): v
     navigator.clipboard.writeText(window.location.href).then(() => {
       const btn = overlay.querySelector(".share-btn-copy") as HTMLButtonElement;
       btn.textContent = "Copied!";
-      setTimeout(() => { btn.textContent = "Copy link"; }, 1500);
+      setTimeout(() => {
+        btn.textContent = "Copy link";
+      }, 1500);
     });
   });
 

@@ -15,10 +15,7 @@
   "postCreateCommand": ".devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "biomejs.biome",
-        "bradlc.vscode-tailwindcss"
-      ],
+      "extensions": ["biomejs.biome", "bradlc.vscode-tailwindcss"],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
         "editor.defaultFormatter": "biomejs.biome",

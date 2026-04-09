@@ -50,13 +50,23 @@ export function readURL(): URLState {
   if (pub) result.pubId = pub;
 
   const t = params.get("t");
-  if (t) result.time = parseInt(t, 10);
+  if (t) {
+    const time = parseInt(t, 10);
+    if (Number.isFinite(time)) result.time = time;
+  }
 
   const d = params.get("d");
   if (d) {
-    const parts = d.split("-");
-    if (parts.length === 3) {
-      result.date = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    const [y, m, day] = d.split("-").map((s) => parseInt(s, 10));
+    if (
+      y != null &&
+      m != null &&
+      day != null &&
+      Number.isFinite(y) &&
+      Number.isFinite(m) &&
+      Number.isFinite(day)
+    ) {
+      result.date = new Date(y, m - 1, day);
     }
   }
 

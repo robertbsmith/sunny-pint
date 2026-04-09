@@ -1,25 +1,28 @@
 /**
- * Opening hours parsing and display using opening_hours.js.
+ * Opening hours parsing using opening_hours.js.
+ *
+ * Wraps the OSM opening_hours format library and exposes a single
+ * `parseHours` function that returns the current open/closed status, the
+ * next state change time, and a weekly table for display.
  */
 
 import opening_hours from "opening_hours";
 
+/** Parsed opening hours information for display. */
 export interface HoursStatus {
   isOpen: boolean;
-  nextChange: Date | undefined;
-  nextChangeLabel: string; // "closes 23:00" or "opens 12:00"
-  statusLabel: string; // "Open" or "Closed"
-  weeklyTable: WeekRow[] | null; // null if not week-stable or parse fails
-  prettified: string; // cleaned up string
+  nextChangeLabel: string;
+  statusLabel: "Open" | "Closed";
+  weeklyTable: WeekRow[] | null;
 }
 
+/** A single row in the weekly hours table. */
 export interface WeekRow {
-  day: string; // "Mo", "Tu", etc.
-  hours: string; // "11:00–23:00" or "Closed"
+  day: string;
+  hours: string;
   isToday: boolean;
 }
 
-const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function formatTime(d: Date): string {
@@ -27,8 +30,7 @@ function formatTime(d: Date): string {
 }
 
 function formatRelative(now: Date, target: Date): string {
-  const diffMs = target.getTime() - now.getTime();
-  const diffMin = Math.round(diffMs / 60000);
+  const diffMin = Math.round((target.getTime() - now.getTime()) / 60000);
   if (diffMin < 1) return "now";
   if (diffMin < 60) return `${diffMin}m`;
   const h = Math.floor(diffMin / 60);
@@ -36,11 +38,19 @@ function formatRelative(now: Date, target: Date): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+/**
+ * Parse an OSM opening_hours string and return a structured status.
+ *
+ * Returns `null` if the input is empty or fails to parse — the caller should
+ * fall back to displaying the raw string.
+ */
 export function parseHours(raw: string | undefined): HoursStatus | null {
   if (!raw) return null;
 
   try {
-    const oh = new opening_hours(raw, undefined, { locale: "en" });
+    // The library accepts (value, nominatimObject, optional_conf) but the
+    // typings require all conf fields. Use single-arg form.
+    const oh = new opening_hours(raw);
     const now = new Date();
     const isOpen = oh.getState(now);
     const nextChange = oh.getNextChange(now);
@@ -51,16 +61,12 @@ export function parseHours(raw: string | undefined): HoursStatus | null {
       nextChangeLabel = `${verb} ${formatTime(nextChange)} (${formatRelative(now, nextChange)})`;
     }
 
-    // Weekly table.
     let weeklyTable: WeekRow[] | null = null;
     if (oh.isWeekStable()) {
-      const todayIdx = now.getDay(); // 0=Sun
+      const todayIdx = now.getDay();
       weeklyTable = [];
-
-      // Get intervals for each day of the current week.
       for (let d = 0; d < 7; d++) {
-        // Start from Monday (d=1) through Sunday (d=0).
-        const dayIdx = (d + 1) % 7; // 1,2,3,4,5,6,0 = Mo-Su
+        const dayIdx = (d + 1) % 7; // Mon..Sun
         const dayStart = new Date(now);
         dayStart.setDate(now.getDate() - todayIdx + dayIdx);
         dayStart.setHours(0, 0, 0, 0);
@@ -71,28 +77,25 @@ export function parseHours(raw: string | undefined): HoursStatus | null {
         let hours = "Closed";
         if (intervals.length > 0) {
           hours = intervals
-            .map((iv: [Date, Date]) => `${formatTime(iv[0])}\u2013${formatTime(iv[1])}`)
+            .map((iv) => `${formatTime(iv[0])}\u2013${formatTime(iv[1])}`)
             .join(", ");
         }
 
         weeklyTable.push({
-          day: DAY_LABELS[(d + 1) % 7]!,
+          day: DAY_LABELS[dayIdx] ?? "",
           hours,
           isToday: dayIdx === todayIdx,
         });
       }
     }
 
-    let prettified = raw;
-    try {
-      prettified = oh.prettifyValue();
-    } catch {
-      // fall back to raw
-    }
-
-    return { isOpen, nextChange, nextChangeLabel, statusLabel: isOpen ? "Open" : "Closed", weeklyTable, prettified };
+    return {
+      isOpen,
+      nextChangeLabel,
+      statusLabel: isOpen ? "Open" : "Closed",
+      weeklyTable,
+    };
   } catch {
-    // Parse failed — return null, caller shows raw string.
     return null;
   }
 }

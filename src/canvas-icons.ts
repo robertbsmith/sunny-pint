@@ -6,7 +6,8 @@
 /** Draw a Lucide-style sun icon centred at (x, y) with given radius. */
 export function drawSunCanvas(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number,
+  x: number,
+  y: number,
   radius: number,
   alpha: number = 1,
 ): void {
@@ -39,11 +40,11 @@ export function drawSunCanvas(
 
   // Rays.
   const rays: [number, number, number, number][] = [
-    [12, 2, 12, 4],     // top
-    [12, 20, 12, 22],   // bottom
-    [2, 12, 4, 12],     // left
-    [20, 12, 22, 12],   // right
-    [6.34, 6.34, 4.93, 4.93],   // top-left
+    [12, 2, 12, 4], // top
+    [12, 20, 12, 22], // bottom
+    [2, 12, 4, 12], // left
+    [20, 12, 22, 12], // right
+    [6.34, 6.34, 4.93, 4.93], // top-left
     [17.66, 6.34, 19.07, 4.93], // top-right
     [6.34, 17.66, 4.93, 19.07], // bottom-left
     [17.66, 17.66, 19.07, 19.07], // bottom-right
@@ -64,7 +65,8 @@ export function drawSunCanvas(
 /** Draw a Lucide-style moon icon centred at (x, y) with given radius. */
 export function drawMoonCanvas(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number,
+  x: number,
+  y: number,
   radius: number,
   alpha: number = 1,
 ): void {
@@ -82,7 +84,9 @@ export function drawMoonCanvas(
   ctx.lineJoin = "round";
 
   // Moon crescent path from Lucide.
-  const p = new Path2D("M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401");
+  const p = new Path2D(
+    "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401",
+  );
   ctx.fill(p);
   ctx.stroke(p);
 

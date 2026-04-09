@@ -5,18 +5,17 @@
  * Play button animates sunrise to sunset.
  */
 
-import { state, pubCenter } from "./state";
-import { renderCircle } from "./circle";
-import { setPlayIcon } from "./icons";
-import { drawSunCanvas, drawMoonCanvas } from "./canvas-icons";
 import SunCalc from "suncalc";
+import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
+import { PLAY_SPEED } from "./config";
+import { setPlayIcon } from "./icons";
+import { pubCenter, state } from "./state";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const PAD_X = 24;
 const PAD_TOP = 20;
 const PAD_BOT = 14;
-const PLAY_SPEED = 120; // minutes per second
 
 const COLORS = {
   arcDay: "#F59E0B",
@@ -113,20 +112,32 @@ export function initSunArc(onTimeChange: () => void): void {
   });
 
   // Touch support.
-  canvas.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    dragging = true;
-    state.timeMins = getTime(e.touches[0]);
-    onTimeChange();
-    renderArc();
-  }, { passive: false });
-  canvas.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-    if (!dragging) return;
-    state.timeMins = getTime(e.touches[0]);
-    onTimeChange();
-    renderArc();
-  }, { passive: false });
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      if (!touch) return;
+      dragging = true;
+      state.timeMins = getTime(touch);
+      onTimeChange();
+      renderArc();
+    },
+    { passive: false },
+  );
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      e.preventDefault();
+      if (!dragging) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      state.timeMins = getTime(touch);
+      onTimeChange();
+      renderArc();
+    },
+    { passive: false },
+  );
   canvas.addEventListener("touchend", () => {
     if (dragging) {
       dragging = false;
@@ -150,8 +161,9 @@ export function initSunArc(onTimeChange: () => void): void {
 
   btnDate.addEventListener("click", () => dateInput.showPicker());
   dateInput.addEventListener("change", () => {
-    const parts = dateInput.value.split("-");
-    state.date = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+    const [y, m, d] = dateInput.value.split("-").map((s) => parseInt(s, 10));
+    if (y == null || m == null || d == null) return;
+    state.date = new Date(y, m - 1, d);
     btnDate.textContent = isToday(state.date) ? "Today" : dateInput.value;
     computeArc();
     onTimeChange();
@@ -161,7 +173,11 @@ export function initSunArc(onTimeChange: () => void): void {
 
 function isToday(d: Date): boolean {
   const now = new Date();
-  return d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  return (
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear()
+  );
 }
 
 // ── Arc computation ───────────────────────────────────────────────────────
@@ -201,7 +217,10 @@ function renderArc(): void {
 
   // Y-axis: show above and below horizon. Horizon at 65% height (more room above).
   const maxAlt = Math.max(...arcPoints.map((p) => p.alt), 1);
-  const minAlt = Math.min(...arcPoints.filter((p) => p.mins >= xMin && p.mins <= xMax).map((p) => p.alt), -5);
+  const minAlt = Math.min(
+    ...arcPoints.filter((p) => p.mins >= xMin && p.mins <= xMax).map((p) => p.alt),
+    -5,
+  );
   const altRange = maxAlt - minAlt;
 
   const toX = (mins: number) => PAD_X + ((mins - xMin) / (xMax - xMin)) * areaW;
@@ -210,7 +229,6 @@ function renderArc(): void {
   // Current sun state — smooth dayFrac matching porthole.
   const currentAlt = interpolateAlt(state.timeMins);
   const dayFrac = Math.min(Math.max((currentAlt + 2) / 10, 0), 1);
-  const isNight = currentAlt <= 0;
 
   // Horizon line.
   const horizonY = toY(0);
@@ -239,9 +257,10 @@ function renderArc(): void {
   ctx.lineTo(toX(sunsetMins), horizonY);
   ctx.closePath();
   const fillAlpha = 0.06 + 0.19 * dayFrac;
-  ctx.fillStyle = dayFrac > 0.5
-    ? `rgba(254,243,199,${fillAlpha.toFixed(2)})`
-    : `rgba(100,116,139,${(fillAlpha * 0.4).toFixed(2)})`;
+  ctx.fillStyle =
+    dayFrac > 0.5
+      ? `rgba(254,243,199,${fillAlpha.toFixed(2)})`
+      : `rgba(100,116,139,${(fillAlpha * 0.4).toFixed(2)})`;
   ctx.fill();
 
   // Arc curve — full curve including below horizon.
@@ -251,8 +270,10 @@ function renderArc(): void {
     if (p.mins < xMin || p.mins > xMax) continue;
     const x = toX(p.mins);
     const y = toY(p.alt);
-    if (first) { ctx.moveTo(x, y); first = false; }
-    else ctx.lineTo(x, y);
+    if (first) {
+      ctx.moveTo(x, y);
+      first = false;
+    } else ctx.lineTo(x, y);
   }
   // Arc stroke — interpolated color.
   const arcR = Math.round(100 + 145 * dayFrac);
@@ -268,11 +289,16 @@ function renderArc(): void {
   first = true;
   for (const p of arcPoints) {
     if (p.mins < xMin || p.mins > xMax) continue;
-    if (p.alt >= 0) { first = true; continue; }
+    if (p.alt >= 0) {
+      first = true;
+      continue;
+    }
     const x = toX(p.mins);
     const y = toY(p.alt);
-    if (first) { ctx.moveTo(x, y); first = false; }
-    else ctx.lineTo(x, y);
+    if (first) {
+      ctx.moveTo(x, y);
+      first = false;
+    } else ctx.lineTo(x, y);
   }
   ctx.strokeStyle = "#4A5568";
   ctx.lineWidth = 1;
@@ -325,11 +351,12 @@ function renderArc(): void {
 /** Interpolate altitude at a given time from arc points. */
 function interpolateAlt(mins: number): number {
   for (let i = 1; i < arcPoints.length; i++) {
-    if (arcPoints[i].mins >= mins) {
-      const p0 = arcPoints[i - 1];
-      const p1 = arcPoints[i];
-      const t = (mins - p0.mins) / (p1.mins - p0.mins);
-      return p0.alt + t * (p1.alt - p0.alt);
+    const cur = arcPoints[i];
+    const prev = arcPoints[i - 1];
+    if (!cur || !prev) continue;
+    if (cur.mins >= mins) {
+      const t = (mins - prev.mins) / (cur.mins - prev.mins);
+      return prev.alt + t * (cur.alt - prev.alt);
     }
   }
   return arcPoints[arcPoints.length - 1]?.alt ?? 0;

@@ -1,25 +1,36 @@
 /**
  * Weather — fetch cloud cover from Open-Meteo (free, no API key).
- * Updates the pub list with sunny/cloudy/overcast indicators.
+ *
+ * Cached for 10 minutes per location, with a small distance tolerance so
+ * scrolling between nearby pubs doesn't trigger duplicate fetches.
  */
 
-export type WeatherState = "sunny" | "partly-cloudy" | "overcast" | "unknown";
+import { OPEN_METEO_URL, WEATHER_CACHE_TOLERANCE_DEG, WEATHER_TTL_MS } from "./config";
+import type { WeatherState } from "./types";
 
-let cachedWeather: { lat: number; lng: number; state: WeatherState; fetchedAt: number } | null = null;
+interface WeatherCache {
+  lat: number;
+  lng: number;
+  state: WeatherState;
+  fetchedAt: number;
+}
 
-/** Get current weather state for a location. Cached for 10 minutes. */
+let cache: WeatherCache | null = null;
+
+/** Get the current weather state for a location. */
 export async function getWeather(lat: number, lng: number): Promise<WeatherState> {
-  // Return cache if fresh and nearby.
-  if (cachedWeather && Date.now() - cachedWeather.fetchedAt < 600000) {
-    const dlat = Math.abs(lat - cachedWeather.lat);
-    const dlng = Math.abs(lng - cachedWeather.lng);
-    if (dlat < 0.1 && dlng < 0.1) return cachedWeather.state;
+  if (cache && Date.now() - cache.fetchedAt < WEATHER_TTL_MS) {
+    const dlat = Math.abs(lat - cache.lat);
+    const dlng = Math.abs(lng - cache.lng);
+    if (dlat < WEATHER_CACHE_TOLERANCE_DEG && dlng < WEATHER_CACHE_TOLERANCE_DEG) {
+      return cache.state;
+    }
   }
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=cloud_cover&timezone=auto`;
+    const url = `${OPEN_METEO_URL}?latitude=${lat.toFixed(4)}&longitude=${lng.toFixed(4)}&current=cloud_cover&timezone=auto`;
     const resp = await fetch(url);
-    const data = await resp.json();
+    const data = (await resp.json()) as { current?: { cloud_cover?: number } };
     const cloudCover = data.current?.cloud_cover ?? 50;
 
     let state: WeatherState;
@@ -27,28 +38,37 @@ export async function getWeather(lat: number, lng: number): Promise<WeatherState
     else if (cloudCover <= 70) state = "partly-cloudy";
     else state = "overcast";
 
-    cachedWeather = { lat, lng, state, fetchedAt: Date.now() };
+    cache = { lat, lng, state, fetchedAt: Date.now() };
     return state;
   } catch {
     return "unknown";
   }
 }
 
-/** Get emoji + text for a weather state. */
+/** Get a human-readable label for a weather state. */
 export function weatherLabel(ws: WeatherState): string {
   switch (ws) {
-    case "sunny": return "Sunny";
-    case "partly-cloudy": return "Partly cloudy";
-    case "overcast": return "Overcast";
-    default: return "";
+    case "sunny":
+      return "Sunny";
+    case "partly-cloudy":
+      return "Partly cloudy";
+    case "overcast":
+      return "Overcast";
+    default:
+      return "";
   }
 }
 
+/** Get an emoji glyph for a weather state. */
 export function weatherEmoji(ws: WeatherState): string {
   switch (ws) {
-    case "sunny": return "\u2600\uFE0F";
-    case "partly-cloudy": return "\u26C5";
-    case "overcast": return "\u2601\uFE0F";
-    default: return "";
+    case "sunny":
+      return "\u2600\uFE0F";
+    case "partly-cloudy":
+      return "\u26C5";
+    case "overcast":
+      return "\u2601\uFE0F";
+    default:
+      return "";
   }
 }

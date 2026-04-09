@@ -2,7 +2,18 @@
  * Lucide icon rendering — only imports the icons we use.
  */
 
-import { createIcons, MapPin, Play, Pause, Search, Sun, Moon, SunMoon, Navigation, Share2 } from "lucide";
+import {
+  createIcons,
+  MapPin,
+  Moon,
+  Navigation,
+  Pause,
+  Play,
+  Search,
+  Share2,
+  Sun,
+  SunMoon,
+} from "lucide";
 
 const usedIcons = { MapPin, Play, Pause, Search, Sun, Moon, SunMoon, Navigation, Share2 };
 

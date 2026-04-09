@@ -26,9 +26,9 @@
             <a href="/" class="brand">sunny-pint.co.uk</a>
           </div>
           <div class="header-center">
-            <button id="btn-locate" title="Use GPS location"></button>
+            <button type="button" id="btn-locate" title="Use GPS location"></button>
             <span id="location-label">Loading...</span>
-            <button id="btn-search" title="Search location"></button>
+            <button type="button" id="btn-search" title="Search location"></button>
           </div>
           <div class="header-right">
             <div class="theme-select-wrap">
@@ -55,19 +55,20 @@
             <canvas id="arc-canvas" height="110"></canvas>
             <div class="arc-controls">
               <div class="arc-left">
-                <button id="btn-play">
+                <button type="button" id="btn-play">
                   <span id="play-icon"></span>
                 </button>
                 <span id="time-display">12:00</span>
-                <button id="btn-now" title="Reset to now">Now</button>
+                <button type="button" id="btn-now" title="Reset to now">Now</button>
               </div>
               <div class="arc-right">
                 <span id="weather-badge" class="weather-badge"></span>
-                <button id="btn-share" title="Share"></button>
-                <button id="btn-directions" title="Get directions"></button>
-                <button id="btn-date">Today</button>
+                <button type="button" id="btn-share" title="Share"></button>
+                <button type="button" id="btn-directions" title="Get directions"></button>
+                <button type="button" id="btn-date">Today</button>
               </div>
               <input type="date" id="date-input" />
+            </div>
           </div>
 
           <!-- Pub info card (selected pub details) -->
@@ -93,7 +94,7 @@
             <input id="pub-search" type="search" placeholder="Search pubs..." />
           </div>
           <div class="filter-chips">
-            <button id="filter-open" class="filter-chip">Open now</button>
+            <button type="button" id="filter-open" class="filter-chip">Open now</button>
           </div>
           <ul id="pub-list"></ul>
         </section>

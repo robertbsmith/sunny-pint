@@ -1,10 +1,12 @@
 /**
- * Pub list rendering and selection.
+ * Pub list — search, filter, distance sort, click selection.
  */
 
-import { state, selectedPub } from "./state";
-import type { Pub } from "./types";
+import { googleMapsUrl, PUB_LIST_MAX } from "./config";
+import { haversineM } from "./geo";
 import { parseHours } from "./hours";
+import { state } from "./state";
+import type { Pub } from "./types";
 
 let listEl: HTMLUListElement;
 let searchEl: HTMLInputElement;
@@ -12,6 +14,7 @@ let filterOpenEl: HTMLButtonElement;
 let filterOpen = false;
 let onSelect: ((pub: Pub) => void) | null = null;
 
+/** Initialise the pub list. Pass a callback fired when a pub is clicked. */
 export function initPubList(selectCallback: (pub: Pub) => void): void {
   listEl = document.getElementById("pub-list") as HTMLUListElement;
   searchEl = document.getElementById("pub-search") as HTMLInputElement;
@@ -26,7 +29,7 @@ export function initPubList(selectCallback: (pub: Pub) => void): void {
   });
 }
 
-/** Compute distance from user location and sort pubs. */
+/** Compute distance from a location to every pub and re-sort the list. */
 export function sortByDistance(lat: number, lng: number): void {
   for (const pub of state.pubs) {
     pub.distance = haversineM(lat, lng, pub.lat, pub.lng);
@@ -35,7 +38,7 @@ export function sortByDistance(lat: number, lng: number): void {
   renderList();
 }
 
-/** Render the pub list from current state. */
+/** Render the pub list from current state, applying search and filters. */
 export function renderList(): void {
   const query = searchEl.value.toLowerCase().trim();
   let filtered = query
@@ -49,8 +52,7 @@ export function renderList(): void {
     });
   }
 
-  // Limit to 100 for DOM performance.
-  const shown = filtered.slice(0, 100);
+  const shown = filtered.slice(0, PUB_LIST_MAX);
 
   listEl.innerHTML = "";
   for (const pub of shown) {
@@ -59,15 +61,14 @@ export function renderList(): void {
     li.setAttribute("aria-selected", pub.id === state.selectedPubId ? "true" : "false");
 
     const dist = pub.distance != null ? formatDistance(pub.distance) : "";
-    const query = encodeURIComponent(pub.name);
-    const mapsUrl = `https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`;
+    const mapsUrl = googleMapsUrl(pub.name, pub.lat, pub.lng);
 
     const hours = parseHours(pub.opening_hours);
     let hoursHtml = "";
     if (hours) {
       const cls = hours.isOpen ? "status-open" : "status-closed";
       const parts = [`<span class="${cls}">${hours.statusLabel}</span>`];
-      if (hours.nextChangeLabel) parts.push(hours.nextChangeLabel);
+      if (hours.nextChangeLabel) parts.push(escapeHtml(hours.nextChangeLabel));
       hoursHtml = `<div class="pub-meta">${parts.join(" · ")}</div>`;
     } else if (pub.opening_hours) {
       hoursHtml = `<div class="pub-meta">${escapeHtml(pub.opening_hours)}</div>`;
@@ -92,7 +93,7 @@ export function renderList(): void {
   }
 }
 
-/** Update selected state on list items without full re-render. */
+/** Update selected state on list items without a full re-render. */
 function updateSelection(): void {
   for (const li of listEl.children) {
     const el = li as HTMLElement;
@@ -105,26 +106,14 @@ function updateSelection(): void {
 }
 
 function formatDistance(metres: number): string {
-  if (metres < 1000) {
-    return `${Math.round(metres)}m`;
-  }
+  if (metres < 1000) return `${Math.round(metres)}m`;
   return `${(metres / 1000).toFixed(1)}km`;
 }
 
-function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180;
-}
-
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
