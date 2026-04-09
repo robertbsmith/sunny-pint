@@ -124,7 +124,7 @@ function updatePubInfo(pub: Pub): void {
   document.getElementById("pub-info-links")!.innerHTML = links.join(" · ");
 }
 
-function setLocation(lat: number, lng: number): void {
+function setLocation(lat: number, lng: number, opts: { keepPub?: boolean } = {}): void {
   state.userLat = lat;
   state.userLng = lng;
   sortByDistance(lat, lng);
@@ -133,9 +133,12 @@ function setLocation(lat: number, lng: number): void {
   fetchWeather(lat, lng);
 
   if (state.pubs.length > 0) {
-    if (!state.selectedPubId) {
-      state.selectedPubId = state.pubs[0].id;
-      onPubSelected(state.pubs[0]);
+    // Auto-select the closest pub on every location change unless explicitly
+    // asked to keep the current pub (e.g., when ?pub= URL param specified one).
+    if (!opts.keepPub) {
+      const closest = state.pubs[0]!;
+      state.selectedPubId = closest.id;
+      onPubSelected(closest);
     }
     renderList();
   }
@@ -217,13 +220,12 @@ async function init(): Promise<void> {
     const urlPub = urlState.pubId ? state.pubs.find((p) => p.id === urlState.pubId) : null;
 
     if (urlPub) {
-      // Set pub ID first so setLocation doesn't auto-select a different pub.
+      // URL specified a pub — use it as the centre and keep it selected.
       state.selectedPubId = urlPub.id;
-      setLocation(urlPub.lat, urlPub.lng);
+      setLocation(urlPub.lat, urlPub.lng, { keepPub: true });
       const label = urlState.query || "Norwich";
       document.getElementById("location-label")!.textContent = `Pubs near ${label}`;
       if (urlState.query) setLocationQuery(urlState.query);
-      renderList();
       await onPubSelected(urlPub);
     } else if (urlState.query) {
       // Search term but no pub — geocode and sort.

@@ -119,10 +119,24 @@ def osgb_to_wgs_rings(geom):
     return rings
 
 
-def load_parcels_near_pubs(pubs: list[dict]) -> tuple | None:
-    """Load INSPIRE parcels near pubs from the GeoPackage (fast R-tree queries).
+# Map area names to their primary INSPIRE GML filenames for fast loading.
+# Used as a shortcut when the full inspire.gpkg isn't built yet.
+AREA_GML_MAP = {
+    "norwich": ["Norwich_City_Council.gml", "Broadland_District_Council.gml", "South_Norfolk_Council.gml"],
+    "bristol": ["Bristol_City_Council.gml"],
+    "london": [],  # too many boroughs — needs the GeoPackage
+    "edinburgh": [],  # Scotland — not in INSPIRE
+    "cardiff": ["Cardiff_Council.gml"],
+}
 
-    Falls back to individual GML files if GeoPackage doesn't exist.
+
+def load_parcels_near_pubs(pubs: list[dict], area_name: str | None = None) -> tuple | None:
+    """Load INSPIRE parcels near pubs.
+
+    Strategy:
+    1. If inspire.gpkg exists, use it (fast R-tree, works for any area).
+    2. Otherwise if area has a known GML mapping, load those files directly.
+    3. Otherwise warn and skip.
     Returns (STRtree, parcels_list) or None.
     """
     # Build pub points in OSGB.
@@ -141,9 +155,47 @@ def load_parcels_near_pubs(pubs: list[dict]) -> tuple | None:
 
     if INSPIRE_GPKG.exists():
         return _load_from_gpkg(pub_points_osgb, pub_tree, BUF)
-    else:
-        print(f"  WARNING: {INSPIRE_GPKG} not found. Run: uv run python scripts/build_inspire_gpkg.py")
+
+    # Fast path: load specific GML files for known areas.
+    area_key = (area_name or "").lower()
+    if area_key in AREA_GML_MAP and AREA_GML_MAP[area_key]:
+        gml_names = AREA_GML_MAP[area_key]
+        print(f"  Fast path: loading {len(gml_names)} GML files for {area_name}")
+        return _load_from_gml_files(gml_names, pub_tree, BUF)
+
+    print(f"  WARNING: {INSPIRE_GPKG} not found. Run: uv run python scripts/build_inspire_gpkg.py")
+    return None
+
+
+def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
+    """Load parcels from a small set of named GML files (fast path)."""
+    import fiona
+
+    parcels = []
+    for name in gml_names:
+        path = INSPIRE_DIR / name
+        if not path.exists():
+            print(f"    {name}: not found, skipping")
+            continue
+        try:
+            with fiona.open(str(path)) as src:
+                for feat in src:
+                    geom = shape(feat["geometry"])
+                    if geom.is_empty or not geom.is_valid:
+                        continue
+                    nearby = pub_tree.query(geom.buffer(buf))
+                    if len(nearby) == 0:
+                        continue
+                    prepare(geom)
+                    parcels.append(geom)
+            print(f"    {name}: ok ({len(parcels)} parcels so far)", flush=True)
+        except Exception as e:
+            print(f"    {name}: ERROR {e}")
+
+    print(f"  {len(parcels)} parcels near pubs from {len(gml_names)} files")
+    if not parcels:
         return None
+    return STRtree(parcels), parcels
 
 
 def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
@@ -226,7 +278,7 @@ def main():
     pubs = json.loads(PUBS_IN.read_text())
     print(f"  {len(pubs)} pubs loaded")
 
-    result = load_parcels_near_pubs(pubs)
+    result = load_parcels_near_pubs(pubs, area_name=area.name.lower())
 
     if result:
         parcel_tree, all_parcels = result
