@@ -41,39 +41,39 @@ pipeline: merge-pubs download-inspire build-inspire-gpkg build-gpkg measure-heig
 
 # Extract pubs from OSM
 merge-pubs:
-    uv run python scripts/merge_pubs.py --area {{area}}
+    uv run --project scripts python scripts/merge_pubs.py --area {{area}}
 
 # Download all INSPIRE Land Registry plot data (England & Wales)
 download-inspire:
-    uv run python scripts/download_inspire.py
+    uv run --project scripts python scripts/download_inspire.py
 
 # Convert downloaded INSPIRE GML files into one indexed GeoPackage
 build-inspire-gpkg:
-    uv run python scripts/build_inspire_gpkg.py
+    uv run --project scripts python scripts/build_inspire_gpkg.py
 
 # Compute terrain horizon profiles for pubs (needs DTM from measure-heights)
 compute-horizons:
-    uv run python scripts/compute_horizons.py --area {{area}}
+    uv run --project scripts python scripts/compute_horizons.py --area {{area}}
 
 # Match pubs to Land Registry plots, compute outdoor areas → public/data/pubs.json
 match-plots:
-    uv run python scripts/match_plots.py --area {{area}}
+    uv run --project scripts python scripts/match_plots.py --area {{area}}
 
 # Extract buildings + roads from England .osm.pbf → GeoPackage
 build-gpkg:
-    uv run python scripts/build_gpkg.py --area {{area}}
+    uv run --project scripts python scripts/build_gpkg.py --area {{area}}
 
 # Sample building heights from LiDAR DSM/DTM
 measure-heights:
-    uv run python scripts/measure_heights.py --area {{area}}
+    uv run --project scripts python scripts/measure_heights.py --area {{area}}
 
 # Generate individual vector tile files from buildings with heights
 generate-tiles:
-    uv run python scripts/generate_tiles.py --area {{area}}
+    uv run --project scripts python scripts/generate_tiles.py --area {{area}}
 
 # Download EA LiDAR DSM + DTM tiles for Norwich area
 download-lidar:
-    uv run python scripts/download_lidar.py
+    uv run --project scripts python scripts/download_lidar.py
 
 # ── Utilities ─────────────────────────────────────────────────────────
 
