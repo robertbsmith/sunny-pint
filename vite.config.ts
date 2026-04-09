@@ -27,6 +27,12 @@ export default defineConfig({
         // very next page load — no second visit needed for the SEO content.
         skipWaiting: true,
         clientsClaim: true,
+        // Drop outdated precache entries when the new SW activates.
+        // Without this, old asset hashes linger in the SW cache after a
+        // deploy, and returning users hit "Refused to apply style: MIME
+        // text/html" errors when the old hash 404s and the SPA fallback
+        // returns HTML in its place.
+        cleanupOutdatedCaches: true,
         // Don't precache HTML — the static landing pages we generate
         // (/norwich/index.html etc.) and the per-pub Pages Function (PR #2)
         // are network-first via runtimeCaching, not precached. Precaching
