@@ -232,15 +232,31 @@ export interface OgCardOptions {
   tileCache?: Map<string, string>;
   /** Tagline shown in the footer. */
   tagline?: string;
+  /** Render the homepage variant: brand/tagline in the left column instead
+   *  of pub identity + score. The porthole still renders the supplied pub
+   *  so the card looks like the real product, but the pub name is never
+   *  shown — it's just representative geometry. */
+  home?: boolean;
 }
 
 export function renderOgCard(opts: OgCardOptions): string {
-  const { pub, buildings, sun, tileCache } = opts;
+  const { pub, buildings, sun, tileCache, home } = opts;
   const tagline = opts.tagline ?? "Find your sunny pint";
   const score = pub.sun?.score;
-  const tier = tierStyle(score);
+  // Home variant always uses the top "Sun trap" tier so the brand colours
+  // come through regardless of which pub we picked for the porthole.
+  const tier = home ? tierStyle(95) : tierStyle(score);
   const town = pub.town ?? "";
   const bestWindow = pub.sun?.best_window ?? null;
+
+  // Home variant gives the porthole a much bigger square — it's the main
+  // visual on the homepage card, so we let it span almost the full height
+  // between top padding and the footer divider. The left column's max
+  // width shrinks to match.
+  const portholeSize = home ? 500 : PORTHOLE_SIZE;
+  const portholeX = W - PAD - portholeSize;
+  const portholeY = home ? PAD : PORTHOLE_Y;
+  const leftW = portholeX - PAD - 40;
 
   // ── Background ────────────────────────────────────────────────────
   const bg =
@@ -278,33 +294,83 @@ export function renderOgCard(opts: OgCardOptions): string {
   // ── Identity zone ─────────────────────────────────────────────────
   // Layout is sequential top-down: each element's TOP is the previous
   // element's BOTTOM plus a gap. No more baseline arithmetic.
+  //
+  // Home variant: brand headline + tagline instead of pub name + town.
+  // The pub object is still used for the porthole geometry on the right
+  // but its name is never shown. Larger headline (no need to scale for
+  // long pub names) and a two-line sub explaining what the site does.
 
-  // Pub name font size scales down for long names so we never overflow.
-  let pubNameSize = 84;
-  if (pub.name.length > 22) pubNameSize = 68;
-  if (pub.name.length > 32) pubNameSize = 52;
+  let identity: string;
+  let TOWN_BOTTOM: number;
 
-  const PUBNAME_TOP = HEADER_H + 12;
-  const TOWN_GAP = 18;
-  const TOWN_FS = 36;
-  const TOWN_TOP = PUBNAME_TOP + pubNameSize + TOWN_GAP;
-  const TOWN_BOTTOM = TOWN_TOP + TOWN_FS;
+  if (home) {
+    // Sequential top-down: headline (2 lines) → sub (2 lines).
+    const HEAD_FS = 92;
+    const HEAD_LINE_GAP = 6;
+    const SUB_FS = 34;
+    const SUB_LINE_GAP = 8;
+    const HEAD_TO_SUB_GAP = 28;
 
-  const identity =
-    topText(pub.name, LEFT_X, PUBNAME_TOP, pubNameSize, LEFT_W, {
-      family: "serif",
-      weight: 700,
-      fill: tier.ink,
-      letterSpacing: -1,
-    }) +
-    (town
-      ? topText(town, LEFT_X, TOWN_TOP, TOWN_FS, LEFT_W, {
-          family: "sans",
-          weight: 500,
-          fill: tier.ink,
-          fillOpacity: 0.7,
-        })
-      : "");
+    const HEAD1_TOP = HEADER_H + 24;
+    const HEAD2_TOP = HEAD1_TOP + HEAD_FS + HEAD_LINE_GAP;
+    const SUB1_TOP = HEAD2_TOP + HEAD_FS + HEAD_TO_SUB_GAP;
+    const SUB2_TOP = SUB1_TOP + SUB_FS + SUB_LINE_GAP;
+
+    TOWN_BOTTOM = SUB2_TOP + SUB_FS;
+
+    identity =
+      topText("Sunny beer", LEFT_X, HEAD1_TOP, HEAD_FS, leftW, {
+        family: "serif",
+        weight: 700,
+        fill: tier.ink,
+        letterSpacing: -1.5,
+      }) +
+      topText("gardens", LEFT_X, HEAD2_TOP, HEAD_FS, leftW, {
+        family: "serif",
+        weight: 700,
+        fill: tier.ink,
+        letterSpacing: -1.5,
+      }) +
+      topText("Real-time shadow maps", LEFT_X, SUB1_TOP, SUB_FS, leftW, {
+        family: "sans",
+        weight: 500,
+        fill: tier.ink,
+        fillOpacity: 0.75,
+      }) +
+      topText("for UK pub gardens", LEFT_X, SUB2_TOP, SUB_FS, leftW, {
+        family: "sans",
+        weight: 500,
+        fill: tier.ink,
+        fillOpacity: 0.75,
+      });
+  } else {
+    // Pub name font size scales down for long names so we never overflow.
+    let pubNameSize = 84;
+    if (pub.name.length > 22) pubNameSize = 68;
+    if (pub.name.length > 32) pubNameSize = 52;
+
+    const PUBNAME_TOP = HEADER_H + 12;
+    const TOWN_GAP = 18;
+    const TOWN_FS = 36;
+    const TOWN_TOP = PUBNAME_TOP + pubNameSize + TOWN_GAP;
+    TOWN_BOTTOM = TOWN_TOP + TOWN_FS;
+
+    identity =
+      topText(pub.name, LEFT_X, PUBNAME_TOP, pubNameSize, LEFT_W, {
+        family: "serif",
+        weight: 700,
+        fill: tier.ink,
+        letterSpacing: -1,
+      }) +
+      (town
+        ? topText(town, LEFT_X, TOWN_TOP, TOWN_FS, LEFT_W, {
+            family: "sans",
+            weight: 500,
+            fill: tier.ink,
+            fillOpacity: 0.7,
+          })
+        : "");
+  }
 
   // ── Score block ───────────────────────────────────────────────────
   // Sequential layout: eyebrow → score line → fact line. Each gap is the
@@ -323,7 +389,7 @@ export function renderOgCard(opts: OgCardOptions): string {
   const FACT_TOP = SCORE_TOP + SCORE_FS + SCORE_TO_FACT_GAP;
 
   let scoreBlock = "";
-  if (score != null) {
+  if (score != null && !home) {
     scoreBlock += topText("SUNNY RATING", LEFT_X, EYEBROW_TOP, EYEBROW_FS, 250, {
       family: "sans",
       weight: 700,
@@ -352,10 +418,10 @@ export function renderOgCard(opts: OgCardOptions): string {
 
   // ── Porthole on the right ─────────────────────────────────────────
   const portholeSvg = renderPortholeSvg(pub, buildings, sun, {
-    size: PORTHOLE_SIZE,
+    size: portholeSize,
     tileCache,
   });
-  const porthole = `<g transform="translate(${PORTHOLE_X},${PORTHOLE_Y})">${unwrapSvg(portholeSvg)}</g>`;
+  const porthole = `<g transform="translate(${portholeX},${portholeY})">${unwrapSvg(portholeSvg)}</g>`;
 
   // ── Footer ────────────────────────────────────────────────────────
   // Footer occupies the bottom FOOTER_H. Divider near the top of the band,
@@ -374,11 +440,13 @@ export function renderOgCard(opts: OgCardOptions): string {
       weight: 600,
       fill: tier.ink,
     }) +
-    `<text x="${W - PAD}" y="${baselineFromTop(FOOTER_TEXT_TOP + 4, URL_FS)}" ` +
-    `font-family="-apple-system, system-ui, sans-serif" font-size="${URL_FS}" font-weight="500" ` +
-    `fill="${tier.ink}" fill-opacity="0.55" text-anchor="end">` +
-    `sunny-pint.co.uk/pub/${escapeXml(pub.slug ?? "")}` +
-    `</text>`;
+    (home
+      ? ""
+      : `<text x="${W - PAD}" y="${baselineFromTop(FOOTER_TEXT_TOP + 4, URL_FS)}" ` +
+        `font-family="-apple-system, system-ui, sans-serif" font-size="${URL_FS}" font-weight="500" ` +
+        `fill="${tier.ink}" fill-opacity="0.55" text-anchor="end">` +
+        `sunny-pint.co.uk/pub/${escapeXml(pub.slug ?? "")}` +
+        `</text>`);
 
   // ── Compose ───────────────────────────────────────────────────────
   return (
