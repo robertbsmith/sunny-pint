@@ -93,11 +93,14 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   const allBuildings = tileResults.flat();
 
   // Deduplicate (tippecanoe can clip features across tile boundaries) and
-  // bbox-filter, while finding the closest centroid to the pub coordinate.
+  // bbox-filter. Pub building is whichever polygon contains the pub point;
+  // fall back to nearest centroid only if no polygon contains it (e.g. the
+  // OSM pub node sits just outside its building footprint).
   const seen = new Set<string>();
   const nearby: Building[] = [];
+  let containingIdx = -1;
   let nearestDist = Infinity;
-  let pubIdx = -1;
+  let nearestIdx = -1;
 
   const south = pub.lat - dlat;
   const north = pub.lat + dlat;
@@ -124,16 +127,38 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
     const idx = nearby.length;
     nearby.push(b);
 
-    // Distance² in metres (anisotropic lat/lng correction).
+    // Point-in-polygon: if the pub point sits inside this building, it's the
+    // pub building. First match wins (tile clipping shouldn't produce overlaps).
+    if (containingIdx === -1 && pointInPolygon(matchLat, matchLng, b.coords)) {
+      containingIdx = idx;
+    }
+
+    // Track nearest centroid as fallback (distance² in metres, anisotropic).
     const dyM = (c[0] - matchLat) * M_PER_DEG_LAT;
     const dxM = (c[1] - matchLng) * M_PER_DEG_LAT * cosLat;
     const d = dyM * dyM + dxM * dxM;
     if (d < nearestDist) {
       nearestDist = d;
-      pubIdx = idx;
+      nearestIdx = idx;
     }
   }
 
   state.buildings = nearby;
-  state.pubBuildingIndex = pubIdx;
+  state.pubBuildingIndex = containingIdx !== -1 ? containingIdx : nearestIdx;
+}
+
+/** Ray-casting point-in-polygon test on a [lat, lng] ring. */
+function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (!a || !b) continue;
+    const [aLat, aLng] = a;
+    const [bLat, bLng] = b;
+    const intersect =
+      aLat > lat !== bLat > lat && lng < ((bLng - aLng) * (lat - aLat)) / (bLat - aLat) + aLng;
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
