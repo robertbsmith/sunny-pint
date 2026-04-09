@@ -340,16 +340,19 @@ a {
 #main {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  /* `flex: 1 0 auto` means: grow to fill available space, never shrink
+     below content, basis = content height. The default `flex: 1` uses
+     basis: 0 which would lock #main to (viewport - header - footer)
+     and overflow long pub-info cards into the footer area. */
+  flex: 1 0 auto;
 }
 
 @media (min-width: 768px) {
   #main {
     flex-direction: row;
-    /* No overflow constraint — let the page grow with content. The
-       footer sits at the natural document bottom; the sidebar uses
-       position: sticky to stay visible while the page scrolls. */
+    /* Don't stretch columns to equal heights — each column has its
+       natural height, and #pubs uses position: sticky to stay visible
+       while the page scrolls. */
     align-items: flex-start;
   }
 }
