@@ -231,9 +231,18 @@ export async function shareSnapshot(): Promise<void> {
   if (navigator.share) {
     try {
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ text: shareText, url: shareUrl, files: [file] });
+        // Critical: when sharing a file we must NOT also pass `url` —
+        // WhatsApp (and others) prioritise the URL, fetch its link
+        // preview, and silently drop the file attachment. Embed the
+        // link inside the text body instead so it still ships as a
+        // clickable line in the caption alongside the image.
+        await navigator.share({
+          text: `${shareText}\n${shareUrl}`,
+          files: [file],
+        });
         return;
       }
+      // Fallback path: target doesn't accept files. Send text + url only.
       await navigator.share({ text: shareText, url: shareUrl });
       return;
     } catch (err) {
