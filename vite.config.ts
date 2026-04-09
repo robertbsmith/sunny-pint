@@ -35,11 +35,14 @@ export default defineConfig({
             },
           },
           {
-            // Cache building vector tiles
+            // Cache building vector tiles. NetworkFirst (not CacheFirst) so a
+            // new pipeline run is picked up on the next visit instead of being
+            // pinned to a stale tile for 30 days.
             urlPattern: /\/data\/tiles\/.+\.pbf$/,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
-              cacheName: "building-tiles",
+              cacheName: "building-tiles-v2",
+              networkTimeoutSeconds: 4,
               expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
             },
           },
@@ -62,11 +65,13 @@ export default defineConfig({
             },
           },
           {
-            // Cache pub/building data
+            // Cache pub data. NetworkFirst so pubs.json updates show up on
+            // the next visit; falls back to cache offline.
             urlPattern: /\/data\/.+\.json$/,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
-              cacheName: "app-data",
+              cacheName: "app-data-v2",
+              networkTimeoutSeconds: 4,
               expiration: { maxEntries: 10, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
