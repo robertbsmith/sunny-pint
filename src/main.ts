@@ -57,8 +57,12 @@ function updateScene(): void {
 }
 
 async function onPubSelected(pub: Pub): Promise<void> {
-  // Close mobile drawer.
+  // Close mobile drawer and scroll back to the porthole. Targets both
+  // window and #main so it works whether the page or main is the
+  // scroll container.
   document.getElementById("pubs")?.classList.remove("open");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
   updatePubInfo(pub);
   await loadBuildingsForPub(pub);
   updateScene();

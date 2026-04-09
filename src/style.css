@@ -70,11 +70,19 @@ a {
 #app {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  min-height: 100dvh;
   max-width: 960px;
   margin: 0 auto;
   background: var(--surface);
   box-shadow: 0 0 40px var(--shadow);
+}
+
+@media (min-width: 768px) {
+  /* Desktop: lock to viewport so the sidebar pub list scrolls in place. */
+  #app {
+    height: 100dvh;
+    min-height: 0;
+  }
 }
 
 /* ── Header ──────────────────────────────────────────────────────── */
@@ -333,7 +341,6 @@ a {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
 }
 
 @media (min-width: 768px) {
@@ -351,12 +358,17 @@ a {
   align-items: center;
   padding: 8px 16px 8px;
   flex: 1;
+  /* Fill the viewport above the drawer peek so the porthole still
+     feels full-screen on initial load. Header ≈ 60px, drawer peek = 48px.
+     Footer falls naturally below — user scrolls to reach it. */
+  min-height: calc(100dvh - 108px);
 }
 
 @media (min-width: 768px) {
   #viz {
     justify-content: flex-start;
     padding: 16px 24px 8px;
+    min-height: 0;
   }
 }
 
@@ -837,6 +849,14 @@ html.dark .status-open {
   color: var(--on-surface-variant);
   border-top: 1px solid var(--outline-variant);
   background: var(--surface);
+}
+
+@media (max-width: 767px) {
+  /* Leave clearance below the footer for the peeked pub drawer overlay
+     so the footer's controls aren't hidden when scrolled to the bottom. */
+  #footer {
+    padding-bottom: 60px;
+  }
 }
 
 .footer-attr {
