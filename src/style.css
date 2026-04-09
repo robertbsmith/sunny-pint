@@ -70,19 +70,16 @@ a {
 #app {
   display: flex;
   flex-direction: column;
+  /* min-height (not height) so the page is at least one viewport tall
+     when content is short, but grows with content when content is long.
+     Previously a desktop override locked this to height: 100dvh, which
+     clipped content into the footer area whenever the seo-intro pushed
+     #main below the viewport. */
   min-height: 100dvh;
   max-width: 960px;
   margin: 0 auto;
   background: var(--surface);
   box-shadow: 0 0 40px var(--shadow);
-}
-
-@media (min-width: 768px) {
-  /* Desktop: lock to viewport so the sidebar pub list scrolls in place. */
-  #app {
-    height: 100dvh;
-    min-height: 0;
-  }
 }
 
 /* ── Header ──────────────────────────────────────────────────────── */
