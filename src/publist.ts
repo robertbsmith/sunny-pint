@@ -4,17 +4,26 @@
 
 import { state, selectedPub } from "./state";
 import type { Pub } from "./types";
+import { parseHours } from "./hours";
 
 let listEl: HTMLUListElement;
 let searchEl: HTMLInputElement;
+let filterOpenEl: HTMLButtonElement;
+let filterOpen = false;
 let onSelect: ((pub: Pub) => void) | null = null;
 
 export function initPubList(selectCallback: (pub: Pub) => void): void {
   listEl = document.getElementById("pub-list") as HTMLUListElement;
   searchEl = document.getElementById("pub-search") as HTMLInputElement;
+  filterOpenEl = document.getElementById("filter-open") as HTMLButtonElement;
   onSelect = selectCallback;
 
   searchEl.addEventListener("input", () => renderList());
+  filterOpenEl.addEventListener("click", () => {
+    filterOpen = !filterOpen;
+    filterOpenEl.classList.toggle("active", filterOpen);
+    renderList();
+  });
 }
 
 /** Compute distance from user location and sort pubs. */
@@ -29,9 +38,16 @@ export function sortByDistance(lat: number, lng: number): void {
 /** Render the pub list from current state. */
 export function renderList(): void {
   const query = searchEl.value.toLowerCase().trim();
-  const filtered = query
+  let filtered = query
     ? state.pubs.filter((p) => p.name.toLowerCase().includes(query))
     : state.pubs;
+
+  if (filterOpen) {
+    filtered = filtered.filter((p) => {
+      const h = parseHours(p.opening_hours);
+      return h ? h.isOpen : false;
+    });
+  }
 
   // Limit to 100 for DOM performance.
   const shown = filtered.slice(0, 100);
@@ -47,13 +63,24 @@ export function renderList(): void {
     const query = encodeURIComponent(pub.name);
     const mapsUrl = `https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`;
 
+    const hours = parseHours(pub.opening_hours);
+    let hoursHtml = "";
+    if (hours) {
+      const cls = hours.isOpen ? "status-open" : "status-closed";
+      const parts = [`<span class="${cls}">${hours.statusLabel}</span>`];
+      if (hours.nextChangeLabel) parts.push(hours.nextChangeLabel);
+      hoursHtml = `<div class="pub-meta">${parts.join(" · ")}</div>`;
+    } else if (pub.opening_hours) {
+      hoursHtml = `<div class="pub-meta">${escapeHtml(pub.opening_hours)}</div>`;
+    }
+
     li.innerHTML = `
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span class="pub-name">${escapeHtml(pub.name)}</span>
         ${dist ? `<span class="pub-dist">${dist}</span>` : ""}
       </div>
       ${sunInfo ? `<div class="pub-meta">${sunInfo}</div>` : ""}
-      ${pub.opening_hours ? `<div class="pub-meta">${escapeHtml(pub.opening_hours)}</div>` : ""}
+      ${hoursHtml}
       <a href="${mapsUrl}" target="_blank" rel="noopener" class="pub-maps" onclick="event.stopPropagation()">Directions</a>
     `;
 

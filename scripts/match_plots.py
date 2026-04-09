@@ -28,6 +28,7 @@ DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
 PUBS_OUT = Path(__file__).resolve().parent.parent / "public" / "data" / "pubs.json"
 INSPIRE_DIR = DATA / "inspire"
+INSPIRE_GPKG = DATA / "inspire.gpkg"
 GPKG_PATH = DATA / "buildings.gpkg"
 
 to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True)
@@ -98,18 +99,13 @@ def osgb_to_wgs_rings(geom):
     return rings
 
 
-def load_parcels_near_pubs(pubs: list[dict]) -> STRtree | None:
-    """Load INSPIRE parcels from individual GML files, filtered to those near pubs.
+def load_parcels_near_pubs(pubs: list[dict]) -> tuple | None:
+    """Load INSPIRE parcels near pubs from the GeoPackage (fast R-tree queries).
 
-    Returns an STRtree spatial index of parcels, or None if no GML files found.
+    Falls back to individual GML files if GeoPackage doesn't exist.
+    Returns (STRtree, parcels_list) or None.
     """
-    gml_files = sorted(INSPIRE_DIR.glob("*.gml"))
-    if not gml_files:
-        print(f"  WARNING: no GML files in {INSPIRE_DIR} — skipping plot matching")
-        print(f"  Run: uv run python scripts/download_inspire.py")
-        return None
-
-    # Build a set of pub points in OSGB for fast proximity checking.
+    # Build pub points in OSGB.
     pub_points_osgb = []
     for pub in pubs:
         if pub.get("polygon") and len(pub["polygon"]) > 2:
@@ -121,45 +117,64 @@ def load_parcels_near_pubs(pubs: list[dict]) -> STRtree | None:
         pub_points_osgb.append(ShapelyPoint(x, y))
 
     pub_tree = STRtree(pub_points_osgb)
-
-    # Buffer distance: 50m should catch the parcel containing any pub.
     BUF = 50
 
+    if INSPIRE_GPKG.exists():
+        return _load_from_gpkg(pub_points_osgb, pub_tree, BUF)
+    else:
+        print(f"  WARNING: {INSPIRE_GPKG} not found. Run: uv run python scripts/build_inspire_gpkg.py")
+        return None
+
+
+def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
+    """Load parcels from the INSPIRE GeoPackage using R-tree spatial queries."""
+    import sqlite3 as _sqlite3
+
+    # Query parcels near each pub using the GeoPackage R-tree index.
+    # Compute the union bbox of all pubs (with buffer) for a single query.
+    pub_xs = [p.x for p in pub_points_osgb]
+    pub_ys = [p.y for p in pub_points_osgb]
+    min_x, max_x = min(pub_xs) - buf, max(pub_xs) + buf
+    min_y, max_y = min(pub_ys) - buf, max(pub_ys) + buf
+    print(f"  Querying INSPIRE GeoPackage for parcels in pub area...", flush=True)
+
+    conn = _sqlite3.connect(str(INSPIRE_GPKG))
+
+    # Use R-tree spatial index for fast bbox query.
+    try:
+        rows = conn.execute(
+            "SELECT p.fid, p.geom FROM parcels p "
+            "JOIN rtree_parcels_geom r ON p.fid = r.id "
+            "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+            (min_x, max_x, min_y, max_y),
+        ).fetchall()
+    except _sqlite3.OperationalError:
+        # No R-tree — fall back to full scan (slow).
+        print("  WARNING: no R-tree index, falling back to full scan")
+        rows = conn.execute("SELECT fid, geom FROM parcels").fetchall()
+    conn.close()
+
+    print(f"  {len(rows)} parcels in pub area bbox", flush=True)
+
+    # Parse geometries and filter to those actually near a pub.
     parcels = []
-    total_loaded = 0
-    total_kept = 0
-
-    for i, gml_file in enumerate(gml_files, 1):
-        name = gml_file.stem.replace("_", " ")
+    for fid, blob in rows:
         try:
-            with fiona.open(str(gml_file)) as src:
-                file_count = 0
-                kept = 0
-                for feat in src:
-                    geom = shape(feat["geometry"])
-                    if geom.is_empty or not geom.is_valid:
-                        continue
-                    file_count += 1
+            hl = gpkg_header_len(blob)
+            geom = wkb.loads(blob[hl:])
+            if geom.is_empty or not geom.is_valid:
+                continue
 
-                    # Only keep parcels near a pub.
-                    nearby = pub_tree.query(geom.buffer(BUF))
-                    if len(nearby) == 0:
-                        continue
+            nearby = pub_tree.query(geom.buffer(buf))
+            if len(nearby) == 0:
+                continue
 
-                    prepare(geom)
-                    parcels.append(geom)
-                    kept += 1
-
-                total_loaded += file_count
-                total_kept += kept
-        except Exception as e:
-            print(f"  [{i}/{len(gml_files)}] {name}: ERROR {e}")
+            prepare(geom)
+            parcels.append(geom)
+        except Exception:
             continue
 
-        if i % 25 == 0 or i == len(gml_files):
-            print(f"  [{i}/{len(gml_files)}] {total_kept} parcels near pubs (of {total_loaded} total)", flush=True)
-
-    print(f"  {total_kept} parcels near pubs from {len(gml_files)} files")
+    print(f"  {len(parcels)} parcels near pubs")
     if not parcels:
         return None
 

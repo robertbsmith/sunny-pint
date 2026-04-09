@@ -14,6 +14,9 @@ importers:
       lucide:
         specifier: ^1.7.0
         version: 1.7.0
+      opening_hours:
+        specifier: ^3.12.0
+        version: 3.12.0(typescript@6.0.2)
       pbf:
         specifier: ^4.0.1
         version: 4.0.1
@@ -1220,6 +1223,14 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
+  i18next@25.10.10:
+    resolution: {integrity: sha512-cqUW2Z3EkRx7NqSyywjkgCLK7KLCL6IFVFcONG7nVYIJ3ekZ1/N5jUsihHV6Bq37NfhgtczxJcxduELtjTwkuQ==}
+    peerDependencies:
+      typescript: ^5 || ^6
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
 
@@ -1513,6 +1524,10 @@ packages:
   object.assign@4.1.7:
     resolution: {integrity: sha512-nK28WOo+QIjBkDduTINE4JkF/UJJKyf2EJxvJKfblDpyg0Q+pkOHNTL0Qwy6NP6FhE/EnzV73BxxqcJaXY9anw==}
     engines: {node: '>= 0.4'}
+
+  opening_hours@3.12.0:
+    resolution: {integrity: sha512-8XVwJUyZVIDObb5OF2DoB+WShGL9RVZRKIevgHOqwPeu0acRx5akruOSmXHZZw2qUTqEjbneZG3REcyvr5yHiQ==}
+    engines: {node: '>=12'}
 
   own-keys@1.0.1:
     resolution: {integrity: sha512-qFOyK5PjiWZd+QQIh+1jhdb9LpxTF0qs7Pm8o5QHYZ0M3vKqSqzsZaEB6oWlxZ+q2sJBMI/Ktgd2N5ZwQoRHfg==}
@@ -3288,6 +3303,12 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  i18next@25.10.10(typescript@6.0.2):
+    dependencies:
+      '@babel/runtime': 7.29.2
+    optionalDependencies:
+      typescript: 6.0.2
+
   idb@7.1.1: {}
 
   internal-slot@1.1.0:
@@ -3539,6 +3560,13 @@ snapshots:
       es-object-atoms: 1.1.1
       has-symbols: 1.1.0
       object-keys: 1.1.1
+
+  opening_hours@3.12.0(typescript@6.0.2):
+    dependencies:
+      i18next: 25.10.10(typescript@6.0.2)
+      suncalc: 1.9.0
+    transitivePeerDependencies:
+      - typescript
 
   own-keys@1.0.1:
     dependencies:

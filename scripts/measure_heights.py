@@ -140,7 +140,7 @@ def sample_heights(
 
 
 _last_wcs_time = 0.0
-WCS_DELAY_S = 1.5  # minimum seconds between WCS requests
+WCS_DELAY_S = 0.3  # minimum seconds between WCS requests
 WCS_MAX_RETRIES = 3
 
 

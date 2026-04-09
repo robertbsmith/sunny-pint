@@ -138,10 +138,7 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
     const idx = nearby.length;
     nearby.push(b);
 
-    if (pointInPoly(matchLat, matchLng, b.coords)) {
-      pubIdx = idx;
-    }
-
+    // Find building whose centroid is closest to the pub's centroid.
     const d = (c[0] - matchLat) ** 2 + (c[1] - matchLng) ** 2;
     if (d < nearestDist) {
       nearestDist = d;
@@ -149,10 +146,7 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
     }
   }
 
-  if (pubIdx === -1 && nearestIdx !== -1) {
-    const distM = Math.sqrt(nearestDist) * M_PER_DEG_LAT;
-    if (distM < 20) pubIdx = nearestIdx;
-  }
+  pubIdx = nearestIdx;
 
   state.buildings = nearby;
   state.pubBuildingIndex = pubIdx;

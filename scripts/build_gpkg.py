@@ -40,31 +40,20 @@ class BuildingExtractor(osmium.SimpleHandler):
         self.dst = dst
         self.count = 0
 
-    def way(self, w):
-        tags = dict(w.tags)
-        if "building" not in tags:
-            return
-
+    def _write_building(self, tags, nodes, osm_id):
+        """Write a building polygon to the GeoPackage."""
         s, w_, n_, e = self.bbox
-        nodes = []
-        for n in w.nodes:
-            if not n.location.valid():
-                return
-            nodes.append((n.lon, n.lat))
-
         if len(nodes) < 3:
             return
-
         if not any(s <= lat <= n_ and w_ <= lon <= e for lon, lat in nodes):
             return
-
         if nodes[0] != nodes[-1]:
             nodes.append(nodes[0])
 
         self.dst.write({
             "geometry": {"type": "Polygon", "coordinates": [nodes]},
             "properties": {
-                "osm_id": w.id,
+                "osm_id": osm_id,
                 "building": tags.get("building", "yes"),
                 "name": tags.get("name", ""),
                 "height": tags.get("height", tags.get("building:height", "")),
@@ -74,6 +63,31 @@ class BuildingExtractor(osmium.SimpleHandler):
         self.count += 1
         if self.count % 50000 == 0:
             print(f"  {self.count} buildings...", flush=True)
+
+    def way(self, w):
+        tags = dict(w.tags)
+        if "building" not in tags:
+            return
+        nodes = []
+        for n in w.nodes:
+            if not n.location.valid():
+                return
+            nodes.append((n.lon, n.lat))
+        self._write_building(tags, nodes, w.id)
+
+    def area(self, a):
+        """Handle multipolygon relations (churches, large buildings, etc.)."""
+        tags = dict(a.tags)
+        if "building" not in tags:
+            return
+        # osmium area IDs: ways get id*2, relations get id*2+1
+        osm_id = a.orig_id()
+        try:
+            for outer in a.outer_rings():
+                nodes = [(n.lon, n.lat) for n in outer]
+                self._write_building(tags, nodes, osm_id)
+        except Exception:
+            pass
 
 
 def main():

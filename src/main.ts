@@ -12,6 +12,7 @@ import { initLocation } from "./location";
 import { readURL, writeURL, writeURLDebounced, setLocationQuery } from "./url";
 import { shareSnapshot } from "./share";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
+import { parseHours } from "./hours";
 import SunCalc from "suncalc";
 
 // Norwich default location.
@@ -63,54 +64,63 @@ function updatePubInfo(pub: Pub): void {
   const card = document.getElementById("pub-info")!;
   card.hidden = false;
 
-  document.getElementById("pub-info-name")!.textContent = pub.name;
+  // Name + status.
+  const hours = parseHours(pub.opening_hours);
+  const nameEl = document.getElementById("pub-info-name")!;
+  if (hours) {
+    const cls = hours.isOpen ? "status-open" : "status-closed";
+    nameEl.innerHTML = `${pub.name} <span class="${cls}">${hours.statusLabel}</span>`;
+  } else {
+    nameEl.textContent = pub.name;
+  }
 
-  const brandEl = document.getElementById("pub-info-brand")!;
-  brandEl.textContent = [pub.brand, pub.brewery].filter(Boolean).join(" · ");
+  // Brand + next change.
+  const brandParts = [pub.brand, pub.brewery].filter(Boolean);
+  if (hours?.nextChangeLabel) brandParts.push(hours.nextChangeLabel);
+  document.getElementById("pub-info-brand")!.textContent = brandParts.join(" · ");
 
   // Attribute grid.
-  const attrs: { label: string; value: string | undefined }[] = [
-    { label: "Real ale", value: pub.real_ale },
-    { label: "Food", value: pub.food },
-    { label: "Outdoor", value: pub.outdoor_seating || pub.beer_garden },
-    { label: "Wheelchair", value: pub.wheelchair },
-    { label: "Dogs", value: pub.dog },
-    { label: "WiFi", value: pub.wifi },
-  ];
+  function fmtVal(v: string | undefined): { text: string; cls: string } {
+    if (!v) return { text: "\u2013", cls: "val-unknown" };
+    if (v === "no") return { text: "No", cls: "val-no" };
+    if (v === "limited") return { text: "Limited", cls: "val-limited" };
+    return { text: "Yes", cls: "val-yes" };
+  }
 
-  const grid = document.getElementById("pub-info-grid")!;
-  grid.innerHTML = attrs.map(({ label, value }) => {
-    let display: string;
-    let cls: string;
-    if (!value) {
-      display = "Unknown";
-      cls = "val-unknown";
-    } else if (value === "no" || value === "limited") {
-      display = value === "limited" ? "Limited" : "No";
-      cls = "val-no";
-    } else {
-      display = "Yes";
-      cls = "val-yes";
-    }
-    return `<div class="pub-info-cell"><div class="cell-label">${label}</div><div class="cell-value ${cls}">${display}</div></div>`;
-  }).join("");
+  function cell(label: string, value: string | undefined): string {
+    const v = fmtVal(value);
+    return `<div class="pub-info-cell"><span class="cell-label">${label}</span><span class="cell-value ${v.cls}">${v.text}</span></div>`;
+  }
 
-  // Hours.
+  document.getElementById("pub-info-grid")!.innerHTML =
+    cell("Real ale", pub.real_ale) +
+    cell("Outdoor", pub.outdoor_seating || pub.beer_garden) +
+    cell("Food", pub.food) +
+    cell("Dogs", pub.dog) +
+    cell("Wheelchair", pub.wheelchair) +
+    cell("WiFi", pub.wifi);
+
+  // Hours — weekly table or raw string.
   const hoursEl = document.getElementById("pub-info-hours")!;
-  hoursEl.textContent = pub.opening_hours || "";
+  if (hours?.weeklyTable) {
+    hoursEl.innerHTML = `<table class="hours-table">${hours.weeklyTable.map((r) =>
+      `<tr class="${r.isToday ? "hours-today" : ""}"><td>${r.day}</td><td>${r.hours}</td></tr>`
+    ).join("")}</table>`;
+  } else if (pub.opening_hours) {
+    hoursEl.innerHTML = `<span class="cell-label">Hours</span> ${pub.opening_hours}`;
+  } else {
+    hoursEl.innerHTML = `<span class="cell-label">Hours</span> <span class="val-unknown">\u2013</span>`;
+  }
 
   // Links.
   const links: string[] = [];
-  if (pub.phone) {
-    links.push(`<a href="tel:${pub.phone}">${pub.phone}</a>`);
-  }
+  if (pub.phone) links.push(`<a href="tel:${pub.phone}">${pub.phone}</a>`);
   if (pub.website) {
-    const domain = pub.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const domain = pub.website.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     links.push(`<a href="${pub.website}" target="_blank" rel="noopener">${domain}</a>`);
   }
   const query = encodeURIComponent(pub.name);
   links.push(`<a href="https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z" target="_blank" rel="noopener">Directions</a>`);
-
   document.getElementById("pub-info-links")!.innerHTML = links.join(" · ");
 }
 

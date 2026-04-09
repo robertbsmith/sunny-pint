@@ -537,6 +537,35 @@ a {
   border-bottom: 1px solid var(--outline-variant);
 }
 
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.filter-chip {
+  font-size: 0.78rem;
+  padding: 4px 12px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 150ms;
+}
+
+.filter-chip:hover {
+  background: var(--surface-container);
+}
+
+.filter-chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
 #pub-search {
   flex: 1;
   font-size: 0.8125rem;
@@ -627,71 +656,134 @@ a {
 /* ── Pub info card ───────────────────────────────────────────── */
 
 .pub-info {
-  padding: 12px 0;
+  padding: 16px 0;
   width: 100%;
-  max-width: 400px;
 }
 
 .pub-info[hidden] { display: none; }
 
+.pub-info-header {
+  margin-bottom: 12px;
+}
+
 .pub-info-header h2 {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pub-info-brand {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--on-surface-variant);
+  margin-top: 3px;
+}
+
+.status-open {
+  background: #dcfce7;
+  color: #15803d;
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+html.dark .status-open {
+  background: #14532d;
+  color: #86efac;
+}
+
+.status-closed {
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-weight: 600;
+  font-size: 0.7rem;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 .pub-info-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  margin: 10px 0;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--outline-variant);
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
 }
 
 .pub-info-cell {
-  background: var(--surface);
-  padding: 6px 8px;
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--surface-container);
+  border-radius: var(--radius-sm);
 }
 
-.pub-info-cell .cell-label {
-  font-size: 0.65rem;
+.cell-label {
   color: var(--on-surface-variant);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.82rem;
 }
 
-.pub-info-cell .cell-value {
-  font-size: 0.8rem;
-  font-weight: 600;
-  margin-top: 1px;
+.cell-value {
+  font-weight: 700;
+  font-size: 0.82rem;
 }
 
-.pub-info-cell .cell-value.val-yes { color: #16a34a; }
-.pub-info-cell .cell-value.val-no { color: var(--on-surface-variant); opacity: 0.5; }
-.pub-info-cell .cell-value.val-unknown { color: var(--on-surface-variant); opacity: 0.35; }
+.val-yes { color: #16a34a; }
+.val-no { color: var(--on-surface-variant); opacity: 0.6; }
+.val-limited { color: #ca8a04; }
+.val-unknown { color: var(--on-surface-variant); opacity: 0.3; font-weight: 400; }
 
 .pub-info-hours {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--on-surface-variant);
-  margin: 6px 0;
-  line-height: 1.4;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.hours-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  font-size: 0.85rem;
+}
+
+.hours-table td {
+  padding: 5px 8px;
+  border: none;
+}
+
+.hours-table td:first-child {
+  color: var(--on-surface-variant);
+  width: 48px;
+  font-weight: 600;
+}
+
+.hours-table tr.hours-today {
+  background: var(--primary-container);
+}
+
+.hours-table tr.hours-today td {
+  color: var(--on-primary-container);
+  font-weight: 700;
+}
+
+.hours-table tr.hours-today td:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.hours-table tr.hours-today td:last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 .pub-info-links {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
-  margin-top: 6px;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
 }
 
 .pub-info-links a {
