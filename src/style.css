@@ -347,7 +347,10 @@ a {
 @media (min-width: 768px) {
   #main {
     flex-direction: row;
-    overflow: hidden;
+    /* No overflow constraint — let the page grow with content. The
+       footer sits at the natural document bottom; the sidebar uses
+       position: sticky to stay visible while the page scrolls. */
+    align-items: flex-start;
   }
 }
 
@@ -688,10 +691,6 @@ html.dark .sunny-badge--sunny {
     justify-content: flex-start;
     padding: 16px 24px 16px;
     min-height: 0;
-    /* Each column scrolls independently inside the desktop two-column row.
-       Without this, long pub-info cards overflow #main (which has
-       overflow: hidden) and get clipped behind the footer. */
-    overflow-y: auto;
   }
 }
 
@@ -878,8 +877,17 @@ html.dark .sunny-badge--sunny {
 /* Desktop: sidebar */
 @media (min-width: 768px) {
   #pubs {
-    position: static;
-    max-height: none;
+    /* Sticky to the top of the viewport (under the header) so the pub
+       list stays visible while the rest of the page scrolls. The page
+       itself scrolls naturally — when the user scrolls past the
+       porthole into the pub-info card, the sidebar stays put. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    /* Cap at viewport height minus the header so the list scrolls
+       independently inside its own column without ever overflowing the
+       viewport. */
+    max-height: 100dvh;
     transform: none;
     transition: none;
     border-top: none;
@@ -888,8 +896,6 @@ html.dark .sunny-badge--sunny {
     box-shadow: none;
     width: 340px;
     flex: none;
-    /* Same as #viz — scroll inside the column rather than letting the
-       parent #main clip the overflow. */
     overflow-y: auto;
   }
 
