@@ -859,15 +859,15 @@ html.dark .status-open {
   display: inline-flex;
   background: var(--surface-container);
   border-radius: var(--radius-full);
-  padding: 3px;
+  padding: 2px;
   border: 1px solid var(--outline-variant);
 }
 
 .theme-toggle button {
   border: none;
   background: none;
-  padding: 5px 14px;
-  font-size: 0.75rem;
+  padding: 3px 10px;
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--on-surface-variant);
   border-radius: var(--radius-full);
