@@ -1,55 +1,55 @@
 /**
- * Renders an example OG image SVG for design iteration.
- *
- * Uses scripts/lib/og_card.ts which composes the full 1200x630 card by hand
- * with the porthole embedded inline (no satori — its limited SVG support
- * couldn't handle our porthole's clipPath / gradients / filters).
+ * Standalone porthole renderer — for sanity-checking porthole_svg.ts
+ * before integrating with the OG card.
  *
  * Run with:
- *   pnpm tsx scripts/render_og_example.ts
+ *   pnpm tsx scripts/render_porthole_example.ts
  *
  * Output:
- *   public/og-example.svg
+ *   public/porthole-example.svg
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { renderOgCard } from "../functions/_lib/og_card";
-import { bestWindowSunPosition, prefetchPortholeTiles } from "../functions/_lib/porthole_svg";
 import { loadBuildingsForPub } from "./lib/tiles_node";
+import {
+  bestWindowSunPosition,
+  prefetchPortholeTiles,
+  renderPortholeSvg,
+} from "../functions/_lib/porthole_svg";
 import type { Pub } from "../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const PUBS_JSON = join(ROOT, "public", "data", "pubs.json");
-const OUT = join(ROOT, "public", "og-example.svg");
+const OUT = join(ROOT, "public", "porthole-example.svg");
 
 async function main(): Promise<void> {
   const pubs = JSON.parse(readFileSync(PUBS_JSON, "utf-8")) as Pub[];
 
-  // The Racecourse — top-rated Norwich pub.
+  // Pick The Racecourse — the highest-scoring Norwich pub.
   const pub = pubs.find((p) => p.slug === "the-racecourse-norwich");
   if (!pub) {
     console.error("ERROR: the-racecourse-norwich not found in pubs.json");
     process.exit(1);
   }
 
-  console.log(`Pub: ${pub.name}, ${pub.town}`);
-  console.log(`Sunny rating: ${pub.sun?.score} (${pub.sun?.label}), best ${pub.sun?.best_window}`);
+  console.log(`Pub: ${pub.name} (${pub.lat}, ${pub.lng})`);
+  console.log(`Sunny rating: ${pub.sun?.score ?? "n/a"}  best window: ${pub.sun?.best_window ?? "n/a"}`);
 
   const buildings = loadBuildingsForPub(pub);
-  console.log(`Buildings: ${buildings.length}`);
+  console.log(`Loaded ${buildings.length} buildings`);
 
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
-  console.log(`Sun: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
+  console.log(`Sun position: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
   console.log("Fetching CARTO tiles…");
   const tileCache = await prefetchPortholeTiles(pub);
   console.log(`Got ${tileCache.size} tiles`);
 
-  const svg = renderOgCard({ pub, buildings, sun, tileCache });
+  const svg = renderPortholeSvg(pub, buildings, sun, { size: 480, tileCache });
   writeFileSync(OUT, svg);
   console.log(`Wrote ${OUT} (${(svg.length / 1024).toFixed(1)} KB)`);
 }

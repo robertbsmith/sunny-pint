@@ -166,6 +166,10 @@ interface PageMeta {
   spPub: string;
   jsonLd: string[];
   seoIntro: string;
+  /** Path to the og:image. Defaults to /banner.png if absent. */
+  ogImagePath?: string;
+  /** Mime type override for og:image (so we can declare image/svg+xml). */
+  ogImageType?: string;
 }
 
 /**
@@ -228,6 +232,28 @@ function applyTemplate(template: string, meta: PageMeta): string {
     /<meta name="twitter:description" content="[^"]*"\s*\/?>/,
     `<meta name="twitter:description" content="${htmlEscape(meta.description)}" />`,
   );
+
+  // og:image / twitter:image — point at a custom URL when the page supplies
+  // one (per-pub OG card via the /og/pub/<slug>.svg Function), otherwise
+  // leave the default banner.png in place.
+  if (meta.ogImagePath) {
+    const ogImageUrl = `${SITE_URL}${meta.ogImagePath}`;
+    out = out.replace(
+      /<meta property="og:image" content="[^"]*"\s*\/?>/,
+      `<meta property="og:image" content="${ogImageUrl}" />`,
+    );
+    out = out.replace(
+      /<meta name="twitter:image" content="[^"]*"\s*\/?>/,
+      `<meta name="twitter:image" content="${ogImageUrl}" />`,
+    );
+    // Insert image:type hint after og:image if it isn't already there.
+    if (meta.ogImageType && !/og:image:type/.test(out)) {
+      out = out.replace(
+        /(<meta property="og:image" content="[^"]*"\s*\/?>)/,
+        `$1\n    <meta property="og:image:type" content="${meta.ogImageType}" />`,
+      );
+    }
+  }
 
   // JSON-LD blocks before </head>.
   if (meta.jsonLd.length > 0) {
@@ -498,5 +524,9 @@ export function renderPubPage(template: string, ctx: PubContext): string {
     spPub: slug,
     jsonLd: [breadcrumbListJsonLd(breadcrumbs), pubJsonLd],
     seoIntro,
+    // Per-pub OG card served by functions/og/pub/[slug].ts. Each pub gets
+    // a unique social-share preview with its own porthole + score + name.
+    ogImagePath: `/og/pub/${slug}.svg`,
+    ogImageType: "image/svg+xml",
   });
 }
