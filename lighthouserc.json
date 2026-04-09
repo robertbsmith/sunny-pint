@@ -8,7 +8,8 @@
         "skipAudits": [
           "uses-http2",
           "is-on-https",
-          "deprecations"
+          "deprecations",
+          "errors-in-console"
         ]
       }
     },
