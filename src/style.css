@@ -350,10 +350,13 @@ a {
 @media (min-width: 768px) {
   #main {
     flex-direction: row;
-    /* Don't stretch columns to equal heights — each column has its
-       natural height, and #pubs uses position: sticky to stay visible
-       while the page scrolls. */
     align-items: flex-start;
+    /* Absolute-position the sidebar inside #main (see #pubs override
+       below) so its long pub list doesn't push #main's height past
+       #viz. We reserve the 340px slot via padding-right and the
+       sidebar fills it. */
+    position: relative;
+    padding-right: 340px;
   }
 }
 
@@ -880,24 +883,22 @@ html.dark .sunny-badge--sunny {
 /* Desktop: sidebar */
 @media (min-width: 768px) {
   #pubs {
-    /* Sticky to the top of the viewport (under the header) so the pub
-       list stays visible while the rest of the page scrolls. The page
-       itself scrolls naturally — when the user scrolls past the
-       porthole into the pub-info card, the sidebar stays put. */
-    position: sticky;
+    /* Absolutely positioned inside #main so it takes EXACTLY #main's
+       height (which is #viz's height since #pubs is out of normal
+       flex flow) and never makes the row taller than the actual
+       content. Internal scroll handles long pub lists. */
+    position: absolute;
     top: 0;
-    align-self: flex-start;
-    /* Cap at viewport height minus the header so the list scrolls
-       independently inside its own column without ever overflowing the
-       viewport. */
-    max-height: 100dvh;
+    right: 0;
+    bottom: 0;
+    width: 340px;
+    max-height: none;
     transform: none;
     transition: none;
     border-top: none;
     border-left: 1px solid var(--outline-variant);
     border-radius: 0;
     box-shadow: none;
-    width: 340px;
     flex: none;
     overflow-y: auto;
   }
