@@ -12,7 +12,7 @@ import {
   USER_AGENT,
 } from "./config";
 import { parseHours } from "./hours";
-import { initIcons, updateThemeIcon } from "./icons";
+import { initIcons } from "./icons";
 import { initLocation } from "./location";
 import { initPubList, renderList, sortByDistance } from "./publist";
 import { computeShadows, isTerrainOccluded } from "./shadow";
@@ -204,7 +204,6 @@ function applyTheme(theme: Theme): void {
 
 function setTheme(theme: Theme): void {
   applyTheme(theme);
-  updateThemeIcon();
   updateScene();
 }
 
@@ -252,7 +251,7 @@ async function init(): Promise<void> {
       state.selectedPubId = urlPub.id;
       setLocation(urlPub.lat, urlPub.lng, { keepPub: true });
       const label = urlState.query || "Norwich";
-      document.getElementById("location-label")!.textContent = `Pubs near ${label}`;
+      document.getElementById("location-label")!.textContent = label;
       if (urlState.query) setLocationQuery(urlState.query);
       await onPubSelected(urlPub);
     } else if (urlState.query) {
@@ -272,56 +271,73 @@ async function init(): Promise<void> {
       } catch {
         setLocation(DEFAULT_LAT, DEFAULT_LNG);
       }
-      document.getElementById("location-label")!.textContent = `Pubs near ${urlState.query}`;
+      document.getElementById("location-label")!.textContent = urlState.query;
       setLocationQuery(urlState.query);
     } else if (urlState.lat != null && urlState.lng != null) {
       setLocation(urlState.lat, urlState.lng);
       document.getElementById("location-label")!.textContent =
-        `Pubs near ${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
+        `${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
     } else {
       // No URL params — default to Norwich, try GPS in background.
       setLocation(DEFAULT_LAT, DEFAULT_LNG);
       const labelEl = document.getElementById("location-label");
-      if (labelEl) labelEl.textContent = `Pubs near ${DEFAULT_LOCATION_NAME}`;
+      if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
       setLocationQuery(DEFAULT_LOCATION_NAME);
 
       if (navigator.geolocation) {
-        if (labelEl) labelEl.textContent = "Finding your location...";
+        if (labelEl) labelEl.textContent = "Locating...";
         navigator.geolocation.getCurrentPosition(
           async (pos) => {
             const { latitude, longitude } = pos.coords;
             setLocation(latitude, longitude);
             try {
               const resp = await fetch(
-                `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`,
+                `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`,
                 { headers: { "User-Agent": USER_AGENT } },
               );
               const data = (await resp.json()) as { address?: Record<string, string> };
+              const addr = data.address ?? {};
+              const local =
+                addr.neighbourhood ||
+                addr.suburb ||
+                addr.quarter ||
+                addr.hamlet ||
+                addr.city_district;
+              const main = addr.city || addr.town || addr.village || addr.municipality;
               const name =
-                data.address?.city ||
-                data.address?.town ||
-                data.address?.village ||
-                data.address?.suburb ||
-                "your location";
-              if (labelEl) labelEl.textContent = `Pubs near ${name}`;
+                local && main && local !== main
+                  ? `${local}, ${main}`
+                  : local || main || "your location";
+              if (labelEl) labelEl.textContent = name;
               setLocationQuery(name);
             } catch {
-              if (labelEl) labelEl.textContent = "Pubs near you";
+              if (labelEl) labelEl.textContent = "Your location";
             }
             writeURL();
           },
           () => {
-            if (labelEl) labelEl.textContent = `Pubs near ${DEFAULT_LOCATION_NAME}`;
+            if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
           },
           { timeout: 5000, maximumAge: 60000 },
         );
       }
     }
 
-    // Theme select.
-    document.getElementById("theme-select")!.addEventListener("change", (e) => {
-      setTheme((e.target as HTMLSelectElement).value as Theme);
+    // Theme toggle in footer.
+    const themeButtons = document.querySelectorAll<HTMLButtonElement>(".theme-toggle button");
+    function updateThemeButtons(): void {
+      const current = getStoredTheme();
+      themeButtons.forEach((b) => {
+        b.classList.toggle("active", b.dataset.theme === current);
+      });
+    }
+    themeButtons.forEach((b) => {
+      b.addEventListener("click", () => {
+        setTheme((b.dataset.theme as Theme) ?? "system");
+        updateThemeButtons();
+      });
     });
+    updateThemeButtons();
 
     // Now button — reset time to current.
     document.getElementById("btn-now")!.addEventListener("click", () => {

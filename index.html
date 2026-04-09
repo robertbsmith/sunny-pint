@@ -21,27 +21,33 @@
       <!-- Header -->
       <header id="header">
         <div class="header-inner">
-          <div class="header-left">
+          <a href="/" class="brand">
             <img src="/icon.svg" alt="" class="header-logo" width="28" height="28" />
-            <a href="/" class="brand">sunny-pint.co.uk</a>
-          </div>
-          <div class="header-center">
-            <button type="button" id="btn-locate" title="Use GPS location"></button>
+            <span class="brand-text">sunny-pint.co.uk</span>
+          </a>
+          <button type="button" id="btn-location" class="location-button" title="Change location">
             <span id="location-label">Loading...</span>
-            <button type="button" id="btn-search" title="Search location"></button>
-          </div>
-          <div class="header-right">
-            <div class="theme-select-wrap">
-              <span id="theme-icon"></span>
-              <select id="theme-select" title="Theme">
-                <option value="system">Auto</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
-          </div>
+            <span class="location-chevron">▾</span>
+          </button>
         </div>
       </header>
+
+      <!-- Location overlay (opened by clicking the location button) -->
+      <div id="location-overlay" hidden>
+        <div class="location-overlay-backdrop"></div>
+        <div class="location-overlay-content">
+          <button type="button" class="location-overlay-close" aria-label="Close">&times;</button>
+          <h3>Change location</h3>
+          <button type="button" id="btn-locate" class="location-gps-btn">
+            <span id="gps-icon"></span>
+            Use my location
+          </button>
+          <div class="location-search-wrap">
+            <input type="search" id="location-search-input" placeholder="Postcode, address or place..." autocomplete="off" />
+            <ul id="location-search-results"></ul>
+          </div>
+        </div>
+      </div>
 
       <!-- Main content -->
       <main id="main">
@@ -107,6 +113,11 @@
           &copy; <a href="https://carto.com/attributions">CARTO</a> ·
           <a href="/how-it-works.html">How it works</a> ·
           <a href="/attribution.html">Attribution &amp; licences</a>
+        </div>
+        <div class="theme-toggle" role="group" aria-label="Theme">
+          <button type="button" data-theme="light" title="Light theme">Light</button>
+          <button type="button" data-theme="system" title="Match system theme">Auto</button>
+          <button type="button" data-theme="dark" title="Dark theme">Dark</button>
         </div>
       </footer>
 

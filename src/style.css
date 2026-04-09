@@ -90,27 +90,31 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  gap: 16px;
+  gap: 12px;
 }
 
-.header-left {
+.brand {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+  font-family: Georgia, serif;
+  white-space: nowrap;
+  text-decoration: none;
+  flex-shrink: 0;
 }
 
-.header-center {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+.brand-text {
+  display: none;
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+@media (min-width: 480px) {
+  .brand-text {
+    display: inline;
+  }
 }
 
 .header-logo {
@@ -123,14 +127,41 @@ a {
   white-space: nowrap;
 }
 
-.brand {
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--primary);
-  font-family: Georgia, serif;
+.location-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  transition: background 150ms;
+}
+
+.location-button:hover {
+  background: var(--surface-container-high);
+}
+
+.location-button #location-label {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  text-decoration: none;
+}
+
+.location-chevron {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 #kofi-link {
@@ -164,145 +195,133 @@ a {
   opacity: 0.7;
 }
 
-#btn-locate {
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: var(--surface-container);
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 150ms;
-}
+/* ── Location overlay ────────────────────────────────────────────── */
 
-#btn-locate:hover {
-  background: var(--surface-container-high);
-}
-
-.theme-select-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: var(--surface-container);
-  border-radius: var(--radius-full);
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  transition: background 150ms;
-}
-
-.theme-select-wrap:hover {
-  background: var(--surface-container-high);
-}
-
-.theme-select-wrap #theme-icon {
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-}
-
-#theme-select {
-  position: absolute;
+#location-overlay {
+  position: fixed;
   inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  border: none;
-  font-size: 0.875rem;
-}
-
-#location-label {
-  font-size: 0.8125rem;
-  color: var(--on-surface-variant);
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#btn-search {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--radius-full);
-  background: none;
-  color: var(--on-surface-variant);
-  cursor: pointer;
+  z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  flex-shrink: 0;
-  opacity: 0.6;
-  transition: opacity 150ms;
+  padding-top: 80px;
 }
 
-#btn-search:hover {
-  opacity: 1;
-}
-
-/* ── Location search ─────────────────────────────────────────────── */
-
-#location-search {
-  flex: 1;
-  position: relative;
-  min-width: 0;
-}
-
-#location-search input {
-  width: 100%;
-  font-size: 0.8125rem;
-  padding: 6px 12px;
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-full);
-  background: var(--surface-container);
-  color: var(--on-surface);
-  outline: none;
-}
-
-#location-search input:focus {
-  border-color: var(--primary);
-}
-
-#location-results {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--surface);
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px var(--shadow-md);
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  z-index: 100;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-#location-results:empty {
+#location-overlay[hidden] {
   display: none;
 }
 
-#location-results li {
-  padding: 8px 14px;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  color: var(--on-surface);
-  transition: background 100ms;
+.location-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
 }
 
-#location-results li:hover {
+.location-overlay-content {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 10px 40px var(--shadow-md);
+}
+
+.location-overlay-content h3 {
+  margin: 0 0 16px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.location-overlay-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  line-height: 1;
+  border-radius: var(--radius-full);
+}
+
+.location-overlay-close:hover {
   background: var(--surface-container);
 }
 
-#location-results li.no-results {
+.location-gps-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: background 150ms;
+}
+
+.location-gps-btn:hover {
+  background: var(--surface-container-high);
+}
+
+.location-gps-btn #gps-icon {
+  display: flex;
+  align-items: center;
+}
+
+.location-search-wrap {
+  position: relative;
+}
+
+#location-search-input {
+  width: 100%;
+  font-size: 0.9rem;
+  padding: 12px 16px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  outline: none;
+  font-family: inherit;
+}
+
+#location-search-input:focus {
+  border-color: var(--primary);
+}
+
+#location-search-results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+#location-search-results li {
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--on-surface);
+  border-radius: var(--radius-sm);
+  transition: background 100ms;
+}
+
+#location-search-results li:hover {
+  background: var(--surface-container);
+}
+
+#location-search-results li.no-results {
   color: var(--on-surface-variant);
   cursor: default;
 }
@@ -810,17 +829,21 @@ html.dark .status-open {
 
 #footer {
   flex-shrink: 0;
-  padding: 6px 16px;
-  text-align: center;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   color: var(--on-surface-variant);
   border-top: 1px solid var(--outline-variant);
   background: var(--surface);
 }
 
 .footer-attr {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   line-height: 1.5;
-  opacity: 0.6;
+  opacity: 0.7;
+  text-align: center;
 }
 
 .footer-attr a {
@@ -830,6 +853,37 @@ html.dark .status-open {
 
 .footer-attr a:hover {
   text-decoration: underline;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  background: var(--surface-container);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  border: 1px solid var(--outline-variant);
+}
+
+.theme-toggle button {
+  border: none;
+  background: none;
+  padding: 5px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 150ms;
+}
+
+.theme-toggle button:hover {
+  color: var(--on-surface);
+}
+
+.theme-toggle button.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px var(--shadow);
 }
 
 /* ── Share dialog ────────────────────────────────────────────────── */
