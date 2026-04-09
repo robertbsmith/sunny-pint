@@ -4,7 +4,7 @@
  */
 
 import { state, selectedPub, pubCenter } from "./state";
-import { renderCircle, sizeCanvas } from "./circle";
+import { renderCircle } from "./circle";
 import { weatherLabel, weatherEmoji } from "./weather";
 import SunCalc from "suncalc";
 

@@ -7,10 +7,8 @@
 
 import { state, pubCenter } from "./state";
 import { renderCircle } from "./circle";
-import { computeShadows } from "./shadow";
 import { setPlayIcon } from "./icons";
 import { drawSunCanvas, drawMoonCanvas } from "./canvas-icons";
-import type { SunPosition } from "./types";
 import SunCalc from "suncalc";
 
 // ── Constants ─────────────────────────────────────────────────────────────

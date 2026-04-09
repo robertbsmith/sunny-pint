@@ -111,7 +111,6 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   // Deduplicate and bbox filter.
   const seen = new Set<string>();
   const nearby: Building[] = [];
-  let pubIdx = -1;
   let nearestDist = Infinity;
   let nearestIdx = -1;
 
@@ -120,9 +119,14 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   const west = pub.lng - dlng;
   const east = pub.lng + dlng;
 
+  // For metric-correct nearest search, weight longitude by cos(lat) so the
+  // distance is comparable in metres rather than degrees.
+  const cosLat = Math.cos((matchLat * Math.PI) / 180);
+
   for (const b of allBuildings) {
     const c = buildingCentroid(b.coords);
-    const dedupKey = `${c[0].toFixed(6)},${c[1].toFixed(6)}`;
+    // Dedupe by 0.5 m precision (5 decimal places ≈ 1.1m at UK latitudes).
+    const dedupKey = `${c[0].toFixed(5)},${c[1].toFixed(5)}`;
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
 
@@ -138,15 +142,17 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
     const idx = nearby.length;
     nearby.push(b);
 
-    // Find building whose centroid is closest to the pub's centroid.
-    const d = (c[0] - matchLat) ** 2 + (c[1] - matchLng) ** 2;
+    // Distance squared in metres (anisotropic lat/lng correction).
+    const dyM = (c[0] - matchLat) * M_PER_DEG_LAT;
+    const dxM = (c[1] - matchLng) * M_PER_DEG_LAT * cosLat;
+    const d = dyM * dyM + dxM * dxM;
     if (d < nearestDist) {
       nearestDist = d;
       nearestIdx = idx;
     }
   }
 
-  pubIdx = nearestIdx;
+  const pubIdx = nearestIdx;
 
   state.buildings = nearby;
   state.pubBuildingIndex = pubIdx;
@@ -164,14 +170,3 @@ function buildingCentroid(coords: [number, number][]): [number, number] {
   return [latSum / n, lngSum / n];
 }
 
-function pointInPoly(lat: number, lng: number, coords: [number, number][]): boolean {
-  let inside = false;
-  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
-    const [yi, xi] = coords[i]!;
-    const [yj, xj] = coords[j]!;
-    if ((xi > lng) !== (xj > lng) && lat < ((yj - yi) * (lng - xi)) / (xj - xi) + yi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}

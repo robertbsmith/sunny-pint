@@ -59,7 +59,6 @@ export function renderList(): void {
     li.setAttribute("aria-selected", pub.id === state.selectedPubId ? "true" : "false");
 
     const dist = pub.distance != null ? formatDistance(pub.distance) : "";
-    const sunInfo = getSunInfo(pub);
     const query = encodeURIComponent(pub.name);
     const mapsUrl = `https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z`;
 
@@ -79,7 +78,6 @@ export function renderList(): void {
         <span class="pub-name">${escapeHtml(pub.name)}</span>
         ${dist ? `<span class="pub-dist">${dist}</span>` : ""}
       </div>
-      ${sunInfo ? `<div class="pub-meta">${sunInfo}</div>` : ""}
       ${hoursHtml}
       <a href="${mapsUrl}" target="_blank" rel="noopener" class="pub-maps" onclick="event.stopPropagation()">Directions</a>
     `;
@@ -98,21 +96,12 @@ export function renderList(): void {
 function updateSelection(): void {
   for (const li of listEl.children) {
     const el = li as HTMLElement;
-    const name = el.querySelector(".font-medium")?.textContent ?? "";
+    const name = el.querySelector(".pub-name")?.textContent ?? "";
     const pub = state.pubs.find((p) => p.name === name);
     el.setAttribute("aria-selected", pub?.id === state.selectedPubId ? "true" : "false");
   }
-  // Scroll selected into view.
   const selected = listEl.querySelector('[aria-selected="true"]');
   selected?.scrollIntoView({ block: "nearest" });
-}
-
-/** Get a sun status string for a pub (placeholder — needs shadow computation). */
-function getSunInfo(pub: Pub): string {
-  if (pub.outdoor_seating || pub.beer_garden) {
-    return "Has outdoor seating";
-  }
-  return "";
 }
 
 function formatDistance(metres: number): string {

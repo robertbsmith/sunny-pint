@@ -392,20 +392,31 @@ def _dsm_with_ground_estimate(dsm, tfm):
 def fetch_ndsm(w, s, e, n):
     """Fetch normalised DSM and DTM for an OSGB bbox.
 
-    Tries local tiles first, then APIs by country.
+    Tries local tiles first, then EA WCS (covers all of England).
+    Falls back to NRW (Wales) and JNCC (Scotland) if EA returns nothing.
     Returns (ndsm_array, dtm_array_or_None, transform) or (None, None, None).
     """
     arr, dtm, tfm = fetch_local(w, s, e, n)
     if arr is not None:
         return arr, dtm, tfm
 
+    # EA WCS covers all of England including the north — try this first.
+    arr, dtm, tfm = fetch_ea_wcs(w, s, e, n)
+    if arr is not None:
+        return arr, dtm, tfm
+
+    # Fallback by country for areas outside England.
     cx, cy = (w + e) / 2, (s + n) / 2
-    if cy > 530000:
+    # Wales: roughly west of OSGB easting 340000 and south of northing 400000.
+    if cx < 340000:
+        arr, dtm, tfm = fetch_nrw_cog(w, s, e, n)
+        if arr is not None:
+            return arr, dtm, tfm
+    # Scotland: north of the border (~northing 540000-580000).
+    if cy > 540000:
         return fetch_jncc_wcs(w, s, e, n)
-    elif cx < 340000 and cy < 380000:
-        return fetch_nrw_cog(w, s, e, n)
-    else:
-        return fetch_ea_wcs(w, s, e, n)
+
+    return None, None, None
 
 
 # ── GeoPackage helpers ────────────────────────────────────────────────────

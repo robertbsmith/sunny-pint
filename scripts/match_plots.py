@@ -45,13 +45,37 @@ def gpkg_header_len(blob: bytes) -> int:
 
 
 def load_buildings_osgb(area):
-    """Load building polygons from GeoPackage, converted to OSGB, with spatial index."""
+    """Load building polygons near the area, converted to OSGB, with spatial index.
+
+    Uses R-tree bbox query for efficiency — won't OOM on UK-wide GeoPackage.
+    """
     if not GPKG_PATH.exists():
         print(f"  WARNING: {GPKG_PATH} not found — can't subtract buildings from plots")
         return [], None
 
     conn = sqlite3.connect(str(GPKG_PATH))
-    rows = conn.execute("SELECT geom FROM buildings").fetchall()
+
+    # Use R-tree spatial index — bbox in WGS84.
+    if area.bbox is not None:
+        s, w_, n_, e_ = area.bbox
+        try:
+            rows = conn.execute(
+                "SELECT b.geom FROM buildings b "
+                "JOIN rtree_buildings_geom r ON b.fid = r.id "
+                "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+                (w_, e_, s, n_),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # No R-tree index — full scan (slow).
+            rows = conn.execute("SELECT geom FROM buildings").fetchall()
+    else:
+        # UK-wide: must filter to pub locations to avoid OOM.
+        # Caller (main loop) will be filtered per-pub anyway, but we still
+        # need to load all buildings — only safe way is to require an area.
+        print("  WARNING: area.bbox is None for UK-wide; skipping per-pub building subtraction")
+        conn.close()
+        return [], None
+
     conn.close()
 
     buildings = []
@@ -61,10 +85,6 @@ def load_buildings_osgb(area):
             geom = wkb.loads(blob[hl:])
             if geom.is_empty or not geom.is_valid:
                 continue
-            centroid = geom.centroid
-            if not in_bbox(centroid.y, centroid.x, area.bbox):
-                continue
-            # Convert WGS84 polygon to OSGB.
             osgb_coords = [to_osgb.transform(x, y) for x, y in geom.exterior.coords]
             poly = Polygon(osgb_coords)
             if poly.is_valid and not poly.is_empty:

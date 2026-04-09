@@ -37,7 +37,7 @@ ci: typecheck lint build
 # ── Data Pipeline ─────────────────────────────────────────────────────
 
 # Run full pipeline: pubs → inspire → buildings → heights → horizons → plots → tiles
-pipeline: merge-pubs download-inspire build-gpkg measure-heights compute-horizons match-plots generate-tiles
+pipeline: merge-pubs download-inspire build-inspire-gpkg build-gpkg measure-heights match-plots compute-horizons generate-tiles
 
 # Extract pubs from OSM
 merge-pubs:
@@ -46,6 +46,10 @@ merge-pubs:
 # Download all INSPIRE Land Registry plot data (England & Wales)
 download-inspire:
     uv run python scripts/download_inspire.py
+
+# Convert downloaded INSPIRE GML files into one indexed GeoPackage
+build-inspire-gpkg:
+    uv run python scripts/build_inspire_gpkg.py
 
 # Compute terrain horizon profiles for pubs (needs DTM from measure-heights)
 compute-horizons:

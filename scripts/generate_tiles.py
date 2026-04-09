@@ -328,14 +328,32 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
     pub_points = load_pub_points()
     pub_tree = STRtree(pub_points)
 
-    # Use max radius for the initial spatial query, then refine per-building.
-    max_buf_deg = MAX_RADIUS_M / 111320.0
-
     conn = sqlite3.connect(str(GPKG_PATH))
-    rows = conn.execute(
-        "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
-        "FROM buildings"
-    ).fetchall()
+
+    # Use R-tree spatial index for area-restricted queries to avoid OOM.
+    if area.bbox is not None:
+        s, w_, n_, e_ = area.bbox
+        # Add max radius buffer (in degrees, conservative — uses lat for both axes).
+        buf_deg = MAX_RADIUS_M / 111320.0
+        try:
+            rows = conn.execute(
+                "SELECT b.fid, b.geom, b.osm_id, b.building, b.name, b.height, b.levels, b.lidar_height, b.ground_elev "
+                "FROM buildings b "
+                "JOIN rtree_buildings_geom r ON b.fid = r.id "
+                "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+                (w_ - buf_deg, e_ + buf_deg, s - buf_deg, n_ + buf_deg),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = conn.execute(
+                "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
+                "FROM buildings"
+            ).fetchall()
+    else:
+        # UK-wide: read all buildings (we filter by pub proximity below).
+        rows = conn.execute(
+            "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
+            "FROM buildings"
+        ).fetchall()
 
     features = []
     skipped = 0

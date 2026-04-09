@@ -6,7 +6,6 @@
  */
 
 import { state, selectedPub, pubCenter } from "./state";
-import type { Building, ShadowPoly, SunPosition } from "./types";
 import { drawSunCanvas, drawMoonCanvas } from "./canvas-icons";
 import SunCalc from "suncalc";
 
