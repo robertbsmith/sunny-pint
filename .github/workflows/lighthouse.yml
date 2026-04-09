@@ -22,10 +22,13 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip lighthouse]')"
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout (for the lighthouserc.json)
+        uses: actions/checkout@v4
+
       - name: Wait for Cloudflare Pages deploy to complete
-        # Cloudflare auto-deploys on push; give it a couple of minutes to
-        # build, deploy globally, and warm the CDN before we audit.
-        run: sleep 180
+        # Cloudflare typically deploys in ~30 seconds, plus a small buffer
+        # for global edge propagation.
+        run: sleep 60
 
       - name: Audit production URLs with Lighthouse
         uses: treosh/lighthouse-ci-action@v12
@@ -37,8 +40,6 @@ jobs:
             https://sunny-pint.co.uk/pub/the-racecourse-norwich/
           uploadArtifacts: true
           temporaryPublicStorage: true
-          # Quality gates — fail the run if any URL drops below.
-          # Performance is intentionally lower because LCP on a per-pub
-          # Function-rendered page depends on edge cache state which is
-          # noisy in CI.
-          configPath: ./.github/lighthouse-config.json
+          # Quality gates — see lighthouserc.json at the repo root for
+          # the assertion thresholds. lhci auto-discovers it.
+          configPath: ./lighthouserc.json

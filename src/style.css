@@ -438,10 +438,9 @@ html.dark .sunny-badge--sunny {
    right, explainer line underneath. Uses the available width instead of
    stacking everything line by line. */
 .sunny-badge--lg {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
+  align-items: center;
   padding: 10px 14px;
   border-radius: 12px;
   width: 100%;
@@ -507,8 +506,10 @@ html.dark .sunny-badge--sunny {
 }
 
 .sunny-badge--lg .sunny-badge-explainer {
-  font-size: 0.72rem;
-  text-align: right;
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 0.7rem;
   line-height: 1;
 }
 
@@ -891,6 +892,13 @@ html.dark .sunny-badge--sunny {
     top: 0;
     right: 0;
     bottom: 0;
+    /* Explicitly clear the mobile drawer's `left: 0` / `max-width` /
+       `margin: 0 auto` — without this, LTR positioning rules pin the
+       sidebar to left: 0 inside #main and ignore `right`, making it
+       float on the wrong side. */
+    left: auto;
+    max-width: none;
+    margin: 0;
     width: 340px;
     max-height: none;
     transform: none;
