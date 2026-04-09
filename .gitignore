@@ -16,6 +16,10 @@ dist/
 # stay stable across machines, CI runs, and contributors. Tiny file, append-
 # only by match_plots.py, never edited by hand.
 !/data/slug_lock.json
+# Lastmod state IS committed for the same reason — it tracks per-URL hashes
+# so the sitemap only bumps `<lastmod>` for genuinely-changed URLs across
+# CI runs, instead of telling Google to recrawl everything every release.
+!/data/lastmod_state.json
 
 # Wrangler local dev cache (workerd binaries, function build artefacts)
 .wrangler/

@@ -19,7 +19,7 @@ import { computeShadows, isTerrainOccluded } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
 import { initSunArc, renderArc } from "./sunarc";
-import { largeSunBadgeHtml } from "./sunbadge";
+import { largeSunBadgeHtml, smallSunBadgeHtml } from "./sunbadge";
 import type { Pub } from "./types";
 import {
   clearTimeUserDriven,
@@ -109,6 +109,10 @@ function updatePubInfo(pub: Pub): void {
   // Sunny Rating badge — the headline metric, just below the name.
   const sunEl = document.getElementById("pub-info-sun");
   if (sunEl) sunEl.innerHTML = largeSunBadgeHtml(pub);
+
+  // Compact rating overlay on the porthole itself (top-left corner).
+  const portholeRatingEl = document.getElementById("porthole-rating");
+  if (portholeRatingEl) portholeRatingEl.innerHTML = smallSunBadgeHtml(pub);
 
   // Attribute grid.
   function fmtVal(v: string | undefined): { text: string; cls: string } {

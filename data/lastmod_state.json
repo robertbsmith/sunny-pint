@@ -1,0 +1,558 @@
+{
+  "/": {
+    "hash": "f801dca99814bc37",
+    "lastmod": "2026-04-09"
+  },
+  "/norwich/": {
+    "hash": "33c4ae229a9c5a2e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/alexandra-tavern-norwich/": {
+    "hash": "f812359a2ff489e4",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/bar-19-norwich/": {
+    "hash": "7f66a8df87c9d0ae",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/bedfords-norwich/": {
+    "hash": "944e86edf42a7fe1",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/ber-strete-gates-norwich/": {
+    "hash": "5279cc4e502c6f79",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/cactus-norwich/": {
+    "hash": "860bb81a62ac9b8d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/coach-and-horses-norwich/": {
+    "hash": "32130232d45fe15a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/crown-point-tavern-norwich/": {
+    "hash": "968d7ef85be16789",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/duke-of-wellington-norwich/": {
+    "hash": "c300aa99ce8d3818",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/elm-farm-country-house-norwich/": {
+    "hash": "d80522b7e5f81fa7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/fat-cat-and-canary-norwich/": {
+    "hash": "7ce881a8499d4ab9",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/gibraltar-gardens-norwich/": {
+    "hash": "8e96d7f9ba369da4",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/kings-arms-norwich/": {
+    "hash": "b9cdd86f3f7d56e6",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/kings-head-norwich-2/": {
+    "hash": "37a76666799d9066",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/kings-head-norwich/": {
+    "hash": "776b4f037a3763ac",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/lamb-inn-norwich/": {
+    "hash": "4bc2439266084dab",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/last-pub-standing-norwich/": {
+    "hash": "41cb040510dc6246",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/lollards-pit-norwich/": {
+    "hash": "9a276855facdce02",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/louis-marchesi-norwich/": {
+    "hash": "da95f47a93fc3790",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/malt-and-mardle-norwich/": {
+    "hash": "56868f294d8df9a6",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/marlborough-arms-norwich/": {
+    "hash": "a8e66b46654b67c1",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/pear-tree-inn-norwich/": {
+    "hash": "fd97c01dccdfdc9f",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/plasterers-arms-norwich/": {
+    "hash": "51070a4a8358cb6f",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/pogue-mahons-norwich/": {
+    "hash": "16f6379e75e1d482",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/rose-tavern-norwich/": {
+    "hash": "ff61b5788cd0ce21",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/shoe-makers-norwich/": {
+    "hash": "9a2766c4d2f422cb",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/sole-and-heel-norwich/": {
+    "hash": "1df230aacdb351c6",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/st-andrews-brewhouse-norwich/": {
+    "hash": "7a88e2a680a39441",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/sugarbeat-eating-house-norwich/": {
+    "hash": "0a68768c1d0d7cc4",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/temple-bar-norwich/": {
+    "hash": "7db53a9c366de0c2",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-adam-and-eve-norwich/": {
+    "hash": "d156e90252824029",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-angel-gardens-norwich/": {
+    "hash": "4a381d662cfd82c5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-artichoke-norwich/": {
+    "hash": "c645cdf9ab77132d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-beehive-norwich/": {
+    "hash": "6521e106e1c79e58",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-belgian-monk-norwich/": {
+    "hash": "5ec88be64a58d5ab",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-bell-hotel-norwich/": {
+    "hash": "1f5a159d4ef659b7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-belle-vue-norwich/": {
+    "hash": "8dccb231ec66a0c0",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-black-horse-norwich/": {
+    "hash": "2796244520ccdc61",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-black-swan-inn-norwich/": {
+    "hash": "d278136d861215a5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-blue-boar-norwich/": {
+    "hash": "a170ee11d4311859",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-boundary-norwich/": {
+    "hash": "c6294c049087e196",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-brewery-tap-norwich/": {
+    "hash": "2cbc1885e5901c1d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-brickmakers-norwich/": {
+    "hash": "08b1508167f9ce89",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-bull-norwich/": {
+    "hash": "2fcb9b424a5f13d3",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-bush-norwich/": {
+    "hash": "cdd1ed35b38c423f",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-castle-inn-norwich/": {
+    "hash": "d5c6765fee7e04b6",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-catherine-wheel-norwich/": {
+    "hash": "8cff45caca22d52b",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-cellar-house-norwich/": {
+    "hash": "90dbb5d9fe245aac",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-champion-norwich/": {
+    "hash": "982023df124f1f33",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-cherry-tree-norwich/": {
+    "hash": "a426901990b9bafb",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-coach-and-horses-norwich/": {
+    "hash": "1c3f08b26cec28bd",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-coachmakers-arms-norwich/": {
+    "hash": "8aeea96aeac12946",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-cock-inn-norwich/": {
+    "hash": "80f91106021c4c57",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-compleat-angler-norwich/": {
+    "hash": "3b48159d55927f31",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-cottage-norwich/": {
+    "hash": "44ba321e26d809bb",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-crown-norwich/": {
+    "hash": "3776ab6d5ce45851",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-dog-inn-norwich/": {
+    "hash": "dc63e92038df8579",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-dove-norwich/": {
+    "hash": "32229385af918521",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-drawing-rooms-norwich/": {
+    "hash": "11ca4d4ad0e8d835",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-eagle-norwich/": {
+    "hash": "cc420243c0884a2e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-earlham-norwich/": {
+    "hash": "f702e6d1779d3b54",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-eaton-cottage-norwich/": {
+    "hash": "e67ed38336be358f",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-edith-cavell-norwich/": {
+    "hash": "5d42b9296dd65cb3",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-farmhouse-norwich/": {
+    "hash": "47bd3c9bdfbe291c",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-fat-cat-norwich/": {
+    "hash": "e3bb5ffd29fac05e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-fiveways-norwich/": {
+    "hash": "2b5d23ebafde2e90",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-forge-norwich/": {
+    "hash": "7e9b4396b5bf33e8",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-freemasons-arms-norwich/": {
+    "hash": "fcb4dc2e5b1424b7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-garden-house-norwich/": {
+    "hash": "458dff75d6256171",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-garnet-norwich/": {
+    "hash": "b123767bf58490fa",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-glass-house-norwich/": {
+    "hash": "fb8593268295ad6a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-golden-star-norwich/": {
+    "hash": "3344f159a727e6a4",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-gordon-norwich/": {
+    "hash": "b0932fb03429d6da",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-gull-inn-norwich/": {
+    "hash": "eabf4248b104a887",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-harte-of-costessey-norwich/": {
+    "hash": "34a9d80d142982d2",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-heath-house-norwich/": {
+    "hash": "2a99713774a0e0e5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-jubilee-norwich/": {
+    "hash": "e52c3ce49e957aeb",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-kings-head-norwich/": {
+    "hash": "1997e0368676be67",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-leopard-norwich/": {
+    "hash": "4f2fb137c9c5049b",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-longe-arms-spixworth/": {
+    "hash": "236696c575327e69",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-lord-rosebery-norwich/": {
+    "hash": "0fcbfb9a6dab1e23",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-mad-cat-norwich/": {
+    "hash": "427187684bcde9d7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-maids-head-norwich/": {
+    "hash": "4aac62ad626fa79a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-marsh-harrier-norwich/": {
+    "hash": "f59318580e62d58e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-merchants-of-spice-norwich/": {
+    "hash": "83c71d167cab0626",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-mischief-norwich/": {
+    "hash": "bb2c06667b63b469",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-nelson-norwich-2/": {
+    "hash": "10b137dea5600f33",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-norkie-norwich/": {
+    "hash": "4e75067ab95a0c95",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-oak-tree-norwich/": {
+    "hash": "2f026f3a86fe75f7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-oaks-norwich/": {
+    "hash": "d644199b693779fa",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-otter-norwich/": {
+    "hash": "371eae9b4ff5a889",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-plough-norwich/": {
+    "hash": "18cd31cd61935c0a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-prince-of-denmark-norwich/": {
+    "hash": "7257441b1679c766",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-queen-of-iceni-norwich/": {
+    "hash": "a965665685b47594",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-queens-head-norwich/": {
+    "hash": "52b798e8c39b257d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-racecourse-norwich/": {
+    "hash": "37fe50b925c9f958",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-railway-tavern-norwich/": {
+    "hash": "3c38011b5d4fb13a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-red-lion-norwich-2/": {
+    "hash": "5fb795171d26b84b",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-red-lion-norwich-3/": {
+    "hash": "f2a9dc39b5ce1f7a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-red-lion-norwich/": {
+    "hash": "759e767c4740137d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-reindeer-norwich/": {
+    "hash": "9afc8bdb157def5e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-ribs-of-beef-norwich/": {
+    "hash": "e42851af7e7278ed",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-rivergarden-bar-and-restaurant-norwich/": {
+    "hash": "ce5463903f236bb9",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-robin-hood-norwich/": {
+    "hash": "21fe6acbe00bc1e4",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-rose-norwich/": {
+    "hash": "45318207d440ea1a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-royal-oak-pub-poringland/": {
+    "hash": "d43dd512af60340e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-rumsey-wells-norwich/": {
+    "hash": "fe431d850022e28f",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-rushcutters-norwich/": {
+    "hash": "5bbbf45b1d3807e5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-silver-fox-norwich/": {
+    "hash": "ec474915391f0e9c",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-stanley-norwich/": {
+    "hash": "7b44622376a705f2",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-steam-packet-norwich/": {
+    "hash": "61d6f5a683555159",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-strangers-tavern-norwich/": {
+    "hash": "adbab8b12051441e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-swan-inn-norwich/": {
+    "hash": "73627ce5901369ba",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-town-house-norwich/": {
+    "hash": "8447b251cde8b6e0",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-unthank-arms-norwich/": {
+    "hash": "a46c7b35a275fa0c",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-vine-thai-cuisine-norwich/": {
+    "hash": "47349b898707abd5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-west-end-retreat-norwich/": {
+    "hash": "9b12b293a3bc52ba",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-whalebone-norwich/": {
+    "hash": "e948d8586620fbca",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-wheel-of-fortune-alpington/": {
+    "hash": "af8f40487b7107e9",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-whiffler-norwich/": {
+    "hash": "bf3696bdd5f8a865",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-white-horse-broadland/": {
+    "hash": "cbf391d0400341dc",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-white-horse-norwich/": {
+    "hash": "83f67e75d9102bf7",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-white-lion-norwich/": {
+    "hash": "ebb5b2de1e211f97",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-wildman-norwich/": {
+    "hash": "c15a92fc56f6cf05",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-windmill-norwich-2/": {
+    "hash": "2c1fe0c4345d64d5",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-windmill-norwich/": {
+    "hash": "85c0bbf0a853e719",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-wine-cellar-norwich/": {
+    "hash": "35f1305bc7b4a3c3",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-woodman-norwich/": {
+    "hash": "2e5eb6d581f86059",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-woolpack-inn-norwich/": {
+    "hash": "bbb18d8667873f68",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-worlds-end-norwich/": {
+    "hash": "32cdff082af9e15a",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/the-york-tavern-norwich/": {
+    "hash": "f69e9f52ddcfb34e",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/trafford-arms-norwich/": {
+    "hash": "1ae1ca1f3b298eb8",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/warwick-arms-norwich/": {
+    "hash": "5a1793e5b5202fe2",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/waters-edge-bramerton/": {
+    "hash": "40b490670772316d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/weavers-arms-norwich/": {
+    "hash": "c71c6e6940143807",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/wig-and-pen-norwich/": {
+    "hash": "7696b54ba176d426",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/william-and-florence-norwich/": {
+    "hash": "ac196d83d9e90e7d",
+    "lastmod": "2026-04-09"
+  },
+  "/pub/william-iv-norwich/": {
+    "hash": "aa2cafc888f9dd90",
+    "lastmod": "2026-04-09"
+  }
+}

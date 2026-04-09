@@ -180,6 +180,20 @@ a {
   text-decoration: none;
 }
 
+/* Sunny Rating overlay — mirrors #kofi-link in the opposite corner so the
+   selected pub's score is visible at a glance while looking at the
+   porthole. Populated by main.ts whenever onPubSelected fires. */
+#porthole-rating {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+}
+
+#porthole-rating:empty {
+  display: none;
+}
+
 .kofi-btn {
   display: inline-flex;
   align-items: center;
