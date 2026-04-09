@@ -90,26 +90,74 @@ def get_authority_urls() -> list[str]:
     return [f"{BASE_URL}{p}" for p in sorted(set(paths))]
 
 
+def validate_gml(path: Path) -> bool:
+    """Quick integrity check for an INSPIRE GML file.
+
+    Catches the failure mode we've actually seen in the wild: a botched
+    download leaves a file that ends with the right close tag but has a
+    region of NULL bytes (and sometimes garbage continuation) in the
+    middle. NULL bytes are illegal in XML 1.0, so any occurrence means
+    corruption. Streams through in 16 MB chunks — fast enough that
+    re-validating the whole INSPIRE corpus (~10 GB) takes seconds.
+    """
+    if not path.exists() or path.stat().st_size < 1024:
+        return False
+    with open(path, "rb") as f:
+        f.seek(-256, 2)
+        if b"</wfs:FeatureCollection>" not in f.read():
+            return False
+        f.seek(0)
+        while True:
+            chunk = f.read(16 * 1024 * 1024)
+            if not chunk:
+                break
+            if b"\x00" in chunk:
+                return False
+    return True
+
+
 def download_and_extract(url: str, output_dir: Path) -> tuple[Path | None, int]:
-    """Download a ZIP and extract the GML file. Returns (path, bytes) or (None, 0)."""
+    """Download a ZIP and extract the GML file. Returns (path, bytes) or (None, 0).
+
+    Cached files are revalidated before being trusted. Corrupt cached
+    files are deleted and re-fetched. Newly downloaded files are
+    extracted to a `.tmp` path, validated, then atomically renamed so
+    a half-extracted file never lands at the canonical path.
+    """
     name = url.split("/")[-1].replace(".zip", "")
     gml_path = output_dir / f"{name}.gml"
 
     if gml_path.exists():
-        return gml_path, gml_path.stat().st_size
+        if validate_gml(gml_path):
+            return gml_path, gml_path.stat().st_size
+        print(f" CACHED FILE CORRUPT, re-downloading: {gml_path.name}", flush=True)
+        gml_path.unlink()
 
     try:
         data = _fetch_with_redirect(url)
+
+        tmp_path = gml_path.with_suffix(".gml.tmp")
+        if tmp_path.exists():
+            tmp_path.unlink()
 
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
             gml_files = [f for f in zf.namelist() if f.endswith(".gml")]
             if not gml_files:
                 return None, 0
-            zf.extract(gml_files[0], output_dir)
-            extracted = output_dir / gml_files[0]
-            if extracted != gml_path:
-                extracted.rename(gml_path)
-            return gml_path, gml_path.stat().st_size
+            with zf.open(gml_files[0]) as src, open(tmp_path, "wb") as dst:
+                while True:
+                    buf = src.read(1024 * 1024)
+                    if not buf:
+                        break
+                    dst.write(buf)
+
+        if not validate_gml(tmp_path):
+            print(f" DOWNLOADED FILE INVALID: {gml_path.name}")
+            tmp_path.unlink(missing_ok=True)
+            return None, 0
+
+        tmp_path.rename(gml_path)
+        return gml_path, gml_path.stat().st_size
 
     except Exception as e:
         print(f" ERROR: {e}")
@@ -133,7 +181,29 @@ def format_size(bytes: int) -> str:
     return f"{bytes / 1e9:.2f} GB"
 
 
+def validate_existing(data_dir: Path) -> list[Path]:
+    """Scan all cached GML files and return the list of corrupt ones."""
+    files = sorted(data_dir.glob("*.gml"))
+    print(f"Validating {len(files)} cached GML files...")
+    bad: list[Path] = []
+    for i, p in enumerate(files, 1):
+        ok = validate_gml(p)
+        if not ok:
+            bad.append(p)
+            print(f"  [{i}/{len(files)}] CORRUPT {p.name} ({format_size(p.stat().st_size)})")
+        elif i % 50 == 0:
+            print(f"  [{i}/{len(files)}] ok so far", flush=True)
+    print(f"\n  {len(bad)} corrupt / {len(files)} total")
+    return bad
+
+
 def main():
+    import sys
+
+    if "--validate" in sys.argv:
+        validate_existing(DATA_DIR)
+        return
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Fetching local authority list...", flush=True)
