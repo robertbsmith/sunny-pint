@@ -59,6 +59,24 @@ ci: typecheck lint build
 # Run full pipeline: pubs → inspire → buildings → heights → horizons → plots → tiles → sunny ratings
 pipeline: merge-pubs download-inspire build-inspire-gpkg build-gpkg measure-heights match-plots compute-horizons generate-tiles precompute-sun
 
+# Full UK rollout: assumes the slow upstream pipeline (build-gpkg, measure-
+# heights, build-inspire-gpkg, generate-tiles for area=uk) has already been
+# run. Runs the FAST steps that depend on the latest source data and
+# produces a deployable dist/ for the whole UK in one command.
+#
+# Usage:
+#   just uk
+#
+# After it finishes:
+#   git add public/data/pubs.json data/slug_lock.json data/lastmod_state.json
+#   git commit -m "Refresh UK pub data"
+#   git push    # Cloudflare auto-deploys
+uk:
+    uv run --project scripts python scripts/merge_pubs.py --area uk
+    uv run --project scripts python scripts/match_plots.py --area uk
+    pnpm tsx scripts/precompute_sun.ts
+    just release
+
 # Extract pubs from OSM
 merge-pubs:
     uv run --project scripts python scripts/merge_pubs.py --area {{area}}

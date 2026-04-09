@@ -250,16 +250,37 @@ function parseFloatOrNull(s: string): number | null {
 
 /**
  * Hydrate the homepage with the default location and try GPS in the
- * background. Used for the bare `/` route — never called on city or pub
- * landing pages, where auto-GPS would silently relocate the user away
- * from the page they actually wanted to see.
+ * background — but only if the user has *already* granted geolocation
+ * permission. Asking on first load (without a user gesture) trips the
+ * Lighthouse "Requests geolocation permission on page load" anti-pattern
+ * and is jarring UX for first-time visitors.
+ *
+ * Returning visitors who clicked the location button on a previous visit
+ * (or any page with geolocation already granted) get the auto-detect
+ * behaviour as before — `permissions.query` returns "granted" and we
+ * call `getCurrentPosition` immediately. Everyone else stays on the
+ * default centroid until they tap the location button themselves.
  */
-function defaultHomeHydration(labelEl: HTMLElement | null): void {
+async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> {
   setLocation(DEFAULT_LAT, DEFAULT_LNG);
   if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
   setLocationQuery(DEFAULT_LOCATION_NAME);
 
   if (!navigator.geolocation) return;
+
+  // Check the permission state before triggering the prompt. Browsers
+  // without the Permissions API (Safari < 16) skip auto-GPS entirely.
+  let alreadyGranted = false;
+  try {
+    if (navigator.permissions?.query) {
+      const status = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+      alreadyGranted = status.state === "granted";
+    }
+  } catch {
+    // Permissions API failed — fall back to never auto-prompting.
+  }
+  if (!alreadyGranted) return;
+
   if (labelEl) labelEl.textContent = "Locating...";
 
   navigator.geolocation.getCurrentPosition(
@@ -400,7 +421,7 @@ async function init(): Promise<void> {
         await onPubSelected(pub);
       } else {
         // Stale slug — fall back to home behaviour.
-        defaultHomeHydration(labelEl);
+        void defaultHomeHydration(labelEl);
       }
     } else if (metaArea && metaAreaLat != null && metaAreaLng != null) {
       // City landing page. Centre on the supplied coordinates and DO NOT

@@ -530,3 +530,164 @@ export function renderPubPage(template: string, ctx: PubContext): string {
     ogImageType: "image/svg+xml",
   });
 }
+
+// ── Theme pages ──────────────────────────────────────────────────────────
+//
+// Filter + sort the pubs in a city by a theme predicate, render a focused
+// landing page targeting the specific search intent. Themes are the long-
+// tail SEO unlock — each one targets a distinct query like "sunniest beer
+// garden norwich" or "biggest beer garden bristol", powered by data we
+// already have.
+
+export interface ThemeDef {
+  /** Slug used in the URL: /<city>/<slug>/ */
+  slug: string;
+  /** Title-cased name shown in headings. */
+  name: string;
+  /** Plain-language description for the intro paragraph. */
+  blurb: (town: string, count: number) => string;
+  /** Predicate for whether a pub qualifies for this theme. */
+  filter: (pub: Pub) => boolean;
+  /** Sort comparator (descending). */
+  sort: (a: Pub, b: Pub) => number;
+  /** Maximum number of pubs to surface in the visible list. */
+  limit: number;
+  /** Format for the per-item suffix shown after each pub name. */
+  itemSuffix: (pub: Pub) => string;
+}
+
+export const THEMES: ThemeDef[] = [
+  {
+    slug: "sunniest",
+    name: "Sunniest beer gardens",
+    blurb: (town, count) =>
+      `These ${count} pub gardens in ${town} score highest on the Sunny Rating — ` +
+      `pubs whose outdoor seating gets direct sun across most of an average day.`,
+    filter: (p) => Boolean(p.sun),
+    sort: (a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0),
+    limit: 30,
+    itemSuffix: (p) => (p.sun ? ` — ${p.sun.score}/100` : ""),
+  },
+  {
+    slug: "evening-sun",
+    name: "Pubs with evening sun",
+    blurb: (town, count) =>
+      `${count} pub gardens in ${town} that catch the sun in the evening — ` +
+      `the after-work pint window. Computed from real building geometry, not just ` +
+      `compass orientation.`,
+    filter: (p) => Boolean(p.sun?.evening_sun),
+    sort: (a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0),
+    limit: 40,
+    itemSuffix: (p) =>
+      p.sun?.best_window ? ` — best ${p.sun.best_window}` : p.sun ? ` — ${p.sun.score}/100` : "",
+  },
+  {
+    slug: "all-day-sun",
+    name: "Pubs with all-day sun",
+    blurb: (town, count) =>
+      `${count} pub gardens in ${town} that get direct sun across the morning, ` +
+      `midday, and evening — a full sunny day from open till close, ` +
+      `weather permitting.`,
+    filter: (p) => Boolean(p.sun?.all_day_sun),
+    sort: (a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0),
+    limit: 40,
+    itemSuffix: (p) => (p.sun ? ` — ${p.sun.score}/100` : ""),
+  },
+  {
+    slug: "biggest",
+    name: "Biggest beer gardens",
+    blurb: (town, count) =>
+      `${count} pub gardens in ${town} ranked by measured outdoor seating area, ` +
+      `from cadastral data + building footprints. Bigger isn't always sunnier ` +
+      `— check the Sunny Rating before you commit.`,
+    filter: (p) => Boolean(p.outdoor_area_m2),
+    sort: (a, b) => (b.outdoor_area_m2 ?? 0) - (a.outdoor_area_m2 ?? 0),
+    limit: 30,
+    itemSuffix: (p) => (p.outdoor_area_m2 ? ` — ${Math.round(p.outdoor_area_m2)} m²` : ""),
+  },
+];
+
+export interface ThemeContext {
+  town: string;
+  country: string;
+  theme: ThemeDef;
+  /** All qualifying pubs in the town (the renderer filters internally). */
+  pubs: Pub[];
+}
+
+/** Render a single theme page. Returns the HTML string. */
+export function renderThemePage(template: string, ctx: ThemeContext): string {
+  const { town, country, theme, pubs } = ctx;
+  const slug = slugify(town);
+  const { lat, lng } = townCentroid(pubs);
+
+  // Apply the theme's filter + sort. The visible list is capped at
+  // theme.limit but the count we report in the intro is the full match
+  // count, so users know whether they're seeing a representative slice.
+  const matched = pubs.filter(theme.filter);
+  matched.sort(theme.sort);
+  const shown = matched.slice(0, theme.limit);
+
+  const title = `${theme.name} in ${town} — Sunny Pint`;
+  const description =
+    `${matched.length} pub gardens in ${town} matching the "${theme.name.toLowerCase()}" criteria, ` +
+    `computed from LiDAR elevation and OpenStreetMap building data.`;
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { name: "Sunny Pint", path: "/" },
+    { name: country, path: `/${slugify(country)}/` },
+    { name: town, path: `/${slug}/` },
+    { name: theme.name, path: `/${slug}/${theme.slug}/` },
+  ];
+
+  const listItems = shown
+    .map(
+      (p) =>
+        `      <li><a href="/pub/${htmlEscape(p.slug ?? "")}/">` +
+        `${htmlEscape(p.name)}${htmlEscape(theme.itemSuffix(p))}</a></li>`,
+    )
+    .join("\n");
+
+  const seoIntro =
+    `<section id="seo-intro" class="seo-intro seo-intro--landing">\n` +
+    `  ${breadcrumbHtml(breadcrumbs)}\n` +
+    `  <h1>${htmlEscape(theme.name)} in ${htmlEscape(town)}</h1>\n` +
+    `  <p>${theme.blurb(htmlEscape(town), matched.length)} ` +
+    `<a href="/how-it-works.html#sunny-rating">How is this calculated?</a></p>\n` +
+    `  <details class="seo-pub-list-wrap" open>\n` +
+    `    <summary>Top ${shown.length} of ${matched.length}</summary>\n` +
+    `    <ul class="seo-pub-list">\n` +
+    `${listItems}\n` +
+    `    </ul>\n` +
+    `  </details>\n` +
+    `</section>`;
+
+  const itemList = JSON.stringify(
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `${theme.name} in ${town}`,
+      numberOfItems: matched.length,
+      itemListElement: shown.map((pub, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        item: barOrPubJsonLd(pub, town),
+      })),
+    },
+    null,
+    2,
+  );
+
+  return applyTemplate(template, {
+    title,
+    description,
+    canonicalPath: `/${slug}/${theme.slug}/`,
+    spArea: slug,
+    spAreaName: town,
+    spAreaLat: lat,
+    spAreaLng: lng,
+    spPub: "",
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs), itemList],
+    seoIntro,
+  });
+}

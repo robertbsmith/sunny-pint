@@ -51,7 +51,9 @@ export function largeSunBadgeHtml(pub: Pub): string {
   const window = pub.sun.best_window
     ? `<span class="sunny-badge-window">Best sun ${escapeHtml(pub.sun.best_window)}</span>`
     : "";
-  return `<div class="sunny-badge sunny-badge--lg ${cls}" role="meter" aria-label="Sunny Rating: ${pub.sun.score} out of 100 — ${escapeHtml(pub.sun.label)}">
+  // role="meter" requires aria-valuenow/min/max alongside the label so
+  // assistive tech can read it as "Sunny Rating, 92 out of 100, Sun trap".
+  return `<div class="sunny-badge sunny-badge--lg ${cls}" role="meter" aria-label="Sunny Rating: ${pub.sun.score} out of 100 — ${escapeHtml(pub.sun.label)}" aria-valuenow="${pub.sun.score}" aria-valuemin="0" aria-valuemax="100">
     <div class="sunny-badge-main">
       <span class="sunny-badge-score">${pub.sun.score}<span class="sunny-badge-score-max">/100</span></span>
       <div class="sunny-badge-text">

@@ -32,7 +32,10 @@ import {
   type Pub,
   qualifying,
   renderCityPage,
+  renderThemePage,
   slugify,
+  THEMES,
+  type ThemeDef,
 } from "../functions/_lib/render";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -47,6 +50,10 @@ const SITE_URL = "https://sunny-pint.co.uk";
 // Below this we'd be shipping thin content that the March 2026 Google update
 // specifically targets for de-indexing.
 const MIN_PUBS_PER_CITY = 8;
+// Theme pages: skip entirely below this; emit but `noindex` between this
+// and MIN_THEME_INDEX; emit normally above.
+const MIN_THEME_PAGES = 4;
+const MIN_THEME_INDEX = 8;
 
 // ── Hash-diffed lastmod state ───────────────────────────────────────────
 //
@@ -145,6 +152,18 @@ function renderSitemap(entries: SitemapEntry[]): string {
   );
 }
 
+// ── Theme page noindex injection ─────────────────────────────────────────
+
+/** Inject `<meta name="robots" content="noindex,follow">` into a rendered
+ *  page. Used for theme pages that have too few matching pubs to deserve
+ *  indexing — they exist for navigation but not for ranking. */
+function injectNoindex(html: string): string {
+  return html.replace(
+    "</head>",
+    `    <meta name="robots" content="noindex,follow" />\n  </head>`,
+  );
+}
+
 // ── 404 page ─────────────────────────────────────────────────────────────
 
 function render404(template: string): string {
@@ -213,8 +232,13 @@ function main(): void {
     lastmod: resolveLastmod(lastmodState, "/", homeHash, today),
   });
 
-  // City pages
+  // City pages + theme pages.
   let cityChangedCount = 0;
+  let themeEmitted = 0;
+  let themeIndexed = 0;
+  let themeNoindex = 0;
+  let themeChangedCount = 0;
+
   for (const [town, townPubs] of qualifyingTowns.sort(([a], [b]) => a.localeCompare(b))) {
     const country = townPubs[0]?.country ?? "England";
     const slug = slugify(town);
@@ -235,6 +259,48 @@ function main(): void {
     });
 
     console.log(`  /${slug}/  (${townPubs.length} pubs, ${sizeKb} KB)`);
+
+    // Theme pages: each (city, theme) emits its own /<city>/<theme>/ page.
+    // The page is skipped entirely if too few pubs match the theme; emitted
+    // with `noindex,follow` for borderline counts so it's still navigable
+    // without polluting Google's index with thin pages; emitted normally
+    // (and listed in the sitemap) once it has a proper number of matches.
+    for (const theme of THEMES as ThemeDef[]) {
+      const matched = townPubs.filter(theme.filter);
+      if (matched.length < MIN_THEME_PAGES) continue;
+
+      const indexed = matched.length >= MIN_THEME_INDEX;
+      let themeHtml = renderThemePage(template, { town, country, theme, pubs: townPubs });
+      if (!indexed) themeHtml = injectNoindex(themeHtml);
+
+      const themeDir = join(DIST, slug, theme.slug);
+      mkdirSync(themeDir, { recursive: true });
+      writeFileSync(join(themeDir, "index.html"), themeHtml);
+      themeEmitted++;
+
+      if (indexed) {
+        themeIndexed++;
+        // Theme pages get their own sitemap entry, hashed on the matched
+        // subset so renaming a pub or changing its rating only bumps the
+        // theme pages it actually affects.
+        const themeKey = `/${slug}/${theme.slug}/`;
+        const themeHash = hashCity(matched);
+        const wasThemeNew = lastmodState[themeKey]?.hash !== themeHash;
+        if (wasThemeNew) themeChangedCount++;
+        sitemapEntries.push({
+          url: `${SITE_URL}${themeKey}`,
+          lastmod: resolveLastmod(lastmodState, themeKey, themeHash, today),
+        });
+      } else {
+        themeNoindex++;
+      }
+    }
+  }
+
+  if (themeEmitted > 0) {
+    console.log(
+      `  themes: ${themeEmitted} emitted (${themeIndexed} indexable, ${themeNoindex} noindex)`,
+    );
   }
 
   // Per-pub URLs — served by the Function but listed in the sitemap so
@@ -268,7 +334,7 @@ function main(): void {
       `1 home + ${qualifyingTowns.length} cities + ${pubSlugList.length} pubs)`,
   );
   console.log(
-    `  lastmod: ${cityChangedCount} cities + ${pubChangedCount} pubs bumped (rest reuse previous date)`,
+    `  lastmod: ${cityChangedCount} cities + ${themeChangedCount} themes + ${pubChangedCount} pubs bumped (rest reuse previous date)`,
   );
 
   // 404.

@@ -1,0 +1,44 @@
+name: Lighthouse
+
+# Audits the live production site after each push to main and asserts that
+# SEO / performance / accessibility scores stay within target. Catches
+# regressions automatically before they have time to hurt search rankings.
+#
+# Runs against the production URL because we don't have a per-PR preview
+# URL configured. Cloudflare Pages takes ~2 minutes to deploy after a push,
+# so we wait then run.
+#
+# To bypass on a single push, use [skip lighthouse] in the commit message.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: "!contains(github.event.head_commit.message, '[skip lighthouse]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Cloudflare Pages deploy to complete
+        # Cloudflare auto-deploys on push; give it a couple of minutes to
+        # build, deploy globally, and warm the CDN before we audit.
+        run: sleep 180
+
+      - name: Audit production URLs with Lighthouse
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            https://sunny-pint.co.uk/
+            https://sunny-pint.co.uk/norwich/
+            https://sunny-pint.co.uk/norwich/sunniest/
+            https://sunny-pint.co.uk/pub/the-racecourse-norwich/
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          # Quality gates — fail the run if any URL drops below.
+          # Performance is intentionally lower because LCP on a per-pub
+          # Function-rendered page depends on edge cache state which is
+          # noisy in CI.
+          configPath: ./.github/lighthouse-config.json

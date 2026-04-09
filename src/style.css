@@ -8,10 +8,10 @@
   --surface-container: #eaeae6;
   --surface-container-high: #e0deda;
   --on-surface: #1c1b1a;
-  --on-surface-variant: #5c5955;
+  --on-surface-variant: #4a4845;
   --outline: #c4c0bb;
   --outline-variant: #e0dcda;
-  --primary: #d97706;
+  --primary: #b45309;
   --primary-container: #fef3c7;
   --on-primary-container: #78350f;
   --secondary: #625b71;
@@ -483,8 +483,9 @@ html.dark .sunny-badge--sunny {
 
 .sunny-badge--lg .sunny-badge-score-max {
   font-size: 0.85rem;
-  font-weight: 500;
-  opacity: 0.65;
+  font-weight: 700;
+  /* No opacity — needs full strength to pass WCAG AA on the tier
+     backgrounds. Let the colour difference do the visual hierarchy. */
 }
 
 .sunny-badge--lg .sunny-badge-text {
@@ -504,14 +505,13 @@ html.dark .sunny-badge--sunny {
 
 .sunny-badge--lg .sunny-badge-window {
   font-size: 0.8rem;
-  font-weight: 500;
-  opacity: 0.85;
+  font-weight: 600;
+  opacity: 1;
   line-height: 1.2;
 }
 
 .sunny-badge--lg .sunny-badge-explainer {
-  font-size: 0.7rem;
-  opacity: 0.6;
+  font-size: 0.72rem;
   text-align: right;
   line-height: 1;
 }
@@ -729,6 +729,20 @@ html.dark .sunny-badge--sunny {
 #arc-canvas {
   display: block;
   width: 100%;
+}
+
+/* Pin the arc canvas height in CSS so the layout reserves space before
+   sunarc.ts runs. Without this, the canvas defaults to its HTML intrinsic
+   ratio (300×110 → renders ~147px tall) then snaps to 110px once JS sets
+   the bitmap dimensions, producing a 37px layout shift on first paint. */
+#arc-canvas {
+  height: 110px;
+}
+
+/* Same trick for #circle-canvas — reserve a square aspect ratio so the
+   porthole doesn't reflow when its bitmap is set on first render. */
+#circle-canvas {
+  aspect-ratio: 1 / 1;
 }
 
 /* ── Arc controls ────────────────────────────────────────────────── */
@@ -1089,7 +1103,6 @@ html.dark .sunny-badge--sunny {
   font-size: 0.75rem;
   color: var(--on-surface-variant);
   margin-top: 2px;
-  opacity: 0.8;
 }
 
 .pub-maps {
@@ -1098,7 +1111,7 @@ html.dark .sunny-badge--sunny {
   color: var(--primary);
   text-decoration: none;
   margin-top: 3px;
-  opacity: 0.7;
+  font-weight: 600;
   transition: opacity 120ms;
 }
 
@@ -1141,7 +1154,7 @@ html.dark .sunny-badge--sunny {
 
 .status-open {
   background: #dcfce7;
-  color: #15803d;
+  color: #14532d;
   font-weight: 700;
   font-size: 0.7rem;
   padding: 2px 10px;
@@ -1150,17 +1163,20 @@ html.dark .sunny-badge--sunny {
 }
 html.dark .status-open {
   background: #14532d;
-  color: #86efac;
+  color: #bbf7d0;
 }
 
 .status-closed {
   background: var(--surface-container);
-  color: var(--on-surface-variant);
-  font-weight: 600;
+  color: #3a3835;
+  font-weight: 700;
   font-size: 0.7rem;
   padding: 2px 10px;
   border-radius: var(--radius-full);
   white-space: nowrap;
+}
+html.dark .status-closed {
+  color: #d6d2cd;
 }
 
 .pub-info-grid {
@@ -1190,14 +1206,13 @@ html.dark .status-open {
 }
 
 .val-yes {
-  color: #16a34a;
+  color: #14532d;
 }
 .val-no {
-  color: var(--on-surface-variant);
-  opacity: 0.6;
+  color: #6b6862;
 }
 .val-limited {
-  color: #ca8a04;
+  color: #92400e;
 }
 .val-unknown {
   color: var(--on-surface-variant);
@@ -1288,13 +1303,13 @@ html.dark .status-open {
 .footer-attr {
   font-size: 0.72rem;
   line-height: 1.5;
-  opacity: 0.7;
   text-align: center;
+  color: var(--on-surface-variant);
 }
 
 .footer-attr a {
   text-decoration: none;
-  color: var(--on-surface-variant);
+  color: var(--on-surface);
 }
 
 .footer-attr a:hover {

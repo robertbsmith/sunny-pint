@@ -16,7 +16,20 @@ let filterOpen = false;
 let onSelect: ((pub: Pub) => void) | null = null;
 
 type SortMode = "distance" | "sun";
-let sortMode: SortMode = "distance";
+
+const SORT_STORAGE_KEY = "sunny-pint:sort-mode";
+
+function loadSortMode(): SortMode {
+  try {
+    const v = localStorage.getItem(SORT_STORAGE_KEY);
+    if (v === "sun" || v === "distance") return v;
+  } catch {
+    // localStorage may be unavailable in private browsing — fall through.
+  }
+  return "distance";
+}
+
+let sortMode: SortMode = loadSortMode();
 
 /** Maximum distance in metres, or 0 for "any". Filters which pubs render. */
 let maxDistance = 0;
@@ -36,7 +49,11 @@ export function initPubList(selectCallback: (pub: Pub) => void): void {
   });
 
   // Distance / Sun sort selector — segmented control next to "Open now".
+  // Restore the active state from the persisted choice on first paint.
   const sortButtons = document.querySelectorAll<HTMLButtonElement>(".sort-toggle button");
+  for (const b of sortButtons) {
+    b.classList.toggle("active", b.dataset.sort === sortMode);
+  }
   for (const btn of sortButtons) {
     btn.addEventListener("click", () => {
       const mode = (btn.dataset.sort as SortMode | undefined) ?? "distance";
@@ -74,8 +91,18 @@ function applySort(): void {
 /** Switch the sort order (distance ↔ Sunny Rating) and re-render. */
 export function setSortMode(mode: SortMode): void {
   sortMode = mode;
+  try {
+    localStorage.setItem(SORT_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage failures (private browsing, quota exceeded, etc.).
+  }
   applySort();
   renderList();
+}
+
+/** Read the current sort mode (used by initPubList to set the active button). */
+export function getSortMode(): SortMode {
+  return sortMode;
 }
 
 /** Recompute distances from a location and re-sort by the current mode. */
