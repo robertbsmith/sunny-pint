@@ -54,8 +54,64 @@ function updateScene(): void {
 async function onPubSelected(pub: Pub): Promise<void> {
   // Close mobile drawer.
   document.getElementById("pubs")?.classList.remove("open");
+  updatePubInfo(pub);
   await loadBuildingsForPub(pub);
   updateScene();
+}
+
+function updatePubInfo(pub: Pub): void {
+  const card = document.getElementById("pub-info")!;
+  card.hidden = false;
+
+  document.getElementById("pub-info-name")!.textContent = pub.name;
+
+  const brandEl = document.getElementById("pub-info-brand")!;
+  brandEl.textContent = [pub.brand, pub.brewery].filter(Boolean).join(" · ");
+
+  // Attribute grid.
+  const attrs: { label: string; value: string | undefined }[] = [
+    { label: "Real ale", value: pub.real_ale },
+    { label: "Food", value: pub.food },
+    { label: "Outdoor", value: pub.outdoor_seating || pub.beer_garden },
+    { label: "Wheelchair", value: pub.wheelchair },
+    { label: "Dogs", value: pub.dog },
+    { label: "WiFi", value: pub.wifi },
+  ];
+
+  const grid = document.getElementById("pub-info-grid")!;
+  grid.innerHTML = attrs.map(({ label, value }) => {
+    let display: string;
+    let cls: string;
+    if (!value) {
+      display = "Unknown";
+      cls = "val-unknown";
+    } else if (value === "no" || value === "limited") {
+      display = value === "limited" ? "Limited" : "No";
+      cls = "val-no";
+    } else {
+      display = "Yes";
+      cls = "val-yes";
+    }
+    return `<div class="pub-info-cell"><div class="cell-label">${label}</div><div class="cell-value ${cls}">${display}</div></div>`;
+  }).join("");
+
+  // Hours.
+  const hoursEl = document.getElementById("pub-info-hours")!;
+  hoursEl.textContent = pub.opening_hours || "";
+
+  // Links.
+  const links: string[] = [];
+  if (pub.phone) {
+    links.push(`<a href="tel:${pub.phone}">${pub.phone}</a>`);
+  }
+  if (pub.website) {
+    const domain = pub.website.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    links.push(`<a href="${pub.website}" target="_blank" rel="noopener">${domain}</a>`);
+  }
+  const query = encodeURIComponent(pub.name);
+  links.push(`<a href="https://www.google.com/maps/search/${query}/@${pub.lat},${pub.lng},17z" target="_blank" rel="noopener">Directions</a>`);
+
+  document.getElementById("pub-info-links")!.innerHTML = links.join(" · ");
 }
 
 function setLocation(lat: number, lng: number): void {

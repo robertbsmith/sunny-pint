@@ -57,10 +57,25 @@ class PubHandler(osmium.SimpleHandler):
             "name": tags.get("name", "Unnamed pub"),
             "lat": lat,
             "lng": lng,
-            "beer_garden": tags.get("beer_garden", ""),
-            "outdoor_seating": tags.get("outdoor_seating", ""),
-            "opening_hours": tags.get("opening_hours", ""),
         }
+        # Only include non-empty optional tags.
+        for osm_key, pub_key in [
+            ("beer_garden", "beer_garden"),
+            ("outdoor_seating", "outdoor_seating"),
+            ("opening_hours", "opening_hours"),
+            ("real_ale", "real_ale"),
+            ("food", "food"),
+            ("wheelchair", "wheelchair"),
+            ("dog", "dog"),
+            ("internet_access", "wifi"),
+            ("phone", "phone"),
+            ("website", "website"),
+            ("brand", "brand"),
+            ("brewery", "brewery"),
+        ]:
+            val = tags.get(osm_key, "")
+            if val:
+                pub[pub_key] = val
         if polygon:
             pub["polygon"] = polygon
         return pub

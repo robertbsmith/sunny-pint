@@ -4,15 +4,24 @@ export interface Pub {
   name: string;
   lat: number;
   lng: number;
-  clat?: number; // OSM building centroid lat (more accurate than geocode)
-  clng?: number; // OSM building centroid lng
-  elev?: number; // ground elevation (metres above sea level)
-  horizon?: string; // base64-encoded terrain horizon profile (36 azimuths, uint8 × 0.1°)
-  outdoor?: [number, number][][]; // outdoor area [exterior, ...holes] each [[lat,lng],...]
+  clat?: number;
+  clng?: number;
+  elev?: number;
+  horizon?: string;
+  outdoor?: [number, number][][];
   beer_garden?: string;
   outdoor_seating?: string;
   opening_hours?: string;
-  distance?: number; // computed client-side, metres
+  real_ale?: string;
+  food?: string;
+  wheelchair?: string;
+  dog?: string;
+  wifi?: string;
+  phone?: string;
+  website?: string;
+  brand?: string;
+  brewery?: string;
+  distance?: number;
 }
 
 /** A building with height data */

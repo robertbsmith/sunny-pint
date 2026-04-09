@@ -624,6 +624,87 @@ a {
 
 /* ── Footer ──────────────────────────────────────────────────────── */
 
+/* ── Pub info card ───────────────────────────────────────────── */
+
+.pub-info {
+  padding: 12px 0;
+  width: 100%;
+  max-width: 400px;
+}
+
+.pub-info[hidden] { display: none; }
+
+.pub-info-header h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.pub-info-brand {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+}
+
+.pub-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 10px 0;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--outline-variant);
+}
+
+.pub-info-cell {
+  background: var(--surface);
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.pub-info-cell .cell-label {
+  font-size: 0.65rem;
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pub-info-cell .cell-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.pub-info-cell .cell-value.val-yes { color: #16a34a; }
+.pub-info-cell .cell-value.val-no { color: var(--on-surface-variant); opacity: 0.5; }
+.pub-info-cell .cell-value.val-unknown { color: var(--on-surface-variant); opacity: 0.35; }
+
+.pub-info-hours {
+  font-size: 0.8rem;
+  color: var(--on-surface-variant);
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+.pub-info-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+
+.pub-info-links a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.pub-info-links a:hover {
+  text-decoration: underline;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+
 #footer {
   flex-shrink: 0;
   padding: 6px 16px;
