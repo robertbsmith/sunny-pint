@@ -19,8 +19,19 @@ import { computeShadows, isTerrainOccluded } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
 import { initSunArc, renderArc } from "./sunarc";
+import { largeSunBadgeHtml } from "./sunbadge";
 import type { Pub } from "./types";
-import { readURL, setLocationQuery, writeURL, writeURLDebounced } from "./url";
+import {
+  clearTimeUserDriven,
+  markTimeUserDriven,
+  onPopState,
+  readURL,
+  setBasePath,
+  setLocationQuery,
+  withSuppressedWrites,
+  writeURL,
+  writeURLDebounced,
+} from "./url";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
 
 async function loadPubs(): Promise<void> {
@@ -64,6 +75,10 @@ async function onPubSelected(pub: Pub): Promise<void> {
   window.scrollTo({ top: 0, behavior: "smooth" });
   document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
   updatePubInfo(pub);
+  // Immediate URL push so the browser back button has a real history entry
+  // for this pub. updateScene() then runs the debounced writer for any
+  // subsequent time scrubbing on top.
+  writeURL();
   await loadBuildingsForPub(pub);
   updateScene();
 }
@@ -90,6 +105,10 @@ function updatePubInfo(pub: Pub): void {
   if (hours?.nextChangeLabel) brandParts.push(hours.nextChangeLabel);
   const brandEl = document.getElementById("pub-info-brand");
   if (brandEl) brandEl.textContent = brandParts.join(" · ");
+
+  // Sunny Rating badge — the headline metric, just below the name.
+  const sunEl = document.getElementById("pub-info-sun");
+  if (sunEl) sunEl.innerHTML = largeSunBadgeHtml(pub);
 
   // Attribute grid.
   function fmtVal(v: string | undefined): { text: string; cls: string } {
@@ -211,6 +230,64 @@ function setTheme(theme: Theme): void {
   updateScene();
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────
+
+/** Read a `<meta name="...">` content attribute, returning '' if absent. */
+function getMeta(name: string): string {
+  const el = document.querySelector(`meta[name="${name}"]`);
+  return el?.getAttribute("content")?.trim() ?? "";
+}
+
+function parseFloatOrNull(s: string): number | null {
+  if (!s) return null;
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Hydrate the homepage with the default location and try GPS in the
+ * background. Used for the bare `/` route — never called on city or pub
+ * landing pages, where auto-GPS would silently relocate the user away
+ * from the page they actually wanted to see.
+ */
+function defaultHomeHydration(labelEl: HTMLElement | null): void {
+  setLocation(DEFAULT_LAT, DEFAULT_LNG);
+  if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
+  setLocationQuery(DEFAULT_LOCATION_NAME);
+
+  if (!navigator.geolocation) return;
+  if (labelEl) labelEl.textContent = "Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude, longitude } = pos.coords;
+      setLocation(latitude, longitude);
+      try {
+        const resp = await fetch(
+          `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`,
+          { headers: { "User-Agent": USER_AGENT } },
+        );
+        const data = (await resp.json()) as { address?: Record<string, string> };
+        const addr = data.address ?? {};
+        const local =
+          addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet || addr.city_district;
+        const main = addr.city || addr.town || addr.village || addr.municipality;
+        const name =
+          local && main && local !== main ? `${local}, ${main}` : local || main || "your location";
+        if (labelEl) labelEl.textContent = name;
+        setLocationQuery(name);
+      } catch {
+        if (labelEl) labelEl.textContent = "Your location";
+      }
+      writeURL();
+    },
+    () => {
+      if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
+    },
+    { timeout: 5000, maximumAge: 60000 },
+  );
+}
+
 // ── Init ─────────────────────────────────────────────────────────────
 
 async function init(): Promise<void> {
@@ -227,15 +304,40 @@ async function init(): Promise<void> {
     // Read URL params (may override defaults).
     const urlState = readURL();
 
-    // Set time — URL param, or now.
+    // Read landing-page meta tags. Statically generated city / pub pages
+    // populate these so the app boots straight into the right context with
+    // no extra fetches and no client-side route detection.
+    const metaArea = getMeta("sp:area");
+    const metaPub = getMeta("sp:pub");
+    const metaAreaName = getMeta("sp:area-name");
+    const metaAreaLat = parseFloatOrNull(getMeta("sp:area-lat"));
+    const metaAreaLng = parseFloatOrNull(getMeta("sp:area-lng"));
+
+    // Lock the base path for url.ts — all subsequent writes stay on this path.
+    setBasePath(window.location.pathname.replace(/[^/]*$/, "") || "/");
+
+    // Set time — URL param, or now. If the incoming URL already had a ?t=
+    // it was either user-shared or scrubbed previously, so preserve it on
+    // subsequent writes. Otherwise leave the URL clean until the user
+    // actually moves the slider.
     const now = new Date();
-    state.timeMins = urlState.time ?? now.getHours() * 60 + now.getMinutes();
+    if (urlState.time != null) {
+      state.timeMins = urlState.time;
+      markTimeUserDriven();
+    } else {
+      state.timeMins = now.getHours() * 60 + now.getMinutes();
+    }
     if (urlState.date) state.date = urlState.date;
 
-    // Init UI components.
+    // Init UI components. Wrap the sun-arc callback so any user-driven time
+    // change (scrub or play) flips the URL flag and writeURL starts emitting
+    // ?t= for sharing/reload preservation.
     initPubList(onPubSelected);
     initCircle();
-    initSunArc(updateScene);
+    initSunArc(() => {
+      markTimeUserDriven();
+      updateScene();
+    });
 
     // Load pub data.
     await loadPubs();
@@ -247,84 +349,77 @@ async function init(): Promise<void> {
       writeURL();
     });
 
-    // If URL specifies a pub, use that pub's location as the sort centre.
-    const urlPub = urlState.pubId ? state.pubs.find((p) => p.id === urlState.pubId) : null;
-
-    if (urlPub) {
-      // URL specified a pub — use it as the centre and keep it selected.
-      state.selectedPubId = urlPub.id;
-      setLocation(urlPub.lat, urlPub.lng, { keepPub: true });
-      const label = urlState.query || "Norwich";
-      document.getElementById("location-label")!.textContent = label;
-      if (urlState.query) setLocationQuery(urlState.query);
-      await onPubSelected(urlPub);
-    } else if (urlState.query) {
-      // Search term but no pub — geocode and sort.
-      try {
-        const resp = await fetch(
-          `${NOMINATIM_URL}/search?format=json&q=${encodeURIComponent(urlState.query)}&countrycodes=gb&limit=1`,
-          { headers: { "User-Agent": USER_AGENT } },
-        );
-        const results = (await resp.json()) as Array<{ lat: string; lon: string }>;
-        const first = results[0];
-        if (first) {
-          setLocation(parseFloat(first.lat), parseFloat(first.lon));
-        } else {
-          setLocation(DEFAULT_LAT, DEFAULT_LNG);
+    // Browser back/forward — re-hydrate from the new URL. Routes we handle:
+    //   /pub/<slug>/  → look up pub by slug, select it, render
+    //   /<city>/      → no-op for now (stays in current city context)
+    //   /             → no-op (homepage; user is just clearing the slug)
+    // Time/date scrubbing carries over via the urlState's time/date fields.
+    onPopState((s) => {
+      if (s.time != null) {
+        state.timeMins = s.time;
+        markTimeUserDriven();
+      }
+      if (s.date) state.date = s.date;
+      const route = s.route;
+      if (route.kind === "pub") {
+        const pub = state.pubs.find((p) => p.slug === route.pubSlug);
+        if (pub && pub.id !== state.selectedPubId) {
+          // Suppress writes during programmatic navigation so onPubSelected
+          // doesn't push another history entry on top of the one we just
+          // popped to.
+          withSuppressedWrites(() => {
+            state.selectedPubId = pub.id;
+            void onPubSelected(pub);
+          });
         }
-      } catch {
-        setLocation(DEFAULT_LAT, DEFAULT_LNG);
       }
-      document.getElementById("location-label")!.textContent = urlState.query;
-      setLocationQuery(urlState.query);
-    } else if (urlState.lat != null && urlState.lng != null) {
-      setLocation(urlState.lat, urlState.lng);
-      document.getElementById("location-label")!.textContent =
-        `${urlState.lat.toFixed(3)}, ${urlState.lng.toFixed(3)}`;
-    } else {
-      // No URL params — default to Norwich, try GPS in background.
-      setLocation(DEFAULT_LAT, DEFAULT_LNG);
-      const labelEl = document.getElementById("location-label");
-      if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
-      setLocationQuery(DEFAULT_LOCATION_NAME);
+      updateScene();
+    });
 
-      if (navigator.geolocation) {
-        if (labelEl) labelEl.textContent = "Locating...";
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const { latitude, longitude } = pos.coords;
-            setLocation(latitude, longitude);
-            try {
-              const resp = await fetch(
-                `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`,
-                { headers: { "User-Agent": USER_AGENT } },
-              );
-              const data = (await resp.json()) as { address?: Record<string, string> };
-              const addr = data.address ?? {};
-              const local =
-                addr.neighbourhood ||
-                addr.suburb ||
-                addr.quarter ||
-                addr.hamlet ||
-                addr.city_district;
-              const main = addr.city || addr.town || addr.village || addr.municipality;
-              const name =
-                local && main && local !== main
-                  ? `${local}, ${main}`
-                  : local || main || "your location";
-              if (labelEl) labelEl.textContent = name;
-              setLocationQuery(name);
-            } catch {
-              if (labelEl) labelEl.textContent = "Your location";
-            }
-            writeURL();
-          },
-          () => {
-            if (labelEl) labelEl.textContent = DEFAULT_LOCATION_NAME;
-          },
-          { timeout: 5000, maximumAge: 60000 },
-        );
+    // ── Hydrate location/pub from the route ─────────────────────────
+    //
+    // Precedence:
+    //   1. meta sp:pub  → per-pub landing page (PR #2)
+    //   2. meta sp:area → city landing page
+    //   3. ?lat=&lng=   → shared GPS coords on the homepage
+    //   4. nothing      → default location + try GPS in the background
+
+    const labelEl = document.getElementById("location-label");
+
+    if (metaPub) {
+      const pub = state.pubs.find((p) => p.slug === metaPub);
+      if (pub) {
+        state.selectedPubId = pub.id;
+        setLocation(pub.lat, pub.lng, { keepPub: true });
+        if (labelEl && pub.town) labelEl.textContent = pub.town;
+        if (pub.town) setLocationQuery(pub.town);
+        await onPubSelected(pub);
+      } else {
+        // Stale slug — fall back to home behaviour.
+        defaultHomeHydration(labelEl);
       }
+    } else if (metaArea && metaAreaLat != null && metaAreaLng != null) {
+      // City landing page. Centre on the supplied coordinates and DO NOT
+      // auto-request GPS — we don't want to silently relocate a user who
+      // arrived from a "/<city>/" Google result to wherever they happen
+      // to be standing.
+      setLocation(metaAreaLat, metaAreaLng);
+      const name = metaAreaName || metaArea;
+      if (labelEl) labelEl.textContent = name;
+      setLocationQuery(name);
+    } else if (
+      urlState.route.kind === "home" &&
+      urlState.route.lat != null &&
+      urlState.route.lng != null
+    ) {
+      // Shared GPS coords URL.
+      setLocation(urlState.route.lat, urlState.route.lng);
+      if (labelEl) {
+        labelEl.textContent = `${urlState.route.lat.toFixed(3)}, ${urlState.route.lng.toFixed(3)}`;
+      }
+    } else {
+      // Plain homepage — default centre, GPS in background.
+      defaultHomeHydration(labelEl);
     }
 
     // Theme toggle in footer.
@@ -343,11 +438,13 @@ async function init(): Promise<void> {
     });
     updateThemeButtons();
 
-    // Now button — reset time to current.
+    // Now button — reset time to current. Also clear the user-driven flag
+    // so writeURL stops emitting ?t= and the URL goes back to clean.
     document.getElementById("btn-now")!.addEventListener("click", () => {
       const now = new Date();
       state.timeMins = now.getHours() * 60 + now.getMinutes();
       state.date = new Date();
+      clearTimeUserDriven();
       updateScene();
       renderArc();
     });

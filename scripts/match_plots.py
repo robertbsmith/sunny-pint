@@ -3,14 +3,20 @@
 For each pub, finds the cadastral parcel containing it, then subtracts
 all building footprints (from OSM GeoPackage) to get the outdoor area polygon.
 
+Also derives locality data (town, country, slug) for each pub. The town is
+sourced from OSM addr tags first, then from the matched parcel's local
+authority as a fallback. Slugs are stable across pipeline runs via a lock
+file (data/slug_lock.json) so SEO URLs never change once published.
+
 Runs after merge_pubs.py — enriches data/pubs_merged.json with plot/outdoor
-fields, then copies result to public/data/pubs.json.
+fields, then writes result to public/data/pubs.json.
 
 Usage:
     uv run python scripts/match_plots.py --area norwich
 """
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -23,10 +29,12 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
 from areas import parse_area, in_bbox
+from localities import la_to_country, la_to_town_fallback
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
 PUBS_OUT = Path(__file__).resolve().parent.parent / "public" / "data" / "pubs.json"
+SLUG_LOCK = DATA / "slug_lock.json"
 INSPIRE_DIR = DATA / "inspire"
 INSPIRE_GPKG = DATA / "inspire.gpkg"
 GPKG_PATH = DATA / "buildings.gpkg"
@@ -168,15 +176,23 @@ def load_parcels_near_pubs(pubs: list[dict], area_name: str | None = None) -> tu
 
 
 def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
-    """Load parcels from a small set of named GML files (fast path)."""
+    """Load parcels from a small set of named GML files (fast path).
+
+    Returns (STRtree, parcels, parcel_las) where parcel_las is parallel to
+    parcels and contains the local authority name (derived from the GML
+    filename) for each parcel.
+    """
     import fiona
 
     parcels = []
+    parcel_las: list[str] = []
     for name in gml_names:
         path = INSPIRE_DIR / name
         if not path.exists():
             print(f"    {name}: not found, skipping")
             continue
+        # "Norwich_City_Council.gml" → "Norwich City Council"
+        la_name = path.stem.replace("_", " ")
         try:
             with fiona.open(str(path)) as src:
                 for feat in src:
@@ -188,6 +204,7 @@ def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
                         continue
                     prepare(geom)
                     parcels.append(geom)
+                    parcel_las.append(la_name)
             print(f"    {name}: ok ({len(parcels)} parcels so far)", flush=True)
         except Exception as e:
             print(f"    {name}: ERROR {e}")
@@ -195,11 +212,18 @@ def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
     print(f"  {len(parcels)} parcels near pubs from {len(gml_names)} files")
     if not parcels:
         return None
-    return STRtree(parcels), parcels
+    return STRtree(parcels), parcels, parcel_las
 
 
 def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
-    """Load parcels from the INSPIRE GeoPackage using R-tree spatial queries."""
+    """Load parcels from the INSPIRE GeoPackage using R-tree spatial queries.
+
+    Returns (STRtree, parcels, parcel_las) where parcel_las is parallel to
+    parcels and contains the local_authority value from each parcel row.
+    Older GeoPackages built before the local_authority column was added will
+    return None for every entry — match_plots.py will warn the user to
+    rebuild.
+    """
     import sqlite3 as _sqlite3
 
     # Query parcels near each pub using the GeoPackage R-tree index.
@@ -212,10 +236,23 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
 
     conn = _sqlite3.connect(str(INSPIRE_GPKG))
 
+    # Detect whether this gpkg has the local_authority column. Older builds
+    # (before build_inspire_gpkg.py started recording it) won't have it.
+    cur = conn.execute("PRAGMA table_info(parcels)")
+    col_names = [r[1] for r in cur.fetchall()]
+    has_la_column = "local_authority" in col_names
+    if not has_la_column:
+        print(
+            "  WARNING: inspire.gpkg has no local_authority column. "
+            "Locality data will be missing — re-run `just build-inspire-gpkg` to fix."
+        )
+
+    la_select = "p.local_authority" if has_la_column else "NULL AS local_authority"
+
     # Use R-tree spatial index for fast bbox query.
     try:
         rows = conn.execute(
-            "SELECT p.fid, p.geom FROM parcels p "
+            f"SELECT p.fid, p.geom, {la_select} FROM parcels p "
             "JOIN rtree_parcels_geom r ON p.fid = r.id "
             "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
             (min_x, max_x, min_y, max_y),
@@ -223,14 +260,15 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
     except _sqlite3.OperationalError:
         # No R-tree — fall back to full scan (slow).
         print("  WARNING: no R-tree index, falling back to full scan")
-        rows = conn.execute("SELECT fid, geom FROM parcels").fetchall()
+        rows = conn.execute(f"SELECT fid, geom, {la_select} FROM parcels").fetchall()
     conn.close()
 
     print(f"  {len(rows)} parcels in pub area bbox", flush=True)
 
     # Parse geometries and filter to those actually near a pub.
     parcels = []
-    for fid, blob in rows:
+    parcel_las: list[str | None] = []
+    for fid, blob, la in rows:
         try:
             hl = gpkg_header_len(blob)
             geom = wkb.loads(blob[hl:])
@@ -243,6 +281,7 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
 
             prepare(geom)
             parcels.append(geom)
+            parcel_las.append(la)
         except Exception:
             continue
 
@@ -250,7 +289,7 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
     if not parcels:
         return None
 
-    return STRtree(parcels), parcels
+    return STRtree(parcels), parcels, parcel_las
 
 
 def building_polygon_osgb(pub):
@@ -267,6 +306,100 @@ def building_polygon_osgb(pub):
     return poly
 
 
+# ── Locality + slug derivation ─────────────────────────────────────────────
+
+
+def derive_town(pub: dict) -> str | None:
+    """Pick the best town for a pub.
+
+    Precedence: OSM addr tags (most specific first), then a fallback derived
+    from the matched parcel's local authority. Returns None if neither source
+    has anything usable — those pubs won't appear on city landing pages.
+    """
+    for key in ("addr_city", "addr_town", "addr_village", "addr_hamlet", "addr_place"):
+        val = pub.get(key)
+        if val:
+            return val.strip()
+    return la_to_town_fallback(pub.get("local_authority"))
+
+
+def slugify(text: str) -> str:
+    """Lowercase ASCII kebab-case slug.
+
+    Handles ampersands ("Fox & Hound" → "fox-and-hound"), apostrophes
+    ("King's Head" → "kings-head"), and any other punctuation.
+    """
+    text = text.lower()
+    text = text.replace("&", " and ")
+    # Strip apostrophes (curly and straight) without leaving a hyphen.
+    text = text.replace("'", "").replace("\u2019", "")
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-+", "-", text)
+    return text.strip("-")
+
+
+def lock_key(pub: dict) -> str:
+    """Stable identifier for the slug lock file.
+
+    Keyed on name + rounded coordinates so OSM ID changes (way → relation,
+    re-ingested with a new ID) don't cause a slug to be re-issued under a
+    different name. ~11m of resolution at lat=52, fine for distinguishing
+    pubs.
+    """
+    name = pub.get("name") or "unnamed"
+    return f"{name}|{round(pub['lat'], 4)}|{round(pub['lng'], 4)}"
+
+
+def load_slug_lock() -> dict[str, str]:
+    if SLUG_LOCK.exists():
+        try:
+            return json.loads(SLUG_LOCK.read_text())
+        except json.JSONDecodeError:
+            print(f"  WARNING: {SLUG_LOCK} is corrupted, starting fresh")
+    return {}
+
+
+def save_slug_lock(lock: dict[str, str]) -> None:
+    SLUG_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    SLUG_LOCK.write_text(json.dumps(lock, indent=2, sort_keys=True))
+
+
+def assign_slugs(pubs: list[dict]) -> None:
+    """Mutate pubs in place to add a stable, collision-free `slug` field.
+
+    Uses data/slug_lock.json to preserve historical slugs across pipeline
+    runs. New pubs get a freshly minted slug; previously seen pubs reuse
+    their locked slug even if the name or town changes slightly.
+    """
+    lock = load_slug_lock()
+    used: set[str] = set(lock.values())
+    new_locks: dict[str, str] = {}
+
+    for pub in pubs:
+        key = lock_key(pub)
+        if key in lock:
+            pub["slug"] = lock[key]
+            continue
+
+        # Build a fresh slug.
+        name_slug = slugify(pub.get("name") or "unnamed-pub")
+        town = pub.get("town")
+        base = f"{name_slug}-{slugify(town)}" if town else name_slug
+        candidate = base
+        n = 2
+        while candidate in used:
+            candidate = f"{base}-{n}"
+            n += 1
+        used.add(candidate)
+        pub["slug"] = candidate
+        new_locks[key] = candidate
+
+    if new_locks:
+        lock.update(new_locks)
+        save_slug_lock(lock)
+        print(f"  {len(new_locks)} new slugs locked (total: {len(lock)})")
+
+
 def main():
     area = parse_area()
     print(f"Matching plots for {area.name}")
@@ -278,10 +411,19 @@ def main():
     pubs = json.loads(PUBS_IN.read_text())
     print(f"  {len(pubs)} pubs loaded")
 
+    # Filter to the requested area BEFORE computing the parcel-load bbox.
+    # Otherwise, when pubs_merged.json is the full UK dataset (~33k pubs),
+    # the bbox would span the whole country and the GeoPackage R-tree query
+    # would return all 24M parcels — OOM and 30+ minute load.
+    if area.bbox is not None:
+        before = len(pubs)
+        pubs = [p for p in pubs if in_bbox(p["lat"], p["lng"], area.bbox)]
+        print(f"  {len(pubs)}/{before} pubs in {area.name} bbox")
+
     result = load_parcels_near_pubs(pubs, area_name=area.name.lower())
 
     if result:
-        parcel_tree, all_parcels = result
+        parcel_tree, all_parcels, all_parcel_las = result
 
         # Load all buildings for subtracting from plots.
         all_buildings, building_tree = load_buildings_osgb(area)
@@ -301,12 +443,15 @@ def main():
                 px, py = to_osgb.transform(pub["lng"], pub["lat"])
             pt = Point(px, py)
 
-            # Find containing parcel via spatial index.
+            # Find containing parcel via spatial index. Track which one matched
+            # so we can stamp its local_authority onto the pub.
             candidates = parcel_tree.query(pt)
             parcel = None
+            parcel_la: str | None = None
             for idx in candidates:
                 if all_parcels[idx].contains(pt):
                     parcel = all_parcels[idx]
+                    parcel_la = all_parcel_las[idx]
                     break
 
             if parcel is None:
@@ -314,6 +459,8 @@ def main():
 
             matched += 1
             pub["plot"] = osgb_to_wgs_rings(parcel)[0]
+            if parcel_la:
+                pub["local_authority"] = parcel_la
 
             # Subtract ALL buildings that intersect this parcel.
             if building_tree:
@@ -347,7 +494,26 @@ def main():
     else:
         print("  No parcels — skipping plot matching")
 
-    # Write to public/data/pubs.json — strip polygon (replaced with centroid) to save bandwidth.
+    # Derive locality (town, country) for every pub from OSM addr tags + the
+    # local authority of the matched parcel. This drives SEO landing-page
+    # generation downstream.
+    for pub in pubs:
+        town = derive_town(pub)
+        if town:
+            pub["town"] = town
+        pub["country"] = la_to_country(pub.get("local_authority"))
+
+    # Generate stable slugs (locked across pipeline runs).
+    assign_slugs(pubs)
+
+    # Stats on locality coverage so we know how good downstream pages will be.
+    with_town = sum(1 for p in pubs if p.get("town"))
+    with_la = sum(1 for p in pubs if p.get("local_authority"))
+    print(f"\n  {with_la}/{len(pubs)} pubs have a local authority")
+    print(f"  {with_town}/{len(pubs)} pubs have a town")
+
+    # Write to public/data/pubs.json — strip pipeline-internal fields and
+    # replace the full polygon with a centroid to save bandwidth.
     PUBS_OUT.parent.mkdir(parents=True, exist_ok=True)
     output_pubs = []
     for pub in pubs:
@@ -356,7 +522,7 @@ def main():
         if "polygon" in out and out["polygon"] and len(out["polygon"]) > 2:
             out["clat"] = round(sum(c[0] for c in out["polygon"]) / len(out["polygon"]), 6)
             out["clng"] = round(sum(c[1] for c in out["polygon"]) / len(out["polygon"]), 6)
-        # Remove plot (only used during pipeline) and polygon from public output.
+        # Remove fields that are only used during pipeline processing.
         out.pop("polygon", None)
         out.pop("plot", None)
         output_pubs.append(out)

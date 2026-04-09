@@ -126,7 +126,8 @@ CREATE TABLE gpkg_geometry_columns (
 CREATE TABLE parcels (
     fid INTEGER PRIMARY KEY AUTOINCREMENT,
     geom BLOB,
-    inspire_id TEXT
+    inspire_id TEXT,
+    local_authority TEXT
 );
 
 INSERT INTO gpkg_contents (table_name, data_type, identifier, srs_id)
@@ -219,14 +220,16 @@ def main() -> None:
     tmp = OUTPUT.with_suffix(".gpkg.tmp")
     conn = init_gpkg(tmp)
 
-    insert_parcel = "INSERT INTO parcels (fid, geom, inspire_id) VALUES (?, ?, ?)"
+    insert_parcel = (
+        "INSERT INTO parcels (fid, geom, inspire_id, local_authority) VALUES (?, ?, ?, ?)"
+    )
     insert_rtree = "INSERT INTO rtree_parcels_geom (id, minx, maxx, miny, maxy) VALUES (?, ?, ?, ?, ?)"
 
     t0 = time.time()
     total = 0
     errors = 0
     fid = 0
-    parcel_batch: list[tuple[int, bytes, str]] = []
+    parcel_batch: list[tuple[int, bytes, str, str]] = []
     rtree_batch: list[tuple[int, float, float, float, float]] = []
     overall_minx = overall_miny = float("inf")
     overall_maxx = overall_maxy = float("-inf")
@@ -242,11 +245,15 @@ def main() -> None:
 
     try:
         for i, gml_file in enumerate(gml_files, 1):
+            # The GML filename is the only place the local authority is recorded.
+            # "Norwich_City_Council.gml" → "Norwich City Council". This is what
+            # match_plots.py reads back to derive locality for SEO landing pages.
+            local_authority = gml_file.stem.replace("_", " ")
             try:
                 for inspire_id, poly in iter_features(gml_file):
                     fid += 1
                     blob, minx, maxx, miny, maxy = make_gpkg_blob(poly)
-                    parcel_batch.append((fid, blob, inspire_id))
+                    parcel_batch.append((fid, blob, inspire_id, local_authority))
                     rtree_batch.append((fid, minx, maxx, miny, maxy))
                     if minx < overall_minx:
                         overall_minx = minx

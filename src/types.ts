@@ -1,3 +1,18 @@
+/** Precomputed Sunny Rating, added by scripts/precompute_sun.ts. */
+export interface SunMetrics {
+  /** 0–100 — the headline number. */
+  score: number;
+  /** Human-readable bucket: "Sun trap" | "Very sunny" | "Sunny" | "Partly shaded" | "Shaded". */
+  label: string;
+  /** Longest contiguous span ≥50% sun on the equinox, e.g. "13:30–16:30", or null. */
+  best_window: string | null;
+  morning_sun: boolean;
+  midday_sun: boolean;
+  evening_sun: boolean;
+  all_day_sun: boolean;
+  sample_day: string;
+}
+
 /** A pub from OSM */
 export interface Pub {
   id: string;
@@ -9,6 +24,7 @@ export interface Pub {
   elev?: number;
   horizon?: string;
   outdoor?: [number, number][][];
+  outdoor_area_m2?: number;
   beer_garden?: string;
   outdoor_seating?: string;
   opening_hours?: string;
@@ -21,6 +37,24 @@ export interface Pub {
   website?: string;
   brand?: string;
   brewery?: string;
+  // Locality (added by match_plots.py — drives SEO landing pages and routing)
+  slug?: string;
+  town?: string;
+  country?: string;
+  local_authority?: string;
+  // Raw OSM address tags (used by match_plots.py for town derivation)
+  addr_city?: string;
+  addr_town?: string;
+  addr_village?: string;
+  addr_hamlet?: string;
+  addr_suburb?: string;
+  addr_place?: string;
+  addr_postcode?: string;
+  addr_street?: string;
+  addr_housenumber?: string;
+  // Precomputed Sunny Rating (offline, scripts/precompute_sun.ts)
+  sun?: SunMetrics;
+  // Computed at runtime
   distance?: number;
 }
 

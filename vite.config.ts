@@ -23,8 +23,31 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+        // Take control immediately so the new SW serves landing pages on the
+        // very next page load — no second visit needed for the SEO content.
+        skipWaiting: true,
+        clientsClaim: true,
+        // Don't precache HTML — the static landing pages we generate
+        // (/norwich/index.html etc.) and the per-pub Pages Function (PR #2)
+        // are network-first via runtimeCaching, not precached. Precaching
+        // ~33k pub pages would also blow the SW cache budget at full UK.
+        globPatterns: ["**/*.{js,css,png,svg,woff2}"],
+        // No SPA fallback — every URL we serve is a real document (static
+        // file or Function-rendered), so navigation requests go straight to
+        // the network-first handler below.
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            // HTML navigation requests — NetworkFirst so SEO content updates
+            // reach returning users immediately, with cache fallback offline.
+            urlPattern: ({ request }) => request.mode === "navigate",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "pages-v3",
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+            },
+          },
           {
             // Cache map tiles
             urlPattern: /^https:\/\/.*\.fastly\.net\//,
@@ -70,7 +93,7 @@ export default defineConfig({
             urlPattern: /\/data\/.+\.json$/,
             handler: "NetworkFirst",
             options: {
-              cacheName: "app-data-v2",
+              cacheName: "app-data-v3",
               networkTimeoutSeconds: 4,
               expiration: { maxEntries: 10, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },

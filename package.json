@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "release": "vite build && tsx scripts/generate_pages.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
@@ -21,9 +22,14 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
     "@tailwindcss/vite": "^4.2.2",
+    "polygon-clipping": "^0.15.7",
+    "satori": "^0.26.0",
+    "satori-html": "^0.3.2",
     "tailwindcss": "^4.2.2",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.7",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "wrangler": "^4.81.0"
   }
 }

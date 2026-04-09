@@ -350,6 +350,324 @@ a {
   }
 }
 
+/* ── Sunny Rating badge ──────────────────────────────────────────── */
+/* Two sizes — `.sunny-badge` is the compact pill used inline in the pub
+   list; `.sunny-badge--lg` is the bigger headline used in the pub-info
+   card under the porthole. Five tier colours by score bucket. */
+
+.sunny-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: var(--surface-container);
+  color: var(--on-surface);
+  border: 1px solid var(--outline-variant);
+}
+
+.sunny-badge::before {
+  content: "☀";
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.sunny-badge--trap {
+  background: #fde68a;
+  color: #78350f;
+  border-color: #fbbf24;
+}
+
+.sunny-badge--very {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.sunny-badge--sunny {
+  background: #fffbeb;
+  color: #a16207;
+  border-color: #fef3c7;
+}
+
+.sunny-badge--partial {
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  border-color: var(--outline-variant);
+}
+
+.sunny-badge--shaded {
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  border-color: var(--outline);
+}
+
+/* Dark mode: warmer backgrounds, lighter foregrounds. */
+html.dark .sunny-badge--trap {
+  background: #78350f;
+  color: #fde68a;
+  border-color: #d97706;
+}
+html.dark .sunny-badge--very {
+  background: #5a2c0a;
+  color: #fcd34d;
+  border-color: #b45309;
+}
+html.dark .sunny-badge--sunny {
+  background: #3d2305;
+  color: #fde68a;
+  border-color: #92400e;
+}
+
+/* Large variant — used in the pub-info card under the porthole.
+   Horizontal layout: score on the left, label/best-window stacked on the
+   right, explainer line underneath. Uses the available width instead of
+   stacking everything line by line. */
+.sunny-badge--lg {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.95rem;
+  white-space: normal;
+}
+
+.sunny-badge--lg::before {
+  display: none;
+}
+
+.sunny-badge--lg .sunny-badge-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sunny-badge--lg .sunny-badge-score {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sunny-badge--lg .sunny-badge-score::before {
+  content: "☀";
+  font-size: 1.4rem;
+  line-height: 1;
+  margin-right: 6px;
+}
+
+.sunny-badge--lg .sunny-badge-score-max {
+  font-size: 0.85rem;
+  font-weight: 500;
+  opacity: 0.65;
+}
+
+.sunny-badge--lg .sunny-badge-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sunny-badge--lg .sunny-badge-label {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.sunny-badge--lg .sunny-badge-window {
+  font-size: 0.8rem;
+  font-weight: 500;
+  opacity: 0.85;
+  line-height: 1.2;
+}
+
+.sunny-badge--lg .sunny-badge-explainer {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  text-align: right;
+  line-height: 1;
+}
+
+.sunny-badge--lg .sunny-badge-explainer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Wrapper inside the pub-info card. */
+.pub-info-sun {
+  margin: 8px 0 12px;
+}
+
+.pub-info-sun:empty {
+  display: none;
+}
+
+/* ── Screen-reader-only utility ──────────────────────────────────── */
+/* Visually hide an element while keeping it in the DOM and accessible to
+   screen readers and search crawlers. Used by the homepage SEO intro and
+   anywhere else we need invisible-but-indexable text. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── SEO intro (homepage hidden, slim hero on landing pages) ─────── */
+/* Sits between #header and #main as a full-width strip on landing pages.
+   Compact: breadcrumb + h1 + one-line intro on a single visual band, then
+   the full pub list inside a closed-by-default <details> so it's
+   crawler-indexable without dominating the page. */
+
+.seo-intro--landing {
+  /* Override sr-only — landing pages show this for real. */
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  flex-shrink: 0;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  background: var(--surface);
+  text-align: left;
+}
+
+.seo-intro--landing .seo-breadcrumb {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  margin: 0 0 2px;
+}
+
+.seo-intro--landing .seo-breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.seo-intro--landing .seo-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.seo-intro--landing h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  color: var(--on-surface);
+}
+
+.seo-intro--landing > p {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--on-surface-variant);
+  margin: 2px 0 0;
+}
+
+@media (min-width: 768px) {
+  .seo-intro--landing {
+    padding: 14px 24px 14px;
+  }
+  .seo-intro--landing h1 {
+    font-size: 1.25rem;
+  }
+  .seo-intro--landing > p {
+    font-size: 0.875rem;
+  }
+}
+
+/* Collapsible pub list — closed by default so the porthole stays the focus.
+   Google indexes <details> content normally; this is the same UX pattern
+   used for FAQ schemas and doc sites. */
+.seo-intro--landing .seo-pub-list-wrap {
+  margin-top: 6px;
+}
+
+.seo-intro--landing .seo-pub-list-wrap > summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  list-style: none;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.seo-intro--landing .seo-pub-list-wrap > summary::-webkit-details-marker {
+  display: none;
+}
+
+.seo-intro--landing .seo-pub-list-wrap > summary::before {
+  content: "▸";
+  font-size: 0.7rem;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.seo-intro--landing .seo-pub-list-wrap[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.seo-intro--landing .seo-pub-list-wrap > summary:hover {
+  color: var(--on-surface);
+}
+
+.seo-intro--landing .seo-pub-list {
+  margin: 8px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  columns: 2;
+  column-gap: 24px;
+}
+
+.seo-intro--landing .seo-pub-list li {
+  break-inside: avoid;
+}
+
+.seo-intro--landing .seo-pub-list a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.seo-intro--landing .seo-pub-list a:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 768px) {
+  .seo-intro--landing .seo-pub-list {
+    columns: 3;
+  }
+}
+
+@media (max-width: 480px) {
+  .seo-intro--landing .seo-pub-list {
+    columns: 1;
+  }
+}
+
 /* ── Viz section (porthole + arc) ────────────────────────────────── */
 
 #viz {
@@ -568,9 +886,28 @@ a {
 
 .filter-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
+  justify-content: center;
+  align-items: center;
   border-bottom: 1px solid var(--outline-variant);
+}
+
+.filter-chips--row2 {
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+/* Drop the row 1 bottom border when row 2 is present so the two rows
+   visually merge into a single chip area. */
+.filter-chips:not(.filter-chips--row2) + .filter-chips--row2 {
+  border-top: none;
+  padding-top: 0;
+}
+
+.filter-chips:has(+ .filter-chips--row2) {
+  border-bottom: none;
+  padding-bottom: 4px;
 }
 
 .filter-chip {
@@ -593,6 +930,81 @@ a {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
+}
+
+/* Segmented sort selector — sits inside .filter-chips next to the Open-now
+   chip. Same shape language as .theme-toggle in the footer. */
+.sort-toggle {
+  display: inline-flex;
+  background: var(--surface-container);
+  border-radius: var(--radius-full);
+  padding: 2px;
+  border: 1px solid var(--outline-variant);
+}
+
+.sort-toggle button {
+  border: none;
+  background: none;
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 150ms;
+  white-space: nowrap;
+}
+
+.sort-toggle button:hover {
+  color: var(--on-surface);
+}
+
+.sort-toggle button.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+
+/* Within label for the radius-filter row. */
+.filter-label {
+  font-size: 0.72rem;
+  color: var(--on-surface-variant);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.distance-toggle {
+  display: inline-flex;
+  background: var(--surface-container);
+  border-radius: var(--radius-full);
+  padding: 2px;
+  border: 1px solid var(--outline-variant);
+}
+
+.distance-toggle button {
+  border: none;
+  background: none;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 150ms;
+  white-space: nowrap;
+}
+
+.distance-toggle button:hover {
+  color: var(--on-surface);
+}
+
+.distance-toggle button.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: 0 1px 3px var(--shadow);
 }
 
 #pub-search {

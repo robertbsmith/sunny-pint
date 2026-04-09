@@ -1,19 +1,57 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F59E0B" />
-    <meta name="description" content="Find sunny beer garden seats — real-time shadow maps for UK pubs" />
-    <meta property="og:title" content="Sunny Pint" />
-    <meta property="og:description" content="Find sunny beer garden seats — real-time shadow maps for UK pubs" />
+    <title>Sunny Pint — Find sunny beer gardens at UK pubs</title>
+    <meta name="description" content="Real-time shadow maps for UK pub gardens. See exactly which beer gardens are in the sun right now, computed from LiDAR and OpenStreetMap data. Norwich, London, Bristol and growing." />
+    <link rel="canonical" href="https://sunny-pint.co.uk/" />
+
+    <!-- Routing hints — generated landing pages override these to point the
+         app at a specific city or pub on first paint without needing JS to
+         re-fetch anything. main.ts reads them in init(). -->
+    <meta name="sp:area" content="" />
+    <meta name="sp:pub" content="" />
+
+    <!-- Open Graph / social cards -->
+    <meta property="og:site_name" content="Sunny Pint" />
+    <meta property="og:title" content="Sunny Pint — Find sunny beer gardens at UK pubs" />
+    <meta property="og:description" content="Real-time shadow maps for UK pub gardens. See which beer gardens are in the sun right now." />
     <meta property="og:image" content="https://sunny-pint.co.uk/banner.png" />
-    <meta property="og:url" content="https://sunny-pint.co.uk" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:url" content="https://sunny-pint.co.uk/" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_GB" />
     <meta name="twitter:card" content="summary_large_image" />
-    <title>Sunny Pint</title>
+    <meta name="twitter:title" content="Sunny Pint — Find sunny beer gardens at UK pubs" />
+    <meta name="twitter:description" content="Real-time shadow maps for UK pub gardens." />
+    <meta name="twitter:image" content="https://sunny-pint.co.uk/banner.png" />
+
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192-v2.png" />
+
+    <!-- Structured data: WebSite + SearchAction so Google can show a
+         sitelinks search box. -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Sunny Pint",
+      "url": "https://sunny-pint.co.uk/",
+      "description": "Real-time shadow maps for UK pub gardens — find which beer gardens are in the sun right now.",
+      "inLanguage": "en-GB",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://sunny-pint.co.uk/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="app">
@@ -22,7 +60,7 @@
       <header id="header">
         <div class="header-inner">
           <a href="/" class="brand">
-            <img src="/icon.svg" alt="" class="header-logo" width="40" height="40" />
+            <img src="/icon.svg" alt="Sunny Pint logo" class="header-logo" width="40" height="40" />
             <span class="brand-text">sunny-pint.co.uk</span>
           </a>
           <button type="button" id="btn-location" class="location-button" title="Change location">
@@ -48,6 +86,24 @@
           </div>
         </div>
       </div>
+
+      <!-- SEO intro slot.
+           Sits between the header and the main row so on landing pages it
+           becomes a slim full-width hero above the porthole, NOT the
+           leftmost column of #main's flex row.
+
+           On the homepage it stays sr-only — present in the DOM for
+           crawlers and screen readers, invisible to sighted users so the
+           porthole layout is unchanged.
+
+           generate_pages.py replaces this whole block on city / theme /
+           pub landing pages with `class="seo-intro seo-intro--landing"`,
+           which makes it visible and adds a collapsible pub list that
+           crawlers index but doesn't dominate the user experience. -->
+      <section id="seo-intro" class="seo-intro sr-only">
+        <h1>Find sunny beer gardens at UK pubs</h1>
+        <p>Real-time shadow maps for pub gardens. Pick a pub, see exactly which seats are in the sun right now — computed from LiDAR elevation and OpenStreetMap building data.</p>
+      </section>
 
       <!-- Main content -->
       <main id="main">
@@ -83,6 +139,7 @@
               <h2 id="pub-info-name"></h2>
               <span id="pub-info-brand" class="pub-info-brand"></span>
             </div>
+            <div id="pub-info-sun" class="pub-info-sun"></div>
             <div class="pub-info-grid" id="pub-info-grid"></div>
             <div id="pub-info-hours" class="pub-info-hours"></div>
             <div class="pub-info-links" id="pub-info-links"></div>
@@ -101,6 +158,20 @@
           </div>
           <div class="filter-chips">
             <button type="button" id="filter-open" class="filter-chip">Open now</button>
+            <div class="sort-toggle" role="group" aria-label="Sort pubs by">
+              <button type="button" data-sort="distance" class="active" title="Sort by distance">Distance</button>
+              <button type="button" data-sort="sun" title="Sort by Sunny Rating">☀ Sun</button>
+            </div>
+          </div>
+          <div class="filter-chips filter-chips--row2">
+            <span class="filter-label">Within</span>
+            <div class="distance-toggle" role="group" aria-label="Maximum distance">
+              <button type="button" data-distance="500">500m</button>
+              <button type="button" data-distance="1000">1km</button>
+              <button type="button" data-distance="2000">2km</button>
+              <button type="button" data-distance="5000">5km</button>
+              <button type="button" data-distance="0" class="active">Any</button>
+            </div>
           </div>
           <ul id="pub-list"></ul>
         </section>

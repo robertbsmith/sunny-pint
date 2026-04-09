@@ -24,6 +24,7 @@
     <a href="#data-sources">Data Sources</a>
     <a href="#heights">Building Heights</a>
     <a href="#gardens">Outdoor Areas</a>
+    <a href="#sunny-rating">The Sunny Rating</a>
     <div class="section-label">Rendering</div>
     <a href="#shadows">Shadow Projection</a>
     <a href="#terrain">Terrain Awareness</a>
@@ -242,6 +243,66 @@
     <p>The resulting polygon may contain interior holes where buildings are fully enclosed within the plot. These are rendered on the Canvas using the <code>evenodd</code> fill rule, which naturally excludes enclosed regions.</p>
 
     <div class="placeholder">Specific pub garden examples will be added after the UK pipeline completes.</div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <h2 id="sunny-rating">The Sunny Rating</h2>
+
+    <p>Every pub on Sunny Pint gets a <strong>Sunny Rating</strong> from <strong>0 to 100</strong>. It tells you what percentage of the beer garden is in direct sun on an average day. It's the headline metric of the whole site and the way to compare pubs at a glance.</p>
+
+    <div class="rating-table">
+      <table>
+        <thead>
+          <tr><th>Score</th><th>Label</th><th>What it means</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>80&ndash;100</strong></td><td>Sun trap</td><td>Garden in full sun for most of the day. Effectively no obstruction.</td></tr>
+          <tr><td><strong>60&ndash;79</strong></td><td>Very sunny</td><td>Mostly sunny across the day with some shaded patches at the edges.</td></tr>
+          <tr><td><strong>40&ndash;59</strong></td><td>Sunny</td><td>Meaningful sun for several hours, with real shadows from buildings.</td></tr>
+          <tr><td><strong>20&ndash;39</strong></td><td>Partly shaded</td><td>Some sun at peak hours, shaded most of the day.</td></tr>
+          <tr><td><strong>0&ndash;19</strong></td><td>Shaded</td><td>Rarely gets direct sun. Probably enclosed or north-facing.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>How we calculate it</h3>
+
+    <p>Every pub's rating is computed once from real-world data, never guessed:</p>
+
+    <ol>
+      <li><strong>Building shapes</strong> come from OpenStreetMap.</li>
+      <li><strong>Building heights</strong> come from Environment Agency LiDAR &mdash; laser-scanned elevation, accurate to about 10&nbsp;cm vertically.</li>
+      <li><strong>The pub's outdoor seating area</strong> is the HM Land Registry cadastral parcel minus all building footprints inside it (described in the previous section).</li>
+      <li><strong>The sun's position</strong> is computed for every half-hour of daylight on the spring equinox &mdash; when day and night are equal, a fair "average day" of the year.</li>
+      <li>At each half-hour, we cast geometric shadows from every nearby building (taller buildings cast longer shadows when the sun is low) and work out what fraction of the outdoor seating is actually in direct sun.</li>
+      <li><strong>The Sunny Rating is the average of those fractions, scaled to 0&ndash;100.</strong></li>
+    </ol>
+
+    <p>This is the same shadow-projection code that the live porthole renders in your browser when you select a pub &mdash; we just run it offline across a representative time grid and average the results. Single source of truth: there is no separate "rating" model that could disagree with what you see on screen.</p>
+
+    <h3>Why fraction of garden, not square metres or hours?</h3>
+
+    <p>We deliberately don't use total square metres of beer garden, or hours of sun per year, as the headline. Both are <em>confounded</em>:</p>
+
+    <ul>
+      <li><strong>Square metres of sun-coverage</strong> rewards big gardens. A 50&nbsp;m&sup2; walled town courtyard fully in sun for six hours scores worse than a sprawling north-facing field that's shaded most of the day. That's the opposite of what users want.</li>
+      <li><strong>Hours of sun per year</strong> is confounded by latitude. Cornish pubs would always rank above Scottish pubs simply because Cornwall has longer days, regardless of how good the actual gardens are.</li>
+    </ul>
+
+    <p>Sun fraction sidesteps both problems. It normalises out garden size and day length. A 70 in Aberdeen and a 70 in Truro both mean &ldquo;70&percnt; of the available sun reaches this garden&rdquo; &mdash; directly comparable, latitude-fair, size-fair.</p>
+
+    <p>It's also robust to imperfect outdoor polygons. Cadastral parcel boundaries occasionally include extra land that isn't really garden seating &mdash; a country pub's full estate, for example. Square-metre metrics get destroyed by these outliers; sun fraction stays meaningful because it's intrinsically per-area.</p>
+
+    <h3>What the rating doesn't include</h3>
+
+    <p>Three things the Sunny Rating deliberately leaves out, in the interest of being honest about what the number represents:</p>
+
+    <ol>
+      <li><strong>Weather.</strong> The rating is <em>clear-sky theoretical sun</em>. It says &ldquo;this garden has the geometry to be in sun&rdquo;; whether it actually <em>is</em> sunny on a given day depends on the clouds. The live cloud-cover badge from Open-Meteo handles that separately, and changes minute to minute.</li>
+      <li><strong>Time of year.</strong> The rating is computed against the spring equinox, when day length is the same at every UK latitude. A pub will be sunnier in summer (longer days, higher sun) and shadier in winter. The rating is the year-round &ldquo;average character&rdquo; of the garden &mdash; for the actual sun on a specific date and time, scrub the date picker on the live porthole.</li>
+      <li><strong>Direct sun only.</strong> &ldquo;In sun&rdquo; means &ldquo;not in any building's shadow&rdquo;. A garden that's bright from indirect or diffuse light but technically in shadow won't get credit for it. This matches the spirit of &ldquo;is the seat I'd pick in the sun&rdquo;.</li>
+    </ol>
+
+    <p>None of these are reasons to distrust the rating &mdash; they're features. They make it defensible. Anyone can audit it by opening the porthole on the equinox at any half-hour and seeing the same shadow geometry the offline computation used.</p>
 
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="shadows">Shadow Projection</h2>

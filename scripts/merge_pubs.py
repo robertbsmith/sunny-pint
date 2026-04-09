@@ -72,6 +72,17 @@ class PubHandler(osmium.SimpleHandler):
             ("website", "website"),
             ("brand", "brand"),
             ("brewery", "brewery"),
+            # Address tags — primary source for the SEO landing-page town field.
+            # See match_plots.py for the precedence order (OSM addr → INSPIRE LA).
+            ("addr:city", "addr_city"),
+            ("addr:town", "addr_town"),
+            ("addr:village", "addr_village"),
+            ("addr:hamlet", "addr_hamlet"),
+            ("addr:suburb", "addr_suburb"),
+            ("addr:place", "addr_place"),
+            ("addr:postcode", "addr_postcode"),
+            ("addr:street", "addr_street"),
+            ("addr:housenumber", "addr_housenumber"),
         ]:
             val = tags.get(osm_key, "")
             if val:

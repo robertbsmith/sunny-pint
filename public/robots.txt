@@ -1,3 +1,30 @@
+# Sunny Pint — robots policy
+# https://sunny-pint.co.uk/
+
 User-agent: *
 Allow: /
-Sitemap: https://sunny-pint.co.uk/sitemap.txt
+
+# Explicit allows for AI search crawlers. They're allowed by default but
+# stating it makes intent unambiguous and avoids accidental disallows from
+# any future changes. ChatGPT / Claude / Perplexity searches are a real
+# distribution channel for "find sunny pub" intent and they cannot run JS,
+# so they need our pre-rendered landing pages.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://sunny-pint.co.uk/sitemap.xml

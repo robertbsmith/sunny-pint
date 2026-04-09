@@ -18,8 +18,12 @@ import type { Building, Pub } from "./types";
 
 const tileCache = new Map<string, Building[]>();
 
-/** Decode a vector tile buffer into Building objects. */
-function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Building[] {
+/** Decode a vector tile buffer into Building objects.
+ *
+ * Exported so the Node-side `scripts/precompute_sun.ts` can reuse the same
+ * decoder against tiles read from disk — single source of truth.
+ */
+export function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number): Building[] {
   const tile = new VectorTile(new Pbf(data));
   const layer = tile.layers.buildings;
   if (!layer) return [];
