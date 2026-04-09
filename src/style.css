@@ -180,19 +180,6 @@ a {
   text-decoration: none;
 }
 
-/* Sunny Rating overlay — mirrors #kofi-link in the opposite corner so the
-   selected pub's score is visible at a glance while looking at the
-   porthole. Populated by main.ts whenever onPubSelected fires. */
-#porthole-rating {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-}
-
-#porthole-rating:empty {
-  display: none;
-}
 
 .kofi-btn {
   display: inline-flex;
@@ -699,8 +686,12 @@ html.dark .sunny-badge--sunny {
 @media (min-width: 768px) {
   #viz {
     justify-content: flex-start;
-    padding: 16px 24px 8px;
+    padding: 16px 24px 16px;
     min-height: 0;
+    /* Each column scrolls independently inside the desktop two-column row.
+       Without this, long pub-info cards overflow #main (which has
+       overflow: hidden) and get clipped behind the footer. */
+    overflow-y: auto;
   }
 }
 
@@ -897,6 +888,9 @@ html.dark .sunny-badge--sunny {
     box-shadow: none;
     width: 340px;
     flex: none;
+    /* Same as #viz — scroll inside the column rather than letting the
+       parent #main clip the overflow. */
+    overflow-y: auto;
   }
 
   .pubs-handle {
