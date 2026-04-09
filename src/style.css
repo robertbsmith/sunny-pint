@@ -855,6 +855,26 @@ html.dark .status-open {
   text-decoration: underline;
 }
 
+.footer-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.footer-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-surface-variant);
+  opacity: 0.75;
+  transition: opacity 150ms;
+}
+
+.footer-github:hover {
+  opacity: 1;
+  color: var(--on-surface);
+}
+
 .theme-toggle {
   display: inline-flex;
   background: var(--surface-container);
