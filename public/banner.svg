@@ -4,20 +4,15 @@
       <stop offset="0%" stop-color="#1A1A1A"/>
       <stop offset="100%" stop-color="#2D2518"/>
     </linearGradient>
-    <linearGradient id="beer" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F59E0B"/>
-      <stop offset="100%" stop-color="#D97706"/>
-    </linearGradient>
-    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFF9E6"/>
-      <stop offset="100%" stop-color="#FDE68A"/>
-    </linearGradient>
+    <clipPath id="banner-pin">
+      <path d="M 64 16 C 94 16 112 38 112 64 C 112 96 64 128 64 128 C 64 128 16 96 16 64 C 16 38 34 16 64 16 Z"/>
+    </clipPath>
   </defs>
 
   <!-- Background -->
   <rect width="1280" height="640" fill="url(#bg)"/>
 
-  <!-- Subtle beer pattern -->
+  <!-- Subtle decorative pattern (Lucide beer glyph at low opacity) -->
   <g opacity="0.04" fill="none" stroke="#F59E0B" stroke-width="1.5">
     <g transform="translate(100,80) scale(1.5) rotate(-12)">
       <path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/>
@@ -29,47 +24,44 @@
     </g>
   </g>
 
-  <!-- Sun rays -->
-  <g transform="translate(250,320)" fill="#FCD34D" opacity="0.3">
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(0)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(45)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(90)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(135)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(180)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(225)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(270)"/>
-    <rect x="-6" y="-130" width="12" height="50" rx="6" transform="rotate(315)"/>
-  </g>
-  <circle cx="250" cy="320" r="60" fill="#FBBF24" opacity="0.25"/>
+  <!-- Pin + pint icon. Nested SVG so we can use the icon's own
+       coordinate system (viewBox 12 20 120 120) inside a 460×460 box. -->
+  <svg x="80" y="90" width="460" height="460" viewBox="12 20 120 120">
+    <g transform="translate(8,8)">
+      <rect x="0" y="0" width="128" height="128" fill="#F4B73C" clip-path="url(#banner-pin)"/>
+      <g clip-path="url(#banner-pin)">
+        <path d="M 54 82
+                 Q 54 86 58 86
+                 L 70 86
+                 Q 74 86 74 82
+                 L 140 115
+                 L 64 128
+                 Z"
+              fill="#2B3B4A"/>
+      </g>
+      <g clip-path="url(#banner-pin)">
+        <path d="M 52 40 L 76 40 L 74 82 Q 74 86 70 86 L 58 86 Q 54 86 54 82 Z"
+              fill="#FFFFFF" stroke="#1C1410" stroke-width="2.25" stroke-linejoin="round"/>
+        <rect x="52" y="40" width="24" height="5" fill="#1C1410"/>
+      </g>
+      <path d="M 64 16 C 94 16 112 38 112 64 C 112 96 64 128 64 128 C 64 128 16 96 16 64 C 16 38 34 16 64 16 Z"
+            fill="none" stroke="#1C1410" stroke-width="2.75" stroke-linejoin="round"/>
+    </g>
+  </svg>
 
-  <!-- Pint glass -->
-  <g transform="translate(250,320) scale(0.55)">
-    <path d="M-101,-180 L-111,280 C-113,300 -96,320 -71,320 L71,320 C96,320 113,300 111,280 L101,-180 Z"
-      fill="url(#beer)" stroke="#B45309" stroke-width="6"/>
-    <path d="M-81,-160 L-86,260 C-87,270 -81,280 -71,280 L-56,280 L-46,-160 Z"
-      fill="white" opacity="0.12"/>
-    <path d="M-106,-180 C-106,-210 -86,-220 -61,-215 C-51,-235 -26,-240 0,-235
-      C26,-240 51,-235 61,-215 C86,-220 106,-210 106,-180 Z"
-      fill="url(#foam)" stroke="#E5B94E" stroke-width="3"/>
-    <path d="M101,-140 C144,-135 159,-100 154,-50 C149,10 129,30 101,15"
-      fill="none" stroke="#B45309" stroke-width="12" stroke-linecap="round"/>
-    <path d="M101,-140 C139,-135 152,-102 148,-55 C144,5 126,25 101,10"
-      fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
-  </g>
-
-  <!-- Text -->
-  <text x="530" y="280" font-family="Georgia, serif" font-weight="800" font-size="96" fill="#F59E0B">
+  <!-- Title -->
+  <text x="580" y="285" font-family="Georgia, serif" font-weight="800" font-size="118" fill="#F59E0B">
     Sunny Pint
   </text>
-  <text x="530" y="350" font-family="system-ui, sans-serif" font-weight="400" font-size="32" fill="#9E9892">
+  <text x="580" y="350" font-family="system-ui, sans-serif" font-weight="400" font-size="36" fill="#9E9892">
     Find sunny beer garden seats
   </text>
-  <text x="530" y="410" font-family="system-ui, sans-serif" font-weight="400" font-size="24" fill="#666059">
+  <text x="580" y="400" font-family="system-ui, sans-serif" font-weight="400" font-size="26" fill="#666059">
     Real-time shadow maps for UK pubs
   </text>
 
   <!-- Domain -->
-  <text x="530" y="480" font-family="ui-monospace, monospace" font-weight="600" font-size="22" fill="#D97706">
+  <text x="580" y="478" font-family="ui-monospace, monospace" font-weight="600" font-size="24" fill="#D97706">
     sunny-pint.co.uk
   </text>
 </svg>

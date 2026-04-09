@@ -1,51 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<!--
+  Concept 6: Map pin with pint glass + shadow.
+  Refinement of the user's original idea: the shadow now starts exactly
+  at the glass base (full base width = 58→70 at y=86), curves out from
+  there along soft cubic edges, and fans out at the same down-right
+  angle as before.
+
+  Glass base geometry:
+    The glass tapers from x=52..76 at y=40 down to x=54..70 at y=82,
+    finishing the rounded base at (58, 86) and (70, 86) — those two
+    points are the shadow's attachment line.
+-->
+<svg width="120" height="120" viewBox="12 20 120 120" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Amber gradient for the pint -->
-    <linearGradient id="beer" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#F59E0B"/>
-      <stop offset="100%" stop-color="#D97706"/>
-    </linearGradient>
-    <!-- Foam gradient -->
-    <linearGradient id="foam" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFF9E6"/>
-      <stop offset="100%" stop-color="#FDE68A"/>
-    </linearGradient>
+    <clipPath id="pin">
+      <path d="M 64 16 C 94 16 112 38 112 64 C 112 96 64 128 64 128 C 64 128 16 96 16 64 C 16 38 34 16 64 16 Z"/>
+    </clipPath>
   </defs>
+  <g transform="translate(8,8)">
+    <!-- Pin background -->
+    <rect x="0" y="0" width="128" height="128" fill="#F4B73C" clip-path="url(#pin)"/>
 
-  <!-- Sun rays behind the glass -->
-  <g transform="translate(256,200)" fill="#FCD34D" opacity="0.6">
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(0)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(45)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(90)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(135)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(180)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(225)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(270)"/>
-    <rect x="-8" y="-120" width="16" height="60" rx="8" transform="rotate(315)"/>
+    <!-- Shadow polygon. The top edge traces the glass's bottom outline
+         pixel-for-pixel — same Q corners and same L base — so the
+         shadow tucks under the glass with no gap or angle change at
+         the join. From the right corner (74,82) the polygon then
+         extends out at slope 0.5 (≈27°) to (140,115); the pin clip
+         crops the right line where it exits the pin and the pin's
+         own curve forms the shadow's bottom from there to the tip
+         (64,128). Closing line from the tip back to (54,82) is the
+         straight left edge of the shadow. -->
+    <g clip-path="url(#pin)">
+      <path d="M 54 82
+               Q 54 86 58 86
+               L 70 86
+               Q 74 86 74 82
+               L 140 115
+               L 64 128
+               Z"
+            fill="#2B3B4A"/>
+    </g>
+
+    <!-- Pint glass + foam -->
+    <g clip-path="url(#pin)">
+      <path d="M 52 40 L 76 40 L 74 82 Q 74 86 70 86 L 58 86 Q 54 86 54 82 Z"
+            fill="#FFFFFF" stroke="#1C1410" stroke-width="2.25" stroke-linejoin="round"/>
+      <rect x="52" y="40" width="24" height="5" fill="#1C1410"/>
+    </g>
+
+    <!-- Pin outline -->
+    <path d="M 64 16 C 94 16 112 38 112 64 C 112 96 64 128 64 128 C 64 128 16 96 16 64 C 16 38 34 16 64 16 Z"
+          fill="none" stroke="#1C1410" stroke-width="2.75" stroke-linejoin="round"/>
   </g>
-
-  <!-- Sun disc behind glass -->
-  <circle cx="256" cy="200" r="70" fill="#FBBF24" opacity="0.5"/>
-
-  <!-- Pint glass body -->
-  <path d="M155,140 L145,420 C143,440 160,460 185,460 L327,460 C352,460 369,440 367,420 L357,140 Z"
-    fill="url(#beer)" stroke="#B45309" stroke-width="6" stroke-linejoin="round"/>
-
-  <!-- Glass highlight (reflection) -->
-  <path d="M175,160 L170,400 C169,410 175,420 185,420 L200,420 L210,160 Z"
-    fill="white" opacity="0.15" rx="4"/>
-
-  <!-- Foam head -->
-  <path d="M150,140
-    C150,110 170,100 195,105
-    C205,85 230,80 256,85
-    C282,80 307,85 317,105
-    C342,100 362,110 362,140 Z"
-    fill="url(#foam)" stroke="#E5B94E" stroke-width="3"/>
-
-  <!-- Handle -->
-  <path d="M357,180 C400,185 415,220 410,270 C405,310 385,330 357,335"
-    fill="none" stroke="#B45309" stroke-width="12" stroke-linecap="round"/>
-  <path d="M357,180 C395,185 408,218 404,265 C400,305 382,325 357,330"
-    fill="none" stroke="#D97706" stroke-width="6" stroke-linecap="round"/>
 </svg>
