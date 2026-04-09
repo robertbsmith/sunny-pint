@@ -4,55 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>How It Works — Sunny Pint</title>
-  <style>
-    :root { --amber: #D97706; --amber-light: #FEF3C7; --amber-dark: #78350F; --grey: #64748B; --dark: #1C1B1A; --mid: #5C5955; --light-bg: #FAFAF8; --code-bg: #F1F0EE; --green: #22C55E; --blue: #3B82F6; --red: #EF4444; }
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; color: var(--dark); background: var(--light-bg); line-height: 1.75; }
-    .layout { display: flex; max-width: 1100px; margin: 0 auto; }
-    .sidebar { width: 220px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 2rem 1rem 2rem 1.5rem; border-right: 1px solid #E5E3E0; font-size: 0.82rem; }
-    .sidebar a { text-decoration: none; color: var(--mid); display: block; padding: 0.3rem 0.5rem; border-radius: 4px; margin: 0.1rem 0; }
-    .sidebar a:hover, .sidebar a.active { background: var(--amber-light); color: var(--amber-dark); }
-    .sidebar .brand { font-family: Georgia, serif; font-weight: 800; color: var(--amber); font-size: 1rem; margin-bottom: 1.5rem; text-decoration: none; display: block; }
-    .sidebar .section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--grey); margin-top: 1rem; margin-bottom: 0.3rem; padding-left: 0.5rem; }
-    .content { flex: 1; min-width: 0; padding: 2rem 3rem 4rem; }
-    @media (max-width: 768px) {
-      .layout { flex-direction: column; }
-      .sidebar { width: 100%; height: auto; position: relative; border-right: none; border-bottom: 1px solid #E5E3E0; padding: 1rem; }
-      .content { padding: 1.5rem 1rem 3rem; }
-    }
-    h1 { font-size: 1.8rem; font-family: Georgia, serif; color: var(--amber); margin: 0 0 0.5rem; }
-    .subtitle { font-size: 1.05rem; color: var(--mid); margin-bottom: 2.5rem; }
-    h2 { font-size: 1.25rem; margin-top: 3rem; padding-bottom: 0.3rem; border-bottom: 2px solid var(--amber-light); }
-    h3 { font-size: 1rem; margin-top: 1.8rem; color: var(--mid); }
-    .diagram { margin: 1.5rem 0; text-align: center; overflow-x: auto; }
-    .diagram svg { max-width: 100%; height: auto; }
-    .diagram figcaption, .fig-caption { font-size: 0.8rem; color: var(--grey); margin-top: 0.4rem; text-align: center; font-style: italic; }
-    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.8rem; margin: 1.5rem 0; }
-    .stat { background: white; border: 1px solid #E5E3E0; border-radius: 8px; padding: 0.8rem; text-align: center; }
-    .stat .num { font-size: 1.5rem; font-weight: 800; color: var(--amber); font-family: Georgia, serif; }
-    .stat .label { font-size: 0.72rem; color: var(--grey); margin-top: 0.15rem; }
-    .formula { background: var(--code-bg); padding: 0.7rem 1rem; border-radius: 6px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.85rem; margin: 1rem 0; overflow-x: auto; line-height: 1.6; }
-    .example { background: white; border-left: 3px solid var(--amber); padding: 0.8rem 1rem; margin: 1.2rem 0; font-size: 0.9rem; }
-    .example strong { color: var(--amber-dark); }
-    .placeholder { background: var(--amber-light); border-radius: 6px; padding: 1.2rem; text-align: center; color: var(--amber-dark); margin: 1.5rem 0; font-size: 0.85rem; font-style: italic; }
-    .layers { margin: 1.2rem 0; }
-    .layer { display: flex; align-items: center; gap: 0.8rem; padding: 0.4rem 0; border-bottom: 1px solid #EEE; }
-    .layer-num { width: 24px; height: 24px; border-radius: 50%; background: var(--amber); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
-    .layer-label { font-weight: 600; font-size: 0.85rem; min-width: 100px; }
-    .layer-desc { font-size: 0.8rem; color: var(--grey); }
-    .hist-bar { display: flex; align-items: center; gap: 0.5rem; margin: 0.15rem 0; font-size: 0.8rem; }
-    .hist-bar .bar { background: var(--amber); height: 16px; border-radius: 2px; min-width: 2px; }
-    .hist-bar .label { width: 55px; text-align: right; color: var(--grey); flex-shrink: 0; font-size: 0.75rem; }
-    .hist-bar .count { color: var(--grey); font-size: 0.7rem; }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.82rem; }
-    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #E5E3E0; }
-    th { color: var(--grey); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    p { margin: 0.8rem 0; }
-    footer { margin-top: 3rem; padding: 1.5rem 0; border-top: 1px solid #E5E3E0; font-size: 0.78rem; color: var(--grey); text-align: center; }
-    footer a { color: var(--amber); }
-  </style>
+  <link rel="stylesheet" href="/docs.css" />
+  <script src="/docs.js"></script>
 </head>
 <body>
+<button type="button" class="sidebar-toggle" aria-label="Open contents">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
+<div class="sidebar-backdrop"></div>
 <div class="layout">
   <nav class="sidebar">
     <a href="/" class="brand">Sunny Pint</a>
@@ -239,7 +198,7 @@
       <div class="hist-bar"><span class="label">20&ndash;25 m</span><div class="bar" style="width: 1px;"></div><span class="count">28</span></div>
       <div class="hist-bar"><span class="label">25 m+</span><div class="bar" style="width: 1px;"></div><span class="count">17</span></div>
     </div>
-    <p style="font-size:0.85rem;color:var(--grey)">The distribution reflects Norwich's predominantly two-storey residential character. The tallest structures (up to 57 m) are church spires and multi-storey car parks. Mean height: 7.7 m, median: 8.0 m.</p>
+    <p style="font-size:0.85rem;color:var(--on-surface-variant)">The distribution reflects Norwich's predominantly two-storey residential character. The tallest structures (up to 57 m) are church spires and multi-storey car parks. Mean height: 7.7 m, median: 8.0 m.</p>
 
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="gardens">Computing Outdoor Areas</h2>
