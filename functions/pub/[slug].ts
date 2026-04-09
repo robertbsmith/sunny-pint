@@ -26,6 +26,12 @@ import { nearbyPubs, type Pub, renderPubPage } from "../_lib/render";
 
 interface Env {
   ASSETS: Fetcher;
+  // Cloudflare Pages auto-injects this at build AND runtime — used as a
+  // cache buster so a new deploy invalidates both the module-scope template
+  // cache and the edge Cache API entries from the previous deploy. Without
+  // this, returning users hit the stale 7-day cached HTML which still points
+  // to the old CSS hash (and therefore the old layout).
+  CF_PAGES_COMMIT_SHA?: string;
 }
 
 // ── Module-scope cache ───────────────────────────────────────────────────
@@ -34,6 +40,7 @@ interface Env {
 // state survives across invocations. The Cache API handles inter-instance
 // sharing; this just speeds up the same-instance warm path.
 
+let cachedSha: string | null = null;
 let cachedTemplate: string | null = null;
 let cachedPubs: Pub[] | null = null;
 let cachedSlugIndex: Map<string, Pub> | null = null;
@@ -42,7 +49,8 @@ async function loadAssets(
   env: Env,
   origin: string,
 ): Promise<{ template: string; pubs: Pub[]; index: Map<string, Pub> }> {
-  if (cachedTemplate && cachedPubs && cachedSlugIndex) {
+  const sha = env.CF_PAGES_COMMIT_SHA ?? "dev";
+  if (cachedSha === sha && cachedTemplate && cachedPubs && cachedSlugIndex) {
     return { template: cachedTemplate, pubs: cachedPubs, index: cachedSlugIndex };
   }
 
@@ -65,6 +73,7 @@ async function loadAssets(
     if (pub.slug) index.set(pub.slug, pub);
   }
 
+  cachedSha = sha;
   cachedTemplate = template;
   cachedPubs = pubs;
   cachedSlugIndex = index;
@@ -77,8 +86,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const url = new URL(ctx.request.url);
 
   // Cache lookup using a normalised key (strip query params so cache hits
-  // aren't fragmented by ?utm_source=… etc).
-  const cacheKey = new Request(`${url.origin}${url.pathname}`, ctx.request);
+  // aren't fragmented by ?utm_source=… etc). Include the deploy SHA so a
+  // new deploy invalidates the entire cache namespace — without this we'd
+  // serve 7-day-old HTML still pointing at the previous CSS hash, which
+  // means the layout fixes from a deploy don't reach returning users.
+  const sha = ctx.env.CF_PAGES_COMMIT_SHA ?? "dev";
+  const cacheKey = new Request(
+    `${url.origin}${url.pathname}?_v=${sha}`,
+    ctx.request,
+  );
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
