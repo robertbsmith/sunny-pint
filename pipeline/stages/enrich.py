@@ -64,6 +64,7 @@ from measure_heights import fetch_ndsm as _fetch_ndsm_wcs
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
 INSPIRE_GPKG = DATA_DIR / "inspire.gpkg"
+SCOTLAND_GPKG = DATA_DIR / "scotland_parcels.gpkg"
 # Accept both v2 filename (pubs_extracted.json) and v1 (pubs_merged.json).
 PUBS_PATH = DATA_DIR / "pubs_extracted.json"
 PUBS_PATH_V1 = DATA_DIR / "pubs_merged.json"
@@ -507,27 +508,20 @@ def _process_bundle(
 # ── INSPIRE parcel loading ───────────────────────────────────────────────
 
 
-def _load_parcels(pubs_osgb: list[tuple[float, float]]) -> tuple:
-    """Load INSPIRE parcels near pubs. Returns (STRtree, parcels, LAs) or (None, None, None)."""
-    if not INSPIRE_GPKG.exists():
-        print("  WARNING: inspire.gpkg not found — skipping parcel matching")
-        return None, None, None
-
+def _load_parcels_from_gpkg(
+    gpkg_path: Path,
+    pub_tree_for_filter: STRtree,
+    min_x: float, max_x: float, min_y: float, max_y: float,
+) -> tuple[list, list[str | None], int]:
+    """Load parcels from one GeoPackage. Returns (parcels, las, scanned)."""
     import sqlite3 as _sq
-    pub_xs = [p[0] for p in pubs_osgb]
-    pub_ys = [p[1] for p in pubs_osgb]
-    min_x, max_x = min(pub_xs) - 50, max(pub_xs) + 50
-    min_y, max_y = min(pub_ys) - 50, max(pub_ys) + 50
 
-    conn = _sq.connect(str(INSPIRE_GPKG))
+    conn = _sq.connect(str(gpkg_path))
     cols = [r[1] for r in conn.execute("PRAGMA table_info(parcels)").fetchall()]
     has_la = "local_authority" in cols
     la_select = "p.local_authority" if has_la else "NULL AS local_authority"
 
-    print(f"  Loading INSPIRE parcels near pubs...", flush=True)
     BATCH = 50000
-    pub_tree_for_filter = STRtree([Point(x, y) for x, y in pubs_osgb])
-
     try:
         cursor = conn.execute(
             f"SELECT p.fid, p.geom, {la_select} FROM parcels p "
@@ -563,14 +557,50 @@ def _load_parcels(pubs_osgb: list[tuple[float, float]]) -> tuple:
                 continue
         elapsed = time.time() - t0
         rate = scanned / elapsed if elapsed else 0
-        print(f"    parcels: {scanned:,} scanned, {len(parcels):,} kept  {rate:,.0f}/s", flush=True)
+        print(f"    {gpkg_path.name}: {scanned:,} scanned, {len(parcels):,} kept  {rate:,.0f}/s", flush=True)
 
     conn.close()
-    print(f"  {len(parcels):,} parcels near pubs (from {scanned:,} scanned)")
+    return parcels, parcel_las, scanned
 
-    if not parcels:
+
+def _load_parcels(pubs_osgb: list[tuple[float, float]]) -> tuple:
+    """Load parcels from INSPIRE (England+Wales) and Scotland GPKGs.
+
+    Returns (STRtree, parcels, LAs) or (None, None, None).
+    """
+    gpkgs = []
+    if INSPIRE_GPKG.exists():
+        gpkgs.append(INSPIRE_GPKG)
+    if SCOTLAND_GPKG.exists():
+        gpkgs.append(SCOTLAND_GPKG)
+    if not gpkgs:
+        print("  WARNING: no parcel GeoPackages found — skipping parcel matching")
         return None, None, None
-    return STRtree(parcels), parcels, parcel_las
+
+    pub_xs = [p[0] for p in pubs_osgb]
+    pub_ys = [p[1] for p in pubs_osgb]
+    min_x, max_x = min(pub_xs) - 50, max(pub_xs) + 50
+    min_y, max_y = min(pub_ys) - 50, max(pub_ys) + 50
+    pub_tree_for_filter = STRtree([Point(x, y) for x, y in pubs_osgb])
+
+    all_parcels = []
+    all_las: list[str | None] = []
+    total_scanned = 0
+
+    for gpkg in gpkgs:
+        print(f"  Loading parcels from {gpkg.name}...", flush=True)
+        parcels, las, scanned = _load_parcels_from_gpkg(
+            gpkg, pub_tree_for_filter, min_x, max_x, min_y, max_y,
+        )
+        all_parcels.extend(parcels)
+        all_las.extend(las)
+        total_scanned += scanned
+
+    print(f"  {len(all_parcels):,} parcels near pubs (from {total_scanned:,} scanned across {len(gpkgs)} GPKGs)")
+
+    if not all_parcels:
+        return None, None, None
+    return STRtree(all_parcels), all_parcels, all_las
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
