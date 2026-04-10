@@ -488,18 +488,10 @@ function dismissSeoContent(): void {
     el.classList.remove("seo-intro--landing");
     el.classList.add("sr-only");
   }
-  sessionStorage.setItem("sp-active", "1");
 }
 
 async function init(): Promise<void> {
   try {
-    // If the user is refreshing within an active session, hide the
-    // SEO landing content immediately. Fresh visits and crawlers still
-    // see it (no sessionStorage flag = first load in this tab).
-    if (sessionStorage.getItem("sp-active")) {
-      dismissSeoContent();
-    }
-
     // Apply theme.
     applyTheme(getStoredTheme());
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
