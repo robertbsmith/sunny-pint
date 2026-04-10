@@ -25,7 +25,9 @@
  *   pnpm tsx scripts/precompute_sun.ts
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -362,7 +364,24 @@ interface PubWithSun extends Pub {
   sun?: SunMetrics;
 }
 
-function main(): void {
+const NUM_WORKERS = Math.min(12, availableParallelism() - 1);
+
+/** Spawn a child process that runs pnpm tsx on the worker script. */
+function runWorker(batchFile: string, resultFile: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "pnpm",
+      ["tsx", join(__dirname, "precompute_sun_worker.ts"), batchFile, resultFile],
+      { maxBuffer: 50 * 1024 * 1024 },
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      },
+    );
+  });
+}
+
+async function main(): Promise<void> {
   let pubs: PubWithSun[];
   try {
     pubs = JSON.parse(readFileSync(PUBS_JSON, "utf-8")) as PubWithSun[];
@@ -371,33 +390,73 @@ function main(): void {
     process.exit(1);
   }
 
-  console.log(`Computing Sunny Rating for ${pubs.length} pubs...`);
+  const workerCount = pubs.length < 200 ? 1 : NUM_WORKERS;
+  console.log(`Computing Sunny Rating for ${pubs.length} pubs with ${workerCount} workers...`);
   const t0 = Date.now();
+
+  // Create temp dir for batch/result files.
+  const tmpDir = join(ROOT, "data", "sun_tmp");
+  if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+
+  // Partition pubs across workers. Each worker gets a contiguous chunk.
+  const chunkSize = Math.ceil(pubs.length / workerCount);
+  const workerPromises: Promise<void>[] = [];
+
+  for (let w = 0; w < workerCount; w++) {
+    const start = w * chunkSize;
+    const end = Math.min(start + chunkSize, pubs.length);
+    if (start >= pubs.length) break;
+
+    const batch = [];
+    for (let i = start; i < end; i++) {
+      batch.push({ index: i, pub: pubs[i]! });
+    }
+
+    const batchFile = join(tmpDir, `batch_${w}.json`);
+    const resultFile = join(tmpDir, `result_${w}.json`);
+    writeFileSync(batchFile, JSON.stringify(batch));
+
+    workerPromises.push(runWorker(batchFile, resultFile));
+    console.log(`  worker ${w}: pubs ${start}–${end - 1} (${batch.length} pubs)`);
+  }
+
+  console.log(`\nWaiting for ${workerPromises.length} workers...`);
+
+  // Wait for all workers.
+  const results = await Promise.allSettled(workerPromises);
 
   let scored = 0;
   let skipped = 0;
   const distribution: Record<string, number> = {};
 
-  for (let i = 0; i < pubs.length; i++) {
-    const pub = pubs[i]!;
-    const metrics = computeSunMetrics(pub);
-    if (!metrics) {
-      skipped++;
+  // Merge results back into pubs array.
+  for (let w = 0; w < results.length; w++) {
+    const r = results[w]!;
+    if (r.status === "rejected") {
+      console.error(`  worker ${w} FAILED:`, r.reason);
       continue;
     }
-    pub.sun = metrics;
-    scored++;
-    distribution[metrics.label] = (distribution[metrics.label] ?? 0) + 1;
 
-    if ((i + 1) % 25 === 0 || i === pubs.length - 1) {
-      const elapsed = (Date.now() - t0) / 1000;
-      const rate = (i + 1) / elapsed;
-      const eta = (pubs.length - i - 1) / rate;
-      console.log(
-        `  ${i + 1}/${pubs.length}  scored=${scored} skipped=${skipped}  ` +
-          `(${rate.toFixed(1)}/s, ${eta.toFixed(0)}s remaining)`,
-      );
+    const resultFile = join(tmpDir, `result_${w}.json`);
+    type WorkResult = { index: number; metrics: SunMetrics | null };
+    let workerResults: WorkResult[];
+    try {
+      workerResults = JSON.parse(readFileSync(resultFile, "utf-8")) as WorkResult[];
+    } catch {
+      console.error(`  worker ${w}: could not read result file`);
+      continue;
     }
+
+    for (const wr of workerResults) {
+      if (wr.metrics) {
+        pubs[wr.index]!.sun = wr.metrics;
+        scored++;
+        distribution[wr.metrics.label] = (distribution[wr.metrics.label] ?? 0) + 1;
+      } else {
+        skipped++;
+      }
+    }
+    console.log(`  worker ${w}: merged ${workerResults.length} results`);
   }
 
   // Stats.
@@ -413,6 +472,19 @@ function main(): void {
   writeFileSync(PUBS_JSON, JSON.stringify(pubs));
   const sizeKb = Math.round(JSON.stringify(pubs).length / 1024);
   console.log(`\nWritten back to ${PUBS_JSON} (${sizeKb} KB)`);
+
+  // Clean up temp files.
+  for (let w = 0; w < workerCount; w++) {
+    try {
+      const bf = join(tmpDir, `batch_${w}.json`);
+      const rf = join(tmpDir, `result_${w}.json`);
+      if (existsSync(bf)) writeFileSync(bf, ""); // truncate before unlink avoids large temp files
+      if (existsSync(rf)) writeFileSync(rf, "");
+    } catch { /* ignore */ }
+  }
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

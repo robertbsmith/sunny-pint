@@ -323,92 +323,127 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
     Uses height-dependent radius: short buildings are excluded if they're too
     far away to cast a shadow into the porthole at low sun angles.
+
+    Streams buildings from SQLite via cursor (never materialises the full
+    result set) and writes GeoJSON incrementally to disk, so memory stays
+    O(batch_size) instead of O(all_features). Safe at UK scale (~27M rows).
+
     Returns feature count.
     """
+    import time as _time
+
     pub_points = load_pub_points()
     pub_tree = STRtree(pub_points)
 
     conn = sqlite3.connect(str(GPKG_PATH))
 
-    # Use R-tree spatial index for area-restricted queries to avoid OOM.
+    # Always use R-tree. For UK-wide (no area.bbox), derive bbox from pubs.
     if area.bbox is not None:
         s, w_, n_, e_ = area.bbox
-        # Add max radius buffer (in degrees, conservative — uses lat for both axes).
-        buf_deg = MAX_RADIUS_M / 111320.0
-        try:
-            rows = conn.execute(
-                "SELECT b.fid, b.geom, b.osm_id, b.building, b.name, b.height, b.levels, b.lidar_height, b.ground_elev "
-                "FROM buildings b "
-                "JOIN rtree_buildings_geom r ON b.fid = r.id "
-                "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
-                (w_ - buf_deg, e_ + buf_deg, s - buf_deg, n_ + buf_deg),
-            ).fetchall()
-        except sqlite3.OperationalError:
-            rows = conn.execute(
-                "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
-                "FROM buildings"
-            ).fetchall()
     else:
-        # UK-wide: read all buildings (we filter by pub proximity below).
-        rows = conn.execute(
+        with open(PUBS_PATH) as f:
+            pubs_data = json.load(f)
+        lats = [p["lat"] for p in pubs_data]
+        lngs = [p["lng"] for p in pubs_data]
+        s, n_ = min(lats), max(lats)
+        w_, e_ = min(lngs), max(lngs)
+
+    buf_deg = MAX_RADIUS_M / 111320.0
+    try:
+        cursor = conn.execute(
+            "SELECT b.fid, b.geom, b.osm_id, b.building, b.name, b.height, b.levels, b.lidar_height, b.ground_elev "
+            "FROM buildings b "
+            "JOIN rtree_buildings_geom r ON b.fid = r.id "
+            "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+            (w_ - buf_deg, e_ + buf_deg, s - buf_deg, n_ + buf_deg),
+        )
+    except sqlite3.OperationalError:
+        # No R-tree — fall back to full scan (shouldn't happen on our gpkg).
+        cursor = conn.execute(
             "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
             "FROM buildings"
-        ).fetchall()
+        )
 
-    features = []
+    included = 0
     skipped = 0
     skipped_by_height = 0
+    scanned = 0
+    t0 = _time.time()
+    BATCH = 5000
 
-    for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height, ground_elev in rows:
-        try:
-            hl = gpkg_header_len(blob)
-            geom = wkb.loads(blob[hl:])
-            if geom.is_empty or not geom.is_valid:
-                continue
+    with open(output_path, "w") as out:
+        out.write('{"type":"FeatureCollection","features":[\n')
+        first = True
 
-            centroid = geom.centroid
-            if not in_bbox(centroid.y, centroid.x, area.bbox):
-                continue
+        while True:
+            batch = cursor.fetchmany(BATCH)
+            if not batch:
+                break
 
-            # Resolve height first so we can compute shadow reach.
-            h = resolve_height(osm_height, levels, lidar_height)
-            reach = shadow_reach_m(h)
-            reach_deg = reach / 111320.0
+            for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height, ground_elev in batch:
+                scanned += 1
+                try:
+                    hl = gpkg_header_len(blob)
+                    geom = wkb.loads(blob[hl:])
+                    if geom.is_empty or not geom.is_valid:
+                        continue
 
-            # Check if any pub is within this building's shadow reach.
-            nearby_idxs = pub_tree.query(centroid.buffer(reach_deg))
-            if len(nearby_idxs) == 0:
-                # Try max radius as fallback — building might be very close but short.
-                # Actually no: if reach_deg found nothing, max_buf_deg won't either
-                # since reach is always >= porthole radius.
-                skipped += 1
-                if reach < MAX_RADIUS_M:
-                    skipped_by_height += 1
-                continue
+                    centroid = geom.centroid
+                    if not in_bbox(centroid.y, centroid.x, area.bbox):
+                        continue
 
-            coords = [list(geom.exterior.coords)]
-            for ring in geom.interiors:
-                coords.append(list(ring.coords))
+                    # Resolve height first so we can compute shadow reach.
+                    h = resolve_height(osm_height, levels, lidar_height)
+                    reach = shadow_reach_m(h)
+                    reach_deg = reach / 111320.0
 
-            feature = {
-                "type": "Feature",
-                "properties": {"h": round(h, 1)},
-                "geometry": {"type": "Polygon", "coordinates": coords},
-            }
-            if ground_elev is not None:
-                feature["properties"]["e"] = round(ground_elev, 1)
-            features.append(feature)
-        except Exception:
-            continue
+                    # Check if any pub is within this building's shadow reach.
+                    nearby_idxs = pub_tree.query(centroid.buffer(reach_deg))
+                    if len(nearby_idxs) == 0:
+                        skipped += 1
+                        if reach < MAX_RADIUS_M:
+                            skipped_by_height += 1
+                        continue
+
+                    coords = [list(geom.exterior.coords)]
+                    for ring in geom.interiors:
+                        coords.append(list(ring.coords))
+
+                    feature = {
+                        "type": "Feature",
+                        "properties": {"h": round(h, 1)},
+                        "geometry": {"type": "Polygon", "coordinates": coords},
+                    }
+                    if ground_elev is not None:
+                        feature["properties"]["e"] = round(ground_elev, 1)
+
+                    if not first:
+                        out.write(",\n")
+                    json.dump(feature, out)
+                    first = False
+                    included += 1
+                except Exception:
+                    continue
+
+            # Progress every ~50k rows.
+            if scanned % 50000 < BATCH:
+                elapsed = _time.time() - t0
+                rate = scanned / elapsed if elapsed > 0 else 0
+                print(
+                    f"  scanned {scanned:,}  included {included:,}  "
+                    f"skipped {skipped:,} ({skipped_by_height:,} by height)  "
+                    f"{rate:,.0f} rows/s",
+                    flush=True,
+                )
+
+        out.write("\n]}")
 
     conn.close()
-    print(f"  {len(features)} buildings near pubs, {skipped} filtered out ({skipped_by_height} by height)")
+    elapsed = _time.time() - t0
+    print(f"  {included:,} buildings near pubs, {skipped:,} filtered out ({skipped_by_height:,} by height)")
+    print(f"  Scanned {scanned:,} rows in {elapsed:.1f}s ({scanned/elapsed:,.0f} rows/s)")
 
-    geojson = {"type": "FeatureCollection", "features": features}
-    with open(output_path, "w") as f:
-        json.dump(geojson, f)
-
-    return len(features)
+    return included
 
 
 def main():
