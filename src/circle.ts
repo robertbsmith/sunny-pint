@@ -1,7 +1,7 @@
 /**
  * Porthole canvas renderer.
  *
- * Composites the main visualisation: CARTO basemap tiles, building polygons,
+ * Composites the main visualisation: basemap tiles, building polygons,
  * geometric shadows, outdoor area outline, bezel ring with compass, sun/moon
  * icon and time text, plus the hanging pub sign above the porthole.
  *
@@ -14,7 +14,7 @@ import SunCalc from "suncalc";
 import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
 import { DAY_FRAC_OFFSET, DAY_FRAC_RANGE, TILE_ZOOM, TWILIGHT_DAY, TWILIGHT_NIGHT } from "./config";
 import { lngLatToTile, tileMetresPerPixel, toPixel } from "./geo";
-import { drawPubSign, measureSignLayout, type SignLayout, setCoaLoadCallback } from "./sign";
+import { drawPubSign, measureSignLayout, type SignLayout } from "./sign";
 import { pubCenter, selectedPub, state } from "./state";
 import { isDark, lerpColor } from "./theme";
 import { loadTile, setSuppressTileRedraw, setTileRedrawCallback } from "./tiles";
@@ -544,11 +544,6 @@ export function initCircle(): void {
   };
 
   setTileRedrawCallback(() => renderCircle(canvas));
-  setCoaLoadCallback(() => {
-    lastSignKey = null;
-    renderCircle(canvas);
-  });
-
   window.addEventListener("resize", resize);
   resize();
 }

@@ -23,7 +23,7 @@ A mobile-first PWA that helps you find a sunny beer garden right now. Open it, s
 - [x] Weather from Open-Meteo (cloud cover indicator)
 - [x] Deep linking via URL params
 - [x] Date picker for future dates
-- [x] Pub sign with coat of arms (Armoria), adaptive sizing
+- [x] Pub sign with procedural heraldic device, adaptive sizing
 - [x] Theme selector (light/dark/system)
 - [x] Ko-fi support button
 - [x] Full attribution page with required legal wording
@@ -41,6 +41,7 @@ A mobile-first PWA that helps you find a sunny beer garden right now. Open it, s
 - [x] Terrain horizon computation
 
 ### Future
+- [ ] Scotland/Wales pubs (need `great-britain-latest.osm.pbf` instead of England-only)
 - [ ] Tree shadows (OSM natural=tree + LiDAR canopy height)
-- [ ] User-reported pub closures / corrections
 - [ ] Opening hours filtering
+- [ ] User-reported pub closures / corrections

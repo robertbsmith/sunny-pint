@@ -1,13 +1,13 @@
 /**
- * Pub sign — hand-drawn hanging tavern sign with iron arm and coat of arms.
+ * Pub sign — hand-drawn hanging tavern sign with iron arm and heraldic device.
  *
  * Renders the swinging tavern sign that appears above the porthole. The sign
- * shape, colour, and coat of arms are deterministically derived from the pub
+ * shape, colour, and heraldic device are deterministically derived from the pub
  * name (so the same pub always looks identical). Layout is measured first to
  * ensure pub names of any length fit legibly.
  */
 
-import { ARMORIA_URL, COA_CACHE_MAX } from "./config";
+import { drawHeraldicDevice } from "./heraldry";
 import { isDark } from "./theme";
 
 /** Layout measurements for a pub sign — computed before rendering. */
@@ -22,52 +22,9 @@ export interface SignLayout {
 const TARGET_FONT = 11;
 const MIN_FONT = 8;
 const MIN_SIGN_W = 100;
-
-// ── Coat of arms cache ──────────────────────────────────────────────
-
-const coaCache = new Map<string, HTMLImageElement | null>();
-let coaLoadCallback: (() => void) | null = null;
-
-/** Set a callback fired when an async coat-of-arms image finishes loading. */
-export function setCoaLoadCallback(callback: () => void): void {
-  coaLoadCallback = callback;
-}
-
-/**
- * Get a procedurally-generated coat of arms for a pub name.
- *
- * Returns the image element if loaded and ready, otherwise `null` (and kicks
- * off an async fetch from Armoria). The caller should re-render once the
- * load callback fires.
- */
-export function getCoatOfArms(name: string): HTMLImageElement | null {
-  if (coaCache.has(name)) {
-    const img = coaCache.get(name);
-    return img?.complete && img.naturalWidth > 0 ? img : null;
-  }
-
-  // Mark as loading to prevent duplicate fetches.
-  coaCache.set(name, null);
-
-  // Bound the cache to prevent memory leaks.
-  if (coaCache.size > COA_CACHE_MAX) {
-    const firstKey = coaCache.keys().next().value;
-    if (firstKey) coaCache.delete(firstKey);
-  }
-
-  const seed = encodeURIComponent(name);
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.onload = () => {
-    coaCache.set(name, img);
-    coaLoadCallback?.();
-  };
-  img.onerror = () => {
-    coaCache.set(name, null);
-  };
-  img.src = `${ARMORIA_URL}/?seed=${seed}&format=svg&size=80`;
-  return null;
-}
+/** Ovals waste ~30% to curvature — enlarge so the usable interior stays legible. */
+const MIN_SIGN_W_OVAL = 130;
+const MIN_SIGN_H_OVAL = 56;
 
 // ── Layout helpers ──────────────────────────────────────────────────
 
@@ -129,26 +86,29 @@ export function measureSignLayout(name: string, maxW: number): SignLayout {
     };
   }
 
-  const hasCoA = !!getCoatOfArms(name);
   const shapeIdx = hashStr(name) % 4;
 
   const MAX_SIGN_W = Math.min(200, maxW * 0.85);
   const SIDE_INSET = shapeIdx === 3 ? 18 : 8;
   const TOP_INSET = shapeIdx === 1 || shapeIdx === 3 ? 14 : 8;
   const BOT_INSET = shapeIdx === 2 ? 20 : shapeIdx === 3 ? 14 : 8;
-  const COA_W = hasCoA ? 32 : 0;
+  const COA_W = 32;
+
+  const minW = shapeIdx === 3 ? MIN_SIGN_W_OVAL : MIN_SIGN_W;
 
   let bestFontSize = MIN_FONT;
   let bestLines: string[] = [name];
-  let bestSignW = MIN_SIGN_W;
+  let bestSignW = minW;
+
+  const MAX_LINES = 3;
 
   for (let fs = TARGET_FONT; fs >= MIN_FONT; fs--) {
     mc.font = `700 ${fs}px Georgia, serif`;
     for (let tw = 60; tw <= MAX_SIGN_W - SIDE_INSET * 2 - COA_W; tw += 10) {
       const lines = wrapText(mc, name, tw);
-      if (lines.length <= 2) {
+      if (lines.length <= MAX_LINES) {
         const neededSignW = tw + SIDE_INSET * 2 + COA_W + 8;
-        const signW = Math.max(MIN_SIGN_W, Math.min(MAX_SIGN_W, neededSignW));
+        const signW = Math.max(minW, Math.min(MAX_SIGN_W, neededSignW));
         if (fs > bestFontSize || (fs === bestFontSize && signW <= bestSignW)) {
           bestFontSize = fs;
           bestLines = lines;
@@ -160,17 +120,18 @@ export function measureSignLayout(name: string, maxW: number): SignLayout {
     if (bestFontSize === TARGET_FONT) break;
   }
 
-  if (bestLines.length > 2) {
+  if (bestLines.length > MAX_LINES) {
     mc.font = `700 ${MIN_FONT}px Georgia, serif`;
     const tw = MAX_SIGN_W - SIDE_INSET * 2 - COA_W - 8;
     bestLines = wrapText(mc, name, tw);
-    if (bestLines.length > 3) bestLines = bestLines.slice(0, 3);
+    if (bestLines.length > MAX_LINES) bestLines = bestLines.slice(0, MAX_LINES);
     bestSignW = MAX_SIGN_W;
   }
 
   const lineH = bestFontSize + 2;
   const textBlockH = bestLines.length * lineH;
-  const signH = Math.max(44, textBlockH + TOP_INSET + BOT_INSET + 4);
+  const minH = shapeIdx === 3 ? MIN_SIGN_H_OVAL : 44;
+  const signH = Math.max(minH, textBlockH + TOP_INSET + BOT_INSET + 4);
   const canvasH = 16 + 20 + signH + 6;
 
   return { signW: bestSignW, signH, canvasH, fontSize: bestFontSize, lines: bestLines };
@@ -188,7 +149,7 @@ export function measureSignLayout(name: string, maxW: number): SignLayout {
  *   4. Two chains hanging the sign board from the arm
  *   5. Sign board (rectangle, arched, pennant or oval based on hash)
  *   6. Wood-grain texture
- *   7. Coat of arms (if loaded)
+ *   7. Heraldic device (procedural, synchronous)
  *   8. Pub name text wrapped to fit
  */
 export function drawPubSign(
@@ -479,22 +440,17 @@ export function drawPubSign(
   const safeLeft = signX + safeInset.side;
   const safeRight = signX + signW - safeInset.side;
 
-  // Coat of arms.
-  const coaImg = getCoatOfArms(name);
+  // Heraldic device.
   const coaSize = Math.min(safeH - 4, 36);
-  let coaActualW = 0;
-
-  if (coaImg) {
-    const coaX = safeLeft;
-    const coaY = safeTop + (safeH - coaSize) / 2;
-    ctx.save();
-    ctx.beginPath();
-    signPath();
-    ctx.clip();
-    ctx.drawImage(coaImg, coaX, coaY, coaSize, coaSize);
-    ctx.restore();
-    coaActualW = coaSize + 4;
-  }
+  const coaX = safeLeft;
+  const coaY = safeTop + (safeH - coaSize) / 2;
+  ctx.save();
+  ctx.beginPath();
+  signPath();
+  ctx.clip();
+  drawHeraldicDevice(ctx, coaX, coaY, coaSize, name);
+  ctx.restore();
+  const coaActualW = coaSize + 4;
 
   // Gold frame.
   ctx.beginPath();
