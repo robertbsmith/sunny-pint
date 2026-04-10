@@ -53,14 +53,12 @@ export const TWILIGHT_DAY = 0.7;
 
 // ── External services ────────────────────────────────────────────────
 
-/** OSM raster basemap tile URL. Free under OSM tile usage policy
- *  (max 2 connections/client, valid User-Agent, display attribution).
- *  https://operations.osmfoundation.org/policies/tiles/ */
-export const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-/** ESRI World Imagery satellite tiles. Note: {z}/{y}/{x} order (not {x}/{y}).
- *  Attribution: Esri, Maxar, Earthstar Geographics, GIS User Community. */
-export const SATELLITE_TILE_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+/** Mapbox raster tile URLs. 200k Static Tile requests/month free.
+ *  Token is public (restricted via URL allowlisting in Mapbox dashboard). */
+const MAPBOX_TOKEN =
+  "pk.eyJ1Ijoicm9iZXJ0YnNtaXRoIiwiYSI6ImNtbnQyemVnbzBoNmYycHIyaHJvb3RremEifQ.zJRELIw_QaWTW0NRQc6-8g";
+export const TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+export const SATELLITE_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";

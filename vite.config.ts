@@ -55,8 +55,8 @@ export default defineConfig({
             },
           },
           {
-            // Cache map tiles (OSM raster + ESRI satellite)
-            urlPattern: /^https:\/\/(tile\.openstreetmap\.org|server\.arcgisonline\.com)\//,
+            // Cache Mapbox raster tiles (streets + satellite)
+            urlPattern: /^https:\/\/api\.mapbox\.com\//,
             handler: "CacheFirst",
             options: {
               cacheName: "map-tiles",
