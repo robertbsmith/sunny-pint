@@ -470,20 +470,31 @@ def fetch_ndsm(w, s, e, n):
     if arr is not None:
         return arr, dtm, tfm
 
-    # EA WCS covers all of England including the north — try this first.
-    arr, dtm, tfm = fetch_ea_wcs(w, s, e, n)
-    if arr is not None:
-        return arr, dtm, tfm
-
-    # Fallback by country for areas outside England.
+    # Route by OSGB coordinates to the correct LiDAR source directly.
+    # Avoids wasting ~8s per tile on failed EA requests for non-England areas.
     cx, cy = (w + e) / 2, (s + n) / 2
-    # Wales: roughly west of OSGB easting 340000 and south of northing 400000.
+
+    # Scotland: north of the border (~northing 540000).
+    if cy > 540000:
+        return fetch_jncc_wcs(w, s, e, n)
+
+    # Wales: roughly west of OSGB easting 340000.
     if cx < 340000:
         arr, dtm, tfm = fetch_nrw_cog(w, s, e, n)
         if arr is not None:
             return arr, dtm, tfm
-    # Scotland: north of the border (~northing 540000-580000).
-    if cy > 540000:
+
+    # England: EA WCS (also covers English areas near Welsh/Scottish borders).
+    arr, dtm, tfm = fetch_ea_wcs(w, s, e, n)
+    if arr is not None:
+        return arr, dtm, tfm
+
+    # Last resort: try NRW/JNCC for border areas that EA didn't cover.
+    if cx < 400000 and cy < 540000:
+        arr, dtm, tfm = fetch_nrw_cog(w, s, e, n)
+        if arr is not None:
+            return arr, dtm, tfm
+    if cy > 500000:
         return fetch_jncc_wcs(w, s, e, n)
 
     return None, None, None
