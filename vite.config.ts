@@ -55,8 +55,8 @@ export default defineConfig({
             },
           },
           {
-            // Cache Stadia Maps raster tiles (normal + satellite)
-            urlPattern: /^https:\/\/tiles\.stadiamaps\.com\//,
+            // Cache map tiles (OSM raster + ESRI satellite)
+            urlPattern: /^https:\/\/(tile\.openstreetmap\.org|server\.arcgisonline\.com)\//,
             handler: "CacheFirst",
             options: {
               cacheName: "map-tiles",

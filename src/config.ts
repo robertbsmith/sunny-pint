@@ -53,10 +53,14 @@ export const TWILIGHT_DAY = 0.7;
 
 // ── External services ────────────────────────────────────────────────
 
-/** Stadia Maps raster basemap tile URL templates. */
-export const TILE_URL = "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png";
+/** OSM raster basemap tile URL. Free under OSM tile usage policy
+ *  (max 2 connections/client, valid User-Agent, display attribution).
+ *  https://operations.osmfoundation.org/policies/tiles/ */
+export const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+/** ESRI World Imagery satellite tiles. Note: {z}/{y}/{x} order (not {x}/{y}).
+ *  Attribution: Esri, Maxar, Earthstar Geographics, GIS User Community. */
 export const SATELLITE_TILE_URL =
-  "https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.png";
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
