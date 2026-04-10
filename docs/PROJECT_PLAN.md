@@ -30,13 +30,17 @@ A mobile-first PWA that helps you find a sunny beer garden right now. Open it, s
 - [x] Cloudflare Pages deployment
 - [x] Pipeline supports `--area` flag for any UK region
 
-### In Progress
-- [ ] UK-wide data pipeline (33k pubs, 12M buildings)
-- [ ] Full INSPIRE plot data (318 local authorities downloaded)
+- [x] UK-wide data pipeline (33k pubs, 13.4M buildings)
+- [x] Full INSPIRE plot data (318 local authorities)
+- [x] Precomputed Sunny Ratings (equinox sun simulation per pub)
+- [x] Per-pub pages via Cloudflare Pages Functions
+- [x] OG image generation per pub
+- [x] SEO landing pages (city, theme) with sitemap.xml
+- [x] Structured data (JSON-LD) on landing pages
+- [x] Privacy page
+- [x] Terrain horizon computation
 
 ### Future
-- [ ] Pre-computed sun scores for list sorting
 - [ ] Tree shadows (OSM natural=tree + LiDAR canopy height)
-- [ ] Scotland/Wales .pbf support (currently England only)
 - [ ] User-reported pub closures / corrections
 - [ ] Opening hours filtering

@@ -14,11 +14,12 @@ Sunny Pint uses LiDAR elevation data and building footprints to project geometri
 
 - **Porthole view** — circular shadow map with CartoDB basemap, building polygons, and geometric shadow projection
 - **Sun arc** — drag to scrub time, play to animate sunrise-to-sunset at 60fps
-- **250+ Norwich pubs** — merged from FSA, VOA, and OpenStreetMap data
+- **33k UK pubs** — extracted from OpenStreetMap, each with a precomputed Sunny Rating
 - **Building heights** — sampled from Environment Agency 1m LiDAR DSM/DTM
 - **Weather** — live cloud cover from Open-Meteo (no API key needed)
 - **Pub signs** — procedurally generated with Armoria coat of arms, unique per pub
 - **Share** — snapshot image with porthole, pub name, weather, and deep link
+- **SEO landing pages** — per-city and per-pub pages with structured data
 - **Dark/light theme** — system-aware with manual toggle
 - **PWA** — installable, offline cached, works on mobile
 - **Deep linking** — URLs encode location, pub, time, and date
@@ -30,7 +31,7 @@ This project runs in a devcontainer. Open in VS Code with the Dev Containers ext
 ```bash
 pnpm install          # Install frontend dependencies
 just dev              # Start Vite dev server (port 5173)
-just build            # Production build → dist/
+just release          # Production build + SEO landing pages → dist/
 ```
 
 ## Data Pipeline
@@ -47,21 +48,23 @@ just pipeline area=uk          # Full UK (slow)
 
 | Step | Script | Input | Output |
 |------|--------|-------|--------|
-| 1. Merge pubs | `scripts/merge_pubs.py` | FSA + VOA + OSM .pbf | `data/pubs_merged.json` |
-| 2. Extract buildings | `scripts/build_gpkg.py` | OSM .pbf | `data/buildings.gpkg` |
-| 3. Measure heights | `scripts/measure_heights.py` | GeoPackage + LiDAR DSM/DTM | `data/buildings.gpkg` (with heights) |
-| 4. Generate tiles | `scripts/generate_pmtiles.py` | GeoPackage | `public/data/buildings.pmtiles` |
+| 1. Merge pubs | `scripts/merge_pubs.py` | OSM .pbf | `data/pubs_merged.json` |
+| 2. Download INSPIRE | `scripts/download_inspire.py` | HM Land Registry | `data/inspire/*.gml` |
+| 3. Build INSPIRE GeoPackage | `scripts/build_inspire_gpkg.py` | INSPIRE GMLs | `data/inspire.gpkg` |
+| 4. Extract buildings | `scripts/build_gpkg.py` | OSM .pbf | `data/buildings.gpkg` |
+| 5. Measure heights | `scripts/measure_heights.py` | GeoPackage + LiDAR DSM/DTM | `data/buildings.gpkg` (with heights) |
+| 6. Match plots | `scripts/match_plots.py` | Pubs + INSPIRE + buildings | `public/data/pubs.json` |
+| 7. Compute horizons | `scripts/compute_horizons.py` | DTM + pubs | Terrain horizon profiles |
+| 8. Generate tiles | `scripts/generate_tiles.py` | GeoPackage | `public/data/tiles/*.pbf` |
+| 9. Precompute sun | `scripts/precompute_sun.ts` | pubs.json + tiles | `sun` field in pubs.json |
 
 ### Data sources (not in repo — fetched by pipeline)
 
 | Source | How to get it | Size |
 |--------|--------------|------|
 | England OSM extract | [Geofabrik](https://download.geofabrik.de/europe/great-britain/england.html) → `data/england-latest.osm.pbf` | ~1.6 GB |
-| EA LiDAR DSM 1m tiles | `scripts/download_lidar.py` → `data/lidar/dsm_*.tif` | ~400 MB |
-| EA LiDAR DTM 1m tiles | Auto-downloaded by `measure_heights.py` → `data/lidar/dtm_*.tif` | ~400 MB |
-| FSA pub data | `data/fsa/download_pubs.py` → `data/fsa/pubs_uk.json` | ~14 MB |
-| VOA rating list | [VOA downloads](https://voaratinglists.blob.core.windows.net/html/rlidata.htm) → extract pubs → `data/voa/pubs_england_wales.json` | ~12 MB |
-| Land Registry INSPIRE | [HM Land Registry](https://use-land-property-data.service.gov.uk/datasets/inspire) → `data/inspire/` | ~47 MB |
+| EA LiDAR DSM/DTM 1m | Auto-downloaded by `measure_heights.py` → `data/lidar/` | ~400 MB per model |
+| Land Registry INSPIRE | `scripts/download_inspire.py` → `data/inspire/` | ~28 GB (318 authorities) |
 
 ## Tech Stack
 
@@ -80,14 +83,21 @@ just pipeline area=uk          # Full UK (slow)
 - **fiona** + shapely — GeoPackage spatial queries
 - **tippecanoe** — vector tile generation
 
+### Deployment
+- **Cloudflare Pages** — static files + Pages Functions for per-pub rendering
+- **Per-pub pages** — rendered on-demand by Cloudflare Pages Functions (`functions/pub/[slug].ts`)
+- **OG images** — generated per-pub at the edge (`functions/og/pub/[slug].ts`)
+- **SEO landing pages** — static city/theme pages generated at build time (`scripts/generate_pages.ts`)
+
 ## Architecture
 
-**Static site** — no backend at runtime. All data is pre-computed and served as static JSON/PMTiles files. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position.
+**Static site** — no backend at runtime. All data is pre-computed and served as static JSON and individual .pbf vector tile files. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position. Per-pub and OG image pages are rendered on-demand by Cloudflare Pages Functions.
 
 Key technical decisions:
 - **Geometric shadow projection** over raster ray-tracing — mathematically precise vector edges, fast enough for real-time animation
 - **DSM minus DTM** for building heights — avoids expensive ground-level estimation
 - **Offscreen canvas compositing** — prevents shadow opacity stacking at polygon overlaps
+- **Individual .pbf tiles** over PMTiles — Cloudflare Pages breaks PMTiles range requests
 
 ## License
 
@@ -98,7 +108,6 @@ MIT — see [LICENSE](LICENSE)
 - Pub & building data: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL)
 - Building heights: [Environment Agency](https://www.gov.uk/government/organisations/environment-agency) LiDAR (OGL v3)
 - Property boundaries: [HM Land Registry](https://use-land-property-data.service.gov.uk/) (OGL v3)
-- Pub listings: [Food Standards Agency](https://ratings.food.gov.uk/) (OGL v3)
 - Map tiles: [CARTO](https://carto.com/attributions) (CC BY 3.0)
 - Sun position: [SunCalc](https://github.com/mourner/suncalc) (BSD)
 - Heraldry: [Armoria](https://azgaar.github.io/Armoria/) (MIT)

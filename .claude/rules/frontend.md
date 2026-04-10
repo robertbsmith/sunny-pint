@@ -17,18 +17,28 @@ Applies to: `src/**`
 
 ## Module Structure
 - `main.ts` — entry point, wires everything together
-- `shadow.ts` — geometric shadow projection from buildings
-- `circle.ts` — porthole canvas renderer (tiles, buildings, shadows, bezel, sign)
-- `sunarc.ts` — sun arc time picker canvas widget
-- `buildings.ts` — vector tile loader, spatial filtering, building types
-- `weather.ts` — Open-Meteo cloud cover
-- `share.ts` — image capture + Web Share API
 - `state.ts` — app state, pub selection, time
-- `types.ts` — shared type definitions
+- `circle.ts` — porthole canvas renderer (tiles, buildings, shadows, bezel, sign)
+- `shadow.ts` — geometric shadow projection from buildings
+- `sunarc.ts` — sun arc time picker canvas widget
+- `sunbadge.ts` — sunny rating badge display
+- `buildings.ts` — vector tile loader, spatial filtering, building types
+- `tiles.ts` — CartoDB raster tile loading for porthole background
+- `sign.ts` — pub sign with Armoria coat of arms
 - `publist.ts` — pub list with search and distance sorting
 - `location.ts` — GPS + Nominatim geocoding
+- `weather.ts` — Open-Meteo cloud cover
+- `share.ts` — image capture + Web Share API
 - `url.ts` — deep linking via URL params
+- `hours.ts` — opening hours parsing and display
+- `welcome.ts` — first-visit welcome modal
+- `theme.ts` — light/dark/system theme switching
+- `storage.ts` — localStorage helpers (location, preferences)
+- `geo.ts` — geographic utilities
+- `config.ts` — app constants
 - `icons.ts` — Lucide DOM icons
+- `canvas-icons.ts` — canvas-rendered icon helpers
+- `types.ts` — shared type definitions
 
 ## Conventions
 - No `any` types
