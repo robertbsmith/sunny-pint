@@ -126,6 +126,7 @@ function initPortholeControls(): void {
   resetBtn?.addEventListener("click", () => {
     state.panX = 0;
     state.panY = 0;
+    state.zoomStep = 1;
     syncPortholeUI();
     updateScene();
   });
@@ -140,7 +141,8 @@ function initPortholeControls(): void {
     if (zoomIn) (zoomIn as HTMLButtonElement).disabled = state.zoomStep >= 4;
     if (zoomOut) (zoomOut as HTMLButtonElement).disabled = state.zoomStep <= 1;
     const panned = state.panX !== 0 || state.panY !== 0;
-    if (resetBtn) (resetBtn as HTMLButtonElement).disabled = !panned;
+    const needsReset = panned || state.zoomStep > 1;
+    if (resetBtn) (resetBtn as HTMLButtonElement).disabled = !needsReset;
   }
 }
 
