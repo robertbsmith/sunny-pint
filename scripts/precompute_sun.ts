@@ -205,8 +205,14 @@ async function main(): Promise<void> {
     console.log(`  ${label.padEnd(15)} ${count.toString().padStart(4)}  ${pct}%`);
   }
 
-  writeFileSync(PUBS_JSON, JSON.stringify(pubs));
-  const sizeKb = Math.round(JSON.stringify(pubs).length / 1024);
+  // Write to temp file then rename — prevents truncating pubs.json if the
+  // process crashes mid-write (which zeroes the file and loses all data).
+  const tmpPath = `${PUBS_JSON}.tmp`;
+  const jsonStr = JSON.stringify(pubs);
+  writeFileSync(tmpPath, jsonStr);
+  const { renameSync } = await import("node:fs");
+  renameSync(tmpPath, PUBS_JSON);
+  const sizeKb = Math.round(jsonStr.length / 1024);
   console.log(`\nWritten back to ${PUBS_JSON} (${sizeKb} KB)`);
 
   // Clean up temp files.
