@@ -199,7 +199,7 @@ function windowAverage(samples: Sample[], window: [number, number]): number {
   return inWin.reduce((a, b) => a + b.fraction, 0) / inWin.length;
 }
 
-function computeSunMetrics(pub: Pub): SunMetrics | null {
+async function computeSunMetrics(pub: Pub): Promise<SunMetrics | null> {
   if (!pub.outdoor || pub.outdoor.length === 0) return null;
 
   const frame = makeFrame(pub.clat ?? pub.lat, pub.clng ?? pub.lng);
@@ -211,7 +211,7 @@ function computeSunMetrics(pub: Pub): SunMetrics | null {
   const samplePoints = samplePointsInside(outdoorPoly, NUM_SAMPLE_POINTS, seed);
   if (samplePoints.length === 0) return null;
 
-  const buildings = loadBuildingsForPub(pub);
+  const buildings = await loadBuildingsForPub(pub);
 
   const times = SunCalc.getTimes(SAMPLE_DAY, pub.lat, pub.lng);
   if (Number.isNaN(times.sunrise.getTime()) || Number.isNaN(times.sunset.getTime())) {
@@ -307,7 +307,7 @@ const results: WorkResult[] = [];
 
 for (const item of batch) {
   try {
-    const metrics = computeSunMetrics(item.pub);
+    const metrics = await computeSunMetrics(item.pub);
     results.push({ index: item.index, metrics });
   } catch {
     results.push({ index: item.index, metrics: null });

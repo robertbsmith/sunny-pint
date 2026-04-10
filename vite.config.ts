@@ -64,10 +64,9 @@ export default defineConfig({
             },
           },
           {
-            // Cache building vector tiles. NetworkFirst (not CacheFirst) so a
-            // new pipeline run is picked up on the next visit instead of being
-            // pinned to a stale tile for 30 days.
-            urlPattern: /\/data\/tiles\/.+\.pbf$/,
+            // Cache building tiles — PMTiles range requests on R2, or
+            // individual .pbf files in local dev.
+            urlPattern: /\.(pmtiles|pbf)$/,
             handler: "NetworkFirst",
             options: {
               cacheName: "building-tiles-v2",

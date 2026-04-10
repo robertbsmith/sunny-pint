@@ -461,13 +461,7 @@ def main():
         return
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Clean old tile files.
-    if TILES_DIR.exists():
-        shutil.rmtree(TILES_DIR)
-    TILES_DIR.mkdir(parents=True)
-    for old in OUTPUT_DIR.glob("buildings*.pmtiles"):
-        old.unlink()
+    PMTILES_OUT = OUTPUT_DIR / "buildings.pmtiles"
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
@@ -483,8 +477,8 @@ def main():
         print(f"  GeoJSON: {gj_size:.1f} MB")
         print()
 
-        # Step 2: Run tippecanoe to create a temporary PMTiles.
-        pmtiles_path = tmp / "buildings.pmtiles"
+        # Step 2: Run tippecanoe → PMTiles archive.
+        pmtiles_tmp = tmp / "buildings.pmtiles"
         tippecanoe = shutil.which("tippecanoe")
         if tippecanoe is None:
             print("ERROR: tippecanoe not found.")
@@ -493,7 +487,7 @@ def main():
         print("Running tippecanoe...", flush=True)
         cmd = [
             tippecanoe,
-            "-o", str(pmtiles_path),
+            "-o", str(pmtiles_tmp),
             "-z", str(TILE_ZOOM),
             "-Z", str(TILE_ZOOM),  # single zoom level only
             "-l", "buildings",
@@ -507,22 +501,20 @@ def main():
         if result.returncode != 0:
             print(f"  tippecanoe failed (exit code {result.returncode})")
             return
-        pm_size = pmtiles_path.stat().st_size / 1e6
+        pm_size = pmtiles_tmp.stat().st_size / 1e6
         print(f"  PMTiles: {pm_size:.1f} MB")
-        print()
 
-        # Step 3: Extract individual z14 tiles from the PMTiles.
-        print(f"Extracting z{TILE_ZOOM} tiles...", flush=True)
-        tile_count = extract_tiles_from_pmtiles(pmtiles_path, TILES_DIR, TILE_ZOOM)
+        # Move to final location.
+        shutil.move(str(pmtiles_tmp), str(PMTILES_OUT))
 
-    # Stats.
-    total_size = sum(f.stat().st_size for f in TILES_DIR.glob("*.pbf"))
-    sizes = [f.stat().st_size for f in TILES_DIR.glob("*.pbf")]
-    print(f"\nDone! {tile_count} tile files in {TILES_DIR}")
-    print(f"  Total: {total_size / 1e6:.1f} MB")
-    if sizes:
-        print(f"  Average: {sum(sizes) / len(sizes) / 1024:.1f} KB")
-        print(f"  Largest: {max(sizes) / 1024:.1f} KB")
+    # Clean up old individual tile files (no longer needed with PMTiles).
+    if TILES_DIR.exists():
+        old_count = len(list(TILES_DIR.glob("*.pbf")))
+        if old_count:
+            shutil.rmtree(TILES_DIR)
+            print(f"  Removed {old_count} old individual .pbf files")
+
+    print(f"\nDone! {PMTILES_OUT} ({PMTILES_OUT.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

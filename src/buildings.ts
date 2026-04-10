@@ -11,12 +11,33 @@
 
 import { VectorTile } from "@mapbox/vector-tile";
 import Pbf from "pbf";
+import { PMTiles } from "pmtiles";
 import { BUILDING_TILE_ZOOM, LOAD_RADIUS_M, M_PER_DEG_LAT } from "./config";
 import { lngLatToTileXY, mPerDegLng, polygonCentroid } from "./geo";
 import { state } from "./state";
 import type { Building, Pub } from "./types";
 
 const tileCache = new Map<string, Building[]>();
+
+/** Data URL for building tiles. PMTiles on R2 in production, individual
+ *  .pbf files in local dev. Set via <meta name="tiles-url"> or falls back
+ *  to the R2 bucket. */
+const TILES_URL = (() => {
+  const meta = document.querySelector('meta[name="tiles-url"]');
+  return meta?.getAttribute("content") || "/data/tiles/buildings.pmtiles";
+})();
+
+/** True if we're using a PMTiles archive instead of individual tile files. */
+const USE_PMTILES = TILES_URL.endsWith(".pmtiles");
+
+/** PMTiles instance — lazy-initialised on first tile request. */
+let pmtilesInstance: PMTiles | null = null;
+function getPMTiles(): PMTiles {
+  if (!pmtilesInstance) {
+    pmtilesInstance = new PMTiles(TILES_URL);
+  }
+  return pmtilesInstance;
+}
 
 /** Decode a vector tile buffer into Building objects.
  *
@@ -52,19 +73,30 @@ export function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number
   return buildings;
 }
 
-/** Fetch a single tile, with caching. 404s are cached as empty. */
+/** Fetch a single tile, with caching. 404s / missing tiles cached as empty. */
 async function fetchTile(tx: number, ty: number): Promise<Building[]> {
   const key = `${tx}-${ty}`;
   const cached = tileCache.get(key);
   if (cached) return cached;
 
   try {
-    const resp = await fetch(`/data/tiles/${key}.pbf`);
-    if (!resp.ok) {
-      tileCache.set(key, []);
-      return [];
+    let data: ArrayBuffer;
+    if (USE_PMTILES) {
+      const resp = await getPMTiles().getZxy(BUILDING_TILE_ZOOM, tx, ty);
+      if (!resp?.data) {
+        tileCache.set(key, []);
+        return [];
+      }
+      data = resp.data;
+    } else {
+      // Individual .pbf files (local dev fallback).
+      const resp = await fetch(`${TILES_URL}/${key}.pbf`);
+      if (!resp.ok) {
+        tileCache.set(key, []);
+        return [];
+      }
+      data = await resp.arrayBuffer();
     }
-    const data = await resp.arrayBuffer();
     const buildings = decodeTile(data, tx, ty, BUILDING_TILE_ZOOM);
     tileCache.set(key, buildings);
     return buildings;
