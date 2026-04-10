@@ -176,7 +176,12 @@ function updateScene(): void {
 }
 
 async function onPubSelected(pub: Pub): Promise<void> {
-  dismissSeoContent();
+  // Only dismiss SEO content when navigating to a different pub.
+  // If this is the landing pub (from meta tag), keep the SEO visible.
+  if (pub.slug !== landingSlug) {
+    dismissSeoContent();
+    landingSlug = null; // once dismissed, don't re-show
+  }
   // Close mobile drawer and scroll back to the porthole. Targets both
   // window and #main so it works whether the page or main is the
   // scroll container.
@@ -471,9 +476,12 @@ async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> 
 
 // ── Init ─────────────────────────────────────────────────────────────
 
-/** Hide the SEO landing-page content (city intro, pub list, breadcrumbs).
- *  Called on search, pub selection, or if the session flag indicates this
- *  is a refresh within an active SPA session (not a fresh visit). */
+/** The pub slug from the landing page meta tag (if any). SEO content
+ *  stays visible while the user is viewing this pub — only dismissed
+ *  when they navigate to a different pub or start searching. */
+let landingSlug: string | null = null;
+
+/** Hide the SEO landing-page content (city intro, pub list, breadcrumbs). */
 function dismissSeoContent(): void {
   const el = document.getElementById("seo-intro");
   if (el) {
@@ -598,6 +606,7 @@ async function init(): Promise<void> {
     const labelEl = document.getElementById("location-label");
 
     if (metaPub) {
+      landingSlug = metaPub;
       const pub = state.pubs.find((p) => p.slug === metaPub);
       if (pub) {
         state.selectedPubId = pub.id;
