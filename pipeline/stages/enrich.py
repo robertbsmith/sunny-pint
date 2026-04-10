@@ -101,15 +101,13 @@ def _pub_hash(pub: dict) -> str:
 
 
 def _pub_is_enriched(pub: dict) -> bool:
-    """Check if a pub has core enrichment fields.
+    """Check if a pub has been through the enrichment pipeline.
 
-    A pub is considered enriched if it has elevation (from LiDAR) AND
-    either outdoor area (from parcel matching) or local_authority.
-    Pubs without INSPIRE parcel matches (e.g. rural Scotland) may lack
-    outdoor but still have elev — those need the parcel pass but NOT
-    the LiDAR pass.
+    Any enrichment field means it was processed — even if some fields
+    are missing (e.g. no INSPIRE parcel match, no LiDAR coverage).
+    Re-running with the same source data won't produce different results.
     """
-    return "elev" in pub and ("outdoor" in pub or "local_authority" in pub)
+    return any(k in pub for k in ("elev", "horizon", "outdoor", "local_authority"))
 
 
 # ── Building height sampling ─────────────────────────────────────────────
@@ -653,14 +651,15 @@ def run(area) -> dict:
     for i, pub in area_pubs:
         pub_id = pub.get("id") or pub.get("osm_id")
         if pub_id in prev_ids:
-            # Already processed in a previous run. Only re-process if
-            # source data actually changed (hash mismatch). On the first
-            # v2 run after v1 migration, no hashes exist yet — skip anyway.
-            h = _pub_hash(pub)
-            prev_hash = pub.get("_enrich_hash")
-            if prev_hash is None or prev_hash == h:
-                skipped += 1
-                continue
+            # Only skip if the pub was MEANINGFULLY enriched (has at least
+            # elev or outdoor). Pubs written to enriched output during a
+            # failed/killed run may exist by ID but have no actual data.
+            if _pub_is_enriched(pub):
+                h = _pub_hash(pub)
+                prev_hash = pub.get("_enrich_hash")
+                if prev_hash is None or prev_hash == h:
+                    skipped += 1
+                    continue
         pub["_enrich_hash"] = _pub_hash(pub)
         pubs_to_process.append((i, pub))
 
