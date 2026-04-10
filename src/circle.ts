@@ -735,7 +735,20 @@ export function initCircle(): void {
     }
   }
 
+  /** Check if a point (in canvas pixel coords) is inside the porthole circle. */
+  function insidePorthole(px: number, py: number): boolean {
+    const w = canvas.clientWidth;
+    // Circle centre: horizontally centred, vertically offset by the sign area (32px).
+    const cx = w / 2;
+    const cy = 32 + w / 2;
+    const r = w / 2;
+    const dx = px - cx;
+    const dy = py - cy;
+    return dx * dx + dy * dy <= r * r;
+  }
+
   canvas.addEventListener("mousedown", (e) => {
+    if (!insidePorthole(e.offsetX, e.offsetY)) return;
     onDragStart(e.offsetX, e.offsetY);
     e.preventDefault();
   });
@@ -749,7 +762,10 @@ export function initCircle(): void {
       if (e.touches.length !== 1) return;
       const t = e.touches[0]!;
       const rect = canvas.getBoundingClientRect();
-      onDragStart(t.clientX - rect.left, t.clientY - rect.top);
+      const px = t.clientX - rect.left;
+      const py = t.clientY - rect.top;
+      if (!insidePorthole(px, py)) return;
+      onDragStart(px, py);
       e.preventDefault();
     },
     { passive: false },
@@ -757,6 +773,7 @@ export function initCircle(): void {
   canvas.addEventListener(
     "touchmove",
     (e) => {
+      if (!dragging) return; // only prevent scroll if we started a drag inside
       if (e.touches.length !== 1) return;
       const t = e.touches[0]!;
       const rect = canvas.getBoundingClientRect();
@@ -787,6 +804,7 @@ export function initCircle(): void {
   canvas.addEventListener(
     "wheel",
     (e) => {
+      if (!insidePorthole(e.offsetX, e.offsetY)) return;
       e.preventDefault();
       stepZoom(e.deltaY < 0 ? 1 : -1);
     },
@@ -809,6 +827,13 @@ export function initCircle(): void {
     "touchstart",
     (e) => {
       if (e.touches.length === 2) {
+        // Check midpoint of the two fingers is inside porthole.
+        const a = e.touches[0]!;
+        const b = e.touches[1]!;
+        const rect = canvas.getBoundingClientRect();
+        const mx = (a.clientX + b.clientX) / 2 - rect.left;
+        const my = (a.clientY + b.clientY) / 2 - rect.top;
+        if (!insidePorthole(mx, my)) return;
         pinchStartDist = touchDist(e);
         pinchBaseZoom = state.zoomStep;
         e.preventDefault();
