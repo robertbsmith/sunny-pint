@@ -101,8 +101,15 @@ def _pub_hash(pub: dict) -> str:
 
 
 def _pub_is_enriched(pub: dict) -> bool:
-    """Check if a pub has all enrichment fields."""
-    return all(k in pub for k in ("elev", "outdoor", "local_authority"))
+    """Check if a pub has core enrichment fields.
+
+    A pub is considered enriched if it has elevation (from LiDAR) AND
+    either outdoor area (from parcel matching) or local_authority.
+    Pubs without INSPIRE parcel matches (e.g. rural Scotland) may lack
+    outdoor but still have elev — those need the parcel pass but NOT
+    the LiDAR pass.
+    """
+    return "elev" in pub and ("outdoor" in pub or "local_authority" in pub)
 
 
 # ── Building height sampling ─────────────────────────────────────────────
@@ -620,14 +627,16 @@ def run(area) -> dict:
     # If enriched file exists, merge existing enrichments.
     if ENRICHED_PATH.exists():
         enriched = json.loads(ENRICHED_PATH.read_text())
-        enriched_by_id = {p.get("osm_id"): p for p in enriched if p.get("osm_id")}
+        enriched_by_id = {p.get("id") or p.get("osm_id"): p for p in enriched if p.get("id") or p.get("osm_id")}
+        merged_count = 0
         for pub in all_pubs:
-            oid = pub.get("osm_id")
+            oid = pub.get("id") or pub.get("osm_id")
             if oid and oid in enriched_by_id:
-                # Carry forward existing enrichments.
                 for k in ("elev", "horizon", "outdoor", "outdoor_area_m2", "local_authority", "_enrich_hash"):
                     if k in enriched_by_id[oid]:
                         pub[k] = enriched_by_id[oid][k]
+                merged_count += 1
+        print(f"  Merged enrichments from previous run for {merged_count} pubs")
 
     # Filter to area.
     area_pubs = [(i, p) for i, p in enumerate(all_pubs) if in_bbox(p["lat"], p["lng"], area.bbox)]
