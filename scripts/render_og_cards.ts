@@ -78,7 +78,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Split into batches per worker.
+  // Sort geographically so each worker batch maximises map tile cache
+  // hits (nearby pubs share z18 tiles). Sort by lat rounded to 0.1°
+  // then lng — gives rough spatial locality within each batch.
+  toRender.sort((a, b) => {
+    const aKey = Math.floor(a.lat * 10) * 10000 + Math.floor(a.lng * 10);
+    const bKey = Math.floor(b.lat * 10) * 10000 + Math.floor(b.lng * 10);
+    return aKey - bKey;
+  });
+
+  // Split into batches per worker. Contiguous chunks from the sorted
+  // list give each worker a geographic region — maximum tile reuse.
   mkdirSync(TMP_DIR, { recursive: true });
   const workerCount = Math.min(NUM_WORKERS, toRender.length);
   const chunkSize = Math.ceil(toRender.length / workerCount);

@@ -282,13 +282,16 @@ def main():
     print()
 
     # Skip pubs that already have elev+horizon from a previous run.
-    already_done = sum(1 for p in area_pubs if "elev" in p and "horizon" in p)
+    pubs_needing_work = {i for i, p in enumerate(area_pubs) if "elev" not in p or "horizon" not in p}
+    already_done = len(area_pubs) - len(pubs_needing_work)
     if already_done:
-        print(f"  {already_done} pubs already have elev+horizon (will be skipped)")
+        print(f"  {already_done}/{len(area_pubs)} pubs already have elev+horizon (skipped)")
+    if not pubs_needing_work:
+        print("  All pubs already have horizons — nothing to do.")
+        return
 
     # Phase 2: Assign pubs to bundles (only pubs that still need horizons).
     print("Assigning pubs to bundles...")
-    pubs_needing_work = {i for i, p in enumerate(area_pubs) if "elev" not in p or "horizon" not in p}
     assignments = assign_pubs_to_bundles(area_pubs, bundles)
     # Filter assignments to only include pubs needing work.
     for tid in list(assignments):
