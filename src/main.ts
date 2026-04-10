@@ -176,6 +176,7 @@ function updateScene(): void {
 }
 
 async function onPubSelected(pub: Pub): Promise<void> {
+  dismissSeoContent();
   // Close mobile drawer and scroll back to the porthole. Targets both
   // window and #main so it works whether the page or main is the
   // scroll container.
@@ -470,8 +471,27 @@ async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> 
 
 // ── Init ─────────────────────────────────────────────────────────────
 
+/** Hide the SEO landing-page content (city intro, pub list, breadcrumbs).
+ *  Called on search, pub selection, or if the session flag indicates this
+ *  is a refresh within an active SPA session (not a fresh visit). */
+function dismissSeoContent(): void {
+  const el = document.getElementById("seo-intro");
+  if (el) {
+    el.classList.remove("seo-intro--landing");
+    el.classList.add("sr-only");
+  }
+  sessionStorage.setItem("sp-active", "1");
+}
+
 async function init(): Promise<void> {
   try {
+    // If the user is refreshing within an active session, hide the
+    // SEO landing content immediately. Fresh visits and crawlers still
+    // see it (no sessionStorage flag = first load in this tab).
+    if (sessionStorage.getItem("sp-active")) {
+      dismissSeoContent();
+    }
+
     // Apply theme.
     applyTheme(getStoredTheme());
     window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -513,6 +533,10 @@ async function init(): Promise<void> {
     // change (scrub or play) flips the URL flag and writeURL starts emitting
     // ?t= for sharing/reload preservation.
     initPubList(onPubSelected);
+    // Dismiss SEO landing content on first search interaction.
+    document
+      .getElementById("pub-search")
+      ?.addEventListener("input", dismissSeoContent, { once: true });
     initCircle();
     initContact();
     initPortholeControls();
