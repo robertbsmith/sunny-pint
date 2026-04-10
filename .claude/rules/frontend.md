@@ -5,13 +5,13 @@ Applies to: `src/**`
 ## Stack
 - Vite 8 + TypeScript 6 + Biome + Tailwind 4
 - Canvas 2D for the porthole circle view (no map library — custom tile rendering)
-- Individual .pbf vector tiles for building data (fetched as static files)
+- PMTiles archive for building data (range requests from R2)
 - SunCalc for sun position
 - vite-plugin-pwa for offline/installable
 
 ## Architecture
 - All shadow computation is client-side (geometric projection)
-- Building data loaded from individual z14 .pbf tile files (1-4 per pub)
+- Building data loaded from buildings.pmtiles on R2 via range requests
 - No backend at runtime — everything is static
 - State is simple module-level variables, no framework
 
@@ -23,7 +23,7 @@ Applies to: `src/**`
 - `sunarc.ts` — sun arc time picker canvas widget
 - `sunbadge.ts` — sunny rating badge display
 - `buildings.ts` — vector tile loader, spatial filtering, building types
-- `tiles.ts` — Stadia Maps raster tile loading for porthole background
+- `tiles.ts` — Mapbox raster tile loading for porthole background
 - `sign.ts` — pub sign with procedural heraldic device
 - `heraldry.ts` — deterministic heraldic shield renderer (tinctures, divisions, charges)
 - `publist.ts` — pub list with search and distance sorting

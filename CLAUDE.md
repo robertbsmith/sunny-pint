@@ -92,7 +92,7 @@ Key modules (see `.claude/rules/frontend.md` for full list):
 - Shadow max length capped at 200m to avoid infinite geometry near sunrise/sunset
 - Height-dependent building filter: short buildings excluded if too far to cast useful shadows
 - Day/night transition uses `dayFrac = (altitude + 2) / 10` for smooth 30-minute twilight
-- Stadia Maps tile URL: `tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png` (API key needed for server-side fetches, browser uses domain allowlisting)
+- Mapbox tiles: streets-v12 + satellite-streets-v12 (public token, URL-restricted to sunny-pint.co.uk)
 - Porthole uses tile zoom 18 metres-per-pixel for building overlay alignment
 - LiDAR sources: EA WCS (England), JNCC WCS (Scotland), NRW COG (Wales)
 - Outdoor area polygons support holes (evenodd canvas fill) for enclosed buildings

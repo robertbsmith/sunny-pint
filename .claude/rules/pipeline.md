@@ -5,7 +5,7 @@ Applies to: `scripts/**`
 ## Stack
 - Python 3.11+ with uv for package management
 - GeoPackage (SQLite + spatial index) as intermediate format
-- Individual z14 .pbf vector tiles as output for static serving
+- PMTiles archive for building vector tiles (served from R2 via range requests)
 - rasterio + fiona + shapely for GIS operations
 
 ## Data Flow
@@ -16,7 +16,7 @@ Applies to: `scripts/**`
 5. `measure_heights.py` — LiDAR DSM/DTM + buildings.gpkg → heights per building
 6. `match_plots.py` — pubs + INSPIRE + buildings → `public/data/pubs.json` (with outdoor areas)
 7. `compute_horizons.py` — DTM + pubs → terrain horizon profiles per pub
-8. `generate_tiles.py` — buildings near pubs → `public/data/tiles/*.pbf`
+8. `generate_tiles.py` — buildings near pubs → `public/data/buildings.pmtiles`
 9. `precompute_sun.ts` — simulate equinox sun path → Sunny Rating per pub in pubs.json
 
 ## Conventions

@@ -114,8 +114,8 @@
         <line x1="260" y1="56" x2="490" y2="54" stroke="#D97706" stroke-width="1.2" marker-end="url(#arr-a)"/>
 
         <rect x="490" y="84" width="170" height="36" rx="6" fill="#D97706"/>
-        <text x="575" y="100" text-anchor="middle" font-weight="700" fill="white">tiles/*.pbf</text>
-        <text x="575" y="112" text-anchor="middle" font-size="8" fill="#FEF3C7">~5,000 vector tiles</text>
+        <text x="575" y="100" text-anchor="middle" font-weight="700" fill="white">buildings.pmtiles</text>
+        <text x="575" y="112" text-anchor="middle" font-size="8" fill="#FEF3C7">vector tiles archive</text>
         <line x1="400" y1="182" x2="435" y2="182" stroke="#9CA3AF" stroke-width="1"/>
         <line x1="435" y1="182" x2="435" y2="102" stroke="#9CA3AF" stroke-width="1"/>
         <line x1="435" y1="102" x2="490" y2="102" stroke="#D97706" stroke-width="1.2" marker-end="url(#arr-a)"/>
@@ -479,7 +479,7 @@
 
     <h3>Layer stack</h3>
     <div class="layers">
-      <div class="layer"><span class="layer-num">1</span><span class="layer-label">Basemap</span><span class="layer-desc">3&times;3 grid of Stadia Alidade Smooth raster tiles at zoom 18 (~0.6 m/px)</span></div>
+      <div class="layer"><span class="layer-num">1</span><span class="layer-label">Basemap</span><span class="layer-desc">3&times;3 grid of Mapbox Streets raster tiles at zoom 18 (~0.6 m/px)</span></div>
       <div class="layer"><span class="layer-num">2</span><span class="layer-label">Night overlay</span><span class="layer-desc">Semi-transparent dark fill, opacity derived from sun altitude for smooth twilight</span></div>
       <div class="layer"><span class="layer-num">3</span><span class="layer-label">Shadows</span><span class="layer-desc">Geometric quads composited via offscreen canvas</span></div>
       <div class="layer"><span class="layer-num">4</span><span class="layer-label">Buildings</span><span class="layer-desc">Filled polygons from vector tiles; pub building highlighted</span></div>
@@ -510,7 +510,7 @@
     <p>This filter eliminated 30% of buildings from the Norwich tile set without affecting shadow accuracy.</p>
 
     <h3>Vector tile delivery</h3>
-    <p>Building geometry is served as individual z14 vector tiles (<code>.pbf</code> files), each covering approximately 2.4 km&sup2;. A pub's 274 m loading radius spans at most four tiles, so selecting a pub triggers 1&ndash;4 small HTTP requests (typically 10&ndash;100 KB each). The service worker caches tiles for 30 days, so revisiting a neighbourhood is instant.</p>
+    <p>Building geometry is served as a single PMTiles archive on Cloudflare R2. When you select a pub, the browser makes range requests to fetch only the z14 tiles needed (1&ndash;4 tiles covering the pub's 274 m loading radius). The service worker caches tile responses for 30 days, so revisiting a neighbourhood is instant.</p>
 
     <h3>Compact pub data</h3>
     <p>The full building polygon for each pub (20&ndash;50 coordinate pairs) represented 70% of the pub list file. Since the renderer obtains building geometry from the vector tiles, only the polygon centroid is needed for matching. Replacing full polygons with pre-computed centroids reduced the file from 11.3 MB to 6.3 MB (approximately 1 MB after gzip).</p>
