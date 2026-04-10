@@ -58,6 +58,23 @@ typecheck:
 # All quality checks
 ci: typecheck lint build
 
+# Upload pipeline data to R2 (pubs.json + building tiles).
+# Run after pipeline changes — R2 is separate from the Pages deploy.
+deploy-data:
+    @echo "Uploading to R2..."
+    pnpm wrangler r2 object put sunny-pint-data/data/pubs.json \
+        --file public/data/pubs.json --content-type application/json --remote
+    @test -f public/data/buildings.pmtiles && \
+        pnpm wrangler r2 object put sunny-pint-data/data/buildings.pmtiles \
+            --file public/data/buildings.pmtiles --content-type application/octet-stream --remote || \
+        echo "No buildings.pmtiles found — skipping tiles upload"
+    @echo "R2 upload complete"
+
+# Full deploy: build SPA + upload data to R2.
+# Code deploys via GitHub push → Cloudflare Pages auto-build.
+deploy: release deploy-data
+    @echo "dist/ ready for Pages deploy. Push to GitHub to trigger build."
+
 # ── Data Pipeline ─────────────────────────────────────────────────────
 
 # Run full pipeline: pubs → inspire → buildings → heights → horizons → plots → tiles → sunny ratings
