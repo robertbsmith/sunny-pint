@@ -152,8 +152,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   }
   const fonts = await loadFonts();
 
-  // Convert SVG → PNG with fonts so text renders correctly.
-  const resvg = new Resvg(svg, {
+  // The SVG uses system font stacks (-apple-system, Georgia etc) which
+  // don't exist in Workers. Replace with our loaded font families before
+  // passing to resvg.
+  const svgWithFonts = svg
+    .replace(/-apple-system, system-ui, 'Segoe UI', sans-serif/g, "Inter")
+    .replace(/-apple-system, system-ui, sans-serif/g, "Inter")
+    .replace(/Georgia, 'Times New Roman', serif/g, "Crimson Text");
+
+  const resvg = new Resvg(svgWithFonts, {
     fitTo: { mode: "width", value: 1200 },
     font: {
       fontBuffers: fonts,
