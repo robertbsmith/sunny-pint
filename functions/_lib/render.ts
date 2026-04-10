@@ -237,7 +237,9 @@ function applyTemplate(template: string, meta: PageMeta): string {
   // one (per-pub OG card via the /og/pub/<slug>.svg Function), otherwise
   // leave the default banner.png in place.
   if (meta.ogImagePath) {
-    const ogImageUrl = `${SITE_URL}${meta.ogImagePath}`;
+    const ogImageUrl = meta.ogImagePath.startsWith("http")
+      ? meta.ogImagePath
+      : `${SITE_URL}${meta.ogImagePath}`;
     out = out.replace(
       /<meta property="og:image" content="[^"]*"\s*\/?>/,
       `<meta property="og:image" content="${ogImageUrl}" />`,
@@ -523,7 +525,8 @@ export function renderPubPage(template: string, ctx: PubContext): string {
     spPub: slug,
     jsonLd: [breadcrumbListJsonLd(breadcrumbs), pubJsonLd],
     seoIntro,
-    ogImagePath: `/og/pub/${slug}.png`,
+    // OG cards are pre-rendered by the pipeline and served from R2.
+    ogImagePath: `https://data.sunny-pint.co.uk/og/${slug}.jpg`,
   });
 }
 

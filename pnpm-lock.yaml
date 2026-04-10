@@ -48,6 +48,9 @@ importers:
       satori-html:
         specifier: ^0.3.2
         version: 0.3.2
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
       tailwindcss:
         specifier: ^4.2.2
         version: 4.2.2

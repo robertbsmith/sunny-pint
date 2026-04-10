@@ -58,7 +58,7 @@ let cachedIndex: Map<string, Pub> | null = null;
 
 const R2_DATA_URL = "https://data.sunny-pint.co.uk/data";
 
-async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
+async function loadPubs(): Promise<Map<string, Pub>> {
   if (cachedIndex) return cachedIndex;
   const res = await fetch(`${R2_DATA_URL}/pubs-index.json`);
   if (!res.ok) throw new Error(`Failed to load pubs-index.json from R2: ${res.status}`);
@@ -125,7 +125,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   let index: Map<string, Pub>;
   try {
-    index = await loadPubs(ctx.env, url.origin);
+    index = await loadPubs();
   } catch (err) {
     return new Response(`Internal error: ${(err as Error).message}`, { status: 500 });
   }

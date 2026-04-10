@@ -75,6 +75,31 @@ deploy-data:
         pnpm wrangler r2 object put sunny-pint-data/data/buildings.pmtiles \
             --file public/data/buildings.pmtiles --content-type application/octet-stream --remote || \
         echo "No buildings.pmtiles found — skipping tiles upload"
+    @if [ -d public/data/og ] && [ "$$(ls public/data/og/*.jpg 2>/dev/null | wc -l)" -gt 0 ]; then \
+        echo "Uploading OG cards to R2..."; \
+        python3 -c "\
+import os, urllib.request, json, time; \
+from concurrent.futures import ThreadPoolExecutor; \
+TOKEN=os.environ['CLOUDFLARE_API_TOKEN']; \
+ACCOUNT=os.environ.get('CF_ACCOUNT_ID','a1f3acf0ef2a2839f9d87d84da3ac117'); \
+og_dir='public/data/og'; \
+files=[f for f in os.listdir(og_dir) if f.endswith('.jpg')]; \
+print(f'  {len(files)} OG cards to upload'); \
+t0=time.time(); done=0; \
+def upload(f): \
+    global done; \
+    key=f'og/{f}'; \
+    url=f'https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/r2/buckets/sunny-pint-data/objects/{key}'; \
+    data=open(f'{og_dir}/{f}','rb').read(); \
+    req=urllib.request.Request(url,data=data,method='PUT'); \
+    req.add_header('Authorization',f'Bearer {TOKEN}'); \
+    req.add_header('Content-Type','image/jpeg'); \
+    urllib.request.urlopen(req,timeout=30); \
+    done+=1; \
+    if done%500==0: print(f'  {done}/{len(files)}',flush=True); \
+with ThreadPoolExecutor(max_workers=16) as ex: list(ex.map(upload,files)); \
+print(f'  {done} OG cards uploaded in {time.time()-t0:.0f}s')"; \
+    else echo "No OG cards found — skipping"; fi
     @echo "R2 upload complete"
 
 # Full deploy: build SPA + upload data to R2.
@@ -144,6 +169,11 @@ generate-tiles:
 # math as the live in-browser porthole.
 precompute-sun:
     pnpm tsx scripts/precompute_sun.ts
+
+# Pre-render OG card images for all qualifying pubs → public/data/og/*.jpg
+# Requires STADIA_API_KEY env var for map tiles. Idempotent (skips existing).
+render-og:
+    pnpm tsx scripts/render_og_cards.ts
 
 # Download EA LiDAR DSM + DTM tiles for Norwich area
 download-lidar:
