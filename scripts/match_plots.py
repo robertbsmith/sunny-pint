@@ -459,11 +459,23 @@ def main():
         # which held ~200k Polygon objects in ~10 GB of Python memory.
         buildings_store = BuildingsStore()
 
+        import time as _time
         matched = 0
         outdoor_computed = 0
+        skipped_done = 0
+        last_save = _time.time()
+        t0 = last_save
+        SAVE_INTERVAL = 300  # incremental save every 5 min
 
         for pi, pub in enumerate(pubs):
             if not in_bbox(pub["lat"], pub["lng"], area.bbox):
+                continue
+
+            # Skip pubs already processed in a previous run.
+            if pub.get("outdoor") and pub.get("local_authority"):
+                skipped_done += 1
+                matched += 1
+                outdoor_computed += 1
                 continue
 
             if pub.get("polygon") and len(pub["polygon"]) > 2:
@@ -515,11 +527,28 @@ def main():
                 pub["outdoor_area_m2"] = round(outdoor.area, 1)
                 outdoor_computed += 1
 
-            if (pi + 1) % 5000 == 0:
-                print(f"  {pi + 1}/{len(pubs)} pubs processed, {matched} matched...", flush=True)
+            if (pi + 1) % 1000 == 0:
+                elapsed = _time.time() - t0
+                rate = (pi + 1) / elapsed if elapsed else 0
+                eta = (len(pubs) - pi - 1) / rate if rate else 0
+                print(
+                    f"  [{pi + 1}/{len(pubs)}] {matched} matched, {outdoor_computed} outdoor  "
+                    f"{rate:.1f}/s  ETA {eta:.0f}s",
+                    flush=True,
+                )
+
+            # Incremental save every 5 minutes.
+            if _time.time() - last_save > SAVE_INTERVAL:
+                tmp = PUBS_IN.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(pubs, indent=2))
+                tmp.replace(PUBS_IN)
+                print(f"  ** incremental save ({matched} matched) **", flush=True)
+                last_save = _time.time()
 
         buildings_store.close()
-        print(f"\n  {matched}/{len(pubs)} pubs matched to a plot")
+        if skipped_done:
+            print(f"\n  {skipped_done} pubs skipped (already had outdoor data)")
+        print(f"  {matched}/{len(pubs)} pubs matched to a plot")
         print(f"  {outdoor_computed} outdoor areas computed (plot minus all buildings)")
     else:
         print("  No parcels — skipping plot matching")

@@ -281,9 +281,20 @@ def main():
     print(f"  {len(bundles)} DTM bundles found")
     print()
 
-    # Phase 2: Assign pubs to bundles.
+    # Skip pubs that already have elev+horizon from a previous run.
+    already_done = sum(1 for p in area_pubs if "elev" in p and "horizon" in p)
+    if already_done:
+        print(f"  {already_done} pubs already have elev+horizon (will be skipped)")
+
+    # Phase 2: Assign pubs to bundles (only pubs that still need horizons).
     print("Assigning pubs to bundles...")
+    pubs_needing_work = {i for i, p in enumerate(area_pubs) if "elev" not in p or "horizon" not in p}
     assignments = assign_pubs_to_bundles(area_pubs, bundles)
+    # Filter assignments to only include pubs needing work.
+    for tid in list(assignments):
+        assignments[tid] = [i for i in assignments[tid] if i in pubs_needing_work]
+        if not assignments[tid]:
+            del assignments[tid]
     print()
 
     # Phase 3: Download + compute in parallel.
@@ -304,6 +315,25 @@ def main():
     print()
 
     all_results: list[dict] = []
+    last_save = time.time()
+    SAVE_INTERVAL = 300  # incremental save every 5 minutes
+
+    def _incremental_save():
+        """Write results collected so far to pubs_merged.json.
+
+        This makes the script crash-safe: if killed, we keep everything
+        computed up to the last save point.
+        """
+        for r in all_results:
+            gi = area_pubs_idx[r["index"]]
+            if r["elev"] is not None:
+                pubs[gi]["elev"] = r["elev"]
+            if r["horizon_b64"] is not None:
+                pubs[gi]["horizon"] = r["horizon_b64"]
+        tmp = PUBS_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(pubs, indent=2))
+        tmp.replace(PUBS_PATH)
+        print(f"  ** incremental save ({stats['pubs_computed']} pubs) **", flush=True)
 
     with ThreadPoolExecutor(max_workers=WCS_WORKERS) as ex:
         futures = {
@@ -340,10 +370,14 @@ def main():
             if done % 10 == 0:
                 _write_progress(stats)
 
+            # Incremental save every 5 minutes so a crash doesn't lose hours.
+            if time.time() - last_save > SAVE_INTERVAL:
+                _incremental_save()
+                last_save = time.time()
+
     _write_progress(stats)
 
-    # Write results back to pubs_merged.json.
-    # Map area_pubs indices back to global indices.
+    # Final write of all results to pubs_merged.json.
     for r in all_results:
         gi = area_pubs_idx[r["index"]]
         if r["elev"] is not None:
