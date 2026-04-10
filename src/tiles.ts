@@ -1,7 +1,7 @@
 /**
  * Map tile loader for the porthole basemap.
  *
- * Fetches and caches CARTO Voyager raster tiles for use as a Canvas 2D
+ * Fetches and caches Stadia Maps raster tiles for use as a Canvas 2D
  * background. Tile loads schedule a single deferred re-render via
  * requestAnimationFrame to avoid render storms when many tiles arrive.
  */

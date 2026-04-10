@@ -228,7 +228,7 @@ export interface OgCardOptions {
   pub: Pub;
   buildings: Building[];
   sun: SunPosition;
-  /** Pre-fetched CARTO tile cache for the porthole. */
+  /** Pre-fetched map tile cache for the porthole. */
   tileCache?: Map<string, string>;
   /** Tagline shown in the footer. */
   tagline?: string;

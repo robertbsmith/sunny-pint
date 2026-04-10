@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   console.log(`Sun: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
-  console.log("Fetching CARTO tiles…");
+  console.log("Fetching map tiles…");
   const tileCache = await prefetchPortholeTiles(pub);
   console.log(`Got ${tileCache.size} tiles`);
 
@@ -64,8 +64,8 @@ async function main(): Promise<void> {
   console.log(`Wrote ${OUT_SVG} (${(svg.length / 1024).toFixed(1)} KB)`);
 
   // Rasterise to PNG at native 1200×630. resvg handles nested <svg>,
-  // clipPaths, gradients, and embedded raster image hrefs (the CARTO
-  // basemap tiles) — ImageMagick's SVG renderer does not.
+  // clipPaths, gradients, and embedded raster image hrefs (the basemap
+  // tiles) — ImageMagick's SVG renderer does not.
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: 1200 },
     background: "rgba(0,0,0,0)",

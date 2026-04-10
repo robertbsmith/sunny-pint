@@ -28,6 +28,5 @@ This software uses data from the following sources:
 - Environment Agency LiDAR Composite DSM/DTM (OGL v3) — building heights
 - HM Land Registry INSPIRE Index Polygons (OGL v3) — property boundaries
 - Food Standards Agency FHRS (OGL v3) — pub listings
-- CARTO basemap tiles (CC BY 3.0) — map backgrounds
+- Stadia Maps basemap tiles — map backgrounds
 - SunCalc (BSD) — sun position calculations
-- Armoria (MIT) — procedural coat of arms generation

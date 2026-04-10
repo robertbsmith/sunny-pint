@@ -23,8 +23,9 @@ Applies to: `src/**`
 - `sunarc.ts` — sun arc time picker canvas widget
 - `sunbadge.ts` — sunny rating badge display
 - `buildings.ts` — vector tile loader, spatial filtering, building types
-- `tiles.ts` — CartoDB raster tile loading for porthole background
-- `sign.ts` — pub sign with Armoria coat of arms
+- `tiles.ts` — Stadia Maps raster tile loading for porthole background
+- `sign.ts` — pub sign with procedural heraldic device
+- `heraldry.ts` — deterministic heraldic shield renderer (tinctures, divisions, charges)
 - `publist.ts` — pub list with search and distance sorting
 - `location.ts` — GPS + Nominatim geocoding
 - `weather.ts` — Open-Meteo cloud cover

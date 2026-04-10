@@ -1,0 +1,7 @@
+name = "sunny-pint-email"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[send_email]]
+name = "SEB"
+destination_address = "hello@sunny-pint.co.uk"

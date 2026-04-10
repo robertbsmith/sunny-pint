@@ -37,9 +37,9 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend fetches 1-4 small
 
 ## Circle View: Map Tiles as Background
 
-**Decision**: Load CartoDB Voyager raster tiles into the canvas porthole.
+**Decision**: Load Stadia Maps Alidade Smooth raster tiles into the canvas porthole.
 
-**Why**: Drawing roads from OSM data looked crude. Loading 9 tile images (3×3 grid) gives full map detail (roads, parks, water, labels) with no effort. The `labels_under` variant puts labels below the building/shadow overlay.
+**Why**: Drawing roads from OSM data looked crude. Loading 9 tile images (3×3 grid) gives full map detail (roads, parks, water, labels) with no effort.
 
 ## Outdoor Areas: Plot Minus All Buildings
 
@@ -61,8 +61,7 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend fetches 1-4 small
 | EA LiDAR | Building heights | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | © Environment Agency |
 | HM Land Registry | Plot boundaries | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | Crown copyright, reproduced with permission of HM Land Registry. Polygons subject to Crown copyright, Ordnance Survey AC0000851063. |
 | Open-Meteo | Weather | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | open-meteo.com |
-| CARTO | Base map tiles | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | © CARTO, © OpenMapTiles |
+| Stadia Maps | Base map tiles | See [terms](https://stadiamaps.com/terms-of-service/) | © Stadia Maps, © OpenMapTiles |
 | SunCalc | Sun position | BSD 2-Clause | © Vladimir Agafonkin |
-| Armoria | Heraldic signs | MIT | © Azgaar |
 
 Full attribution with required legal wording: [/attribution.html](/attribution.html)

@@ -55,8 +55,8 @@ export default defineConfig({
             },
           },
           {
-            // Cache map tiles
-            urlPattern: /^https:\/\/.*\.fastly\.net\//,
+            // Cache Stadia Maps raster tiles
+            urlPattern: /^https:\/\/tiles\.stadiamaps\.com\//,
             handler: "CacheFirst",
             options: {
               cacheName: "map-tiles",
@@ -73,15 +73,6 @@ export default defineConfig({
               cacheName: "building-tiles-v2",
               networkTimeoutSeconds: 4,
               expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
-            },
-          },
-          {
-            // Cache Armoria coat of arms SVGs
-            urlPattern: /armoria\.herokuapp\.com/,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "armoria",
-              expiration: { maxEntries: 200, maxAgeSeconds: 30 * 24 * 60 * 60 },
             },
           },
           {

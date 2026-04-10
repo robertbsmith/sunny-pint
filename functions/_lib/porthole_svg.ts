@@ -2,7 +2,7 @@
  * Porthole SVG renderer — matches the live in-browser circle.ts exactly.
  *
  * The SHADOW GEOMETRY comes from src/shadow.ts (same source of truth as the
- * live app). The MAP TILES come from CARTO at the same URL the live app
+ * live app). The MAP TILES come from Stadia Maps at the same URL the live app
  * fetches. The PROJECTION math comes from src/geo.ts. The COLOURS, dimensions,
  * and layer order all mirror src/circle.ts. The only thing this file does
  * differently is emit SVG markup instead of canvas paint calls — the inputs
@@ -78,7 +78,7 @@ export interface PortholeOptions {
 const tileFetchCache = new Map<string, Promise<string | null>>();
 
 /**
- * Fetch one CARTO tile and return it as a data URI. Cached at the module
+ * Fetch one map tile and return it as a data URI. Cached at the module
  * level so multiple pubs in the same neighbourhood share fetches. Returns
  * null on 404 / network error so the porthole still renders without tiles.
  */
@@ -250,7 +250,7 @@ function pathAttr(
  *
  * Layers (matching circle.ts order):
  *   1. Bezel ring (outer to inner gradient)
- *   2. Map tiles (CARTO Voyager z18, 3x3 grid, clipped to inner circle)
+ *   2. Map tiles (Stadia Alidade Smooth z18, 3x3 grid, clipped to inner circle)
  *   3. Shadow polygons (alpha-blended)
  *   4. Building polygons (with the pub building highlighted in orange)
  *   5. Outdoor garden polygon (green-dashed outline, evenodd fill)

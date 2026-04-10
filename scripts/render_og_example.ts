@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   console.log(`Sun: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
-  console.log("Fetching CARTO tiles…");
+  console.log("Fetching map tiles…");
   const tileCache = await prefetchPortholeTiles(pub);
   console.log(`Got ${tileCache.size} tiles`);
 

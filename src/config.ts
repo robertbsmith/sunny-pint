@@ -53,9 +53,9 @@ export const TWILIGHT_DAY = 0.7;
 
 // ── External services ────────────────────────────────────────────────
 
-/** CARTO Voyager labels-under raster basemap tiles. */
+/** Stadia Maps OSM Bright raster basemap tiles. */
 export const TILE_URL =
-  "https://cartodb-basemaps-a.global.ssl.fastly.net/rastertiles/voyager_labels_under/{z}/{x}/{y}.png";
+  "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png";
 
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
@@ -63,16 +63,13 @@ export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 /** Nominatim search & reverse geocoding API. */
 export const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
 
-/** Armoria procedural heraldry service. */
-export const ARMORIA_URL = "https://armoria.herokuapp.com";
-
 /** Google Maps search URL template (for directions). */
 export function googleMapsUrl(name: string, lat: number, lng: number): string {
   return `https://www.google.com/maps/search/${encodeURIComponent(name)}/@${lat},${lng},17z`;
 }
 
 /** User-Agent header for outbound API requests. */
-export const USER_AGENT = "SunnyPint/0.1 (https://sunny-pint.co.uk)";
+export const USER_AGENT = "SunnyPint/0.1 (https://sunny-pint.co.uk; hello@sunny-pint.co.uk)";
 
 // ── Caching ──────────────────────────────────────────────────────────
 
@@ -84,9 +81,6 @@ export const WEATHER_CACHE_TOLERANCE_DEG = 0.1;
 
 /** Maximum entries in the porthole map tile cache. */
 export const TILE_CACHE_MAX = 200;
-
-/** Maximum entries in the coat-of-arms cache. */
-export const COA_CACHE_MAX = 200;
 
 // ── UI tuning ────────────────────────────────────────────────────────
 

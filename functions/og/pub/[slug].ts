@@ -2,7 +2,7 @@
  * Cloudflare Pages Function — per-pub OG card image.
  *
  * Serves /og/pub/<slug>.svg for every pub. Renders a 1200x630 social card
- * with the actual pub's porthole (real CARTO tiles + real building shadows
+ * with the actual pub's porthole (real map tiles + real building shadows
  * for that pub's location), score, identity, and footer.
  *
  * Edge-cached aggressively via the Cache API so the renderer almost never
@@ -86,7 +86,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const pub = index.get(slug);
   if (!pub) return new Response("Pub not found", { status: 404 });
 
-  // Load buildings, sun position, CARTO tiles in parallel.
+  // Load buildings, sun position, map tiles in parallel.
   const tileFetcher = makeTileFetcher(ctx.env, url.origin);
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   const [buildings, tileCache] = await Promise.all([

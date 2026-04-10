@@ -176,4 +176,4 @@ All runtime data is in WGS84. OSGB is only used during pipeline processing.
 | EA LiDAR | Building heights (DSM/DTM) | OGL v3 | Auto-downloaded via WCS |
 | HM Land Registry INSPIRE | Property plot boundaries | OGL v3 | `scripts/download_inspire.py` |
 | Open-Meteo | Cloud cover / weather | CC BY 4.0 | API (no key needed) |
-| CARTO | Base map tiles | CC BY 3.0 | CDN tiles |
+| Stadia Maps | Base map tiles | See [terms](https://stadiamaps.com/terms-of-service/) | Domain-authenticated tiles |

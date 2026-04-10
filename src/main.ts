@@ -35,6 +35,7 @@ import {
 } from "./url";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
 import { maybeShowWelcome } from "./welcome";
+import { initContact, openContact } from "./contact";
 
 async function loadPubs(): Promise<void> {
   const resp = await fetch("/data/pubs.json");
@@ -89,6 +90,16 @@ function updatePubInfo(pub: Pub): void {
   const card = document.getElementById("pub-info");
   if (!card) return;
   card.hidden = false;
+
+  // Show "Report a problem" link
+  const reportBtn = document.getElementById("btn-report") as HTMLElement | null;
+  if (reportBtn) {
+    reportBtn.hidden = false;
+    reportBtn.onclick = (e) => {
+      e.preventDefault();
+      openContact({ pubSlug: pub.slug, pubName: pub.name });
+    };
+  }
 
   // Name + status.
   const hours = parseHours(pub.opening_hours);
@@ -388,6 +399,7 @@ async function init(): Promise<void> {
     // ?t= for sharing/reload preservation.
     initPubList(onPubSelected);
     initCircle();
+    initContact();
     initSunArc(() => {
       markTimeUserDriven();
       updateScene();
