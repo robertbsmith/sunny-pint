@@ -21,6 +21,14 @@ AREAS: dict[str, Area] = {
 DEFAULT_AREA = "norwich"
 
 
+def parse_area_name(name: str) -> Area:
+    """Look up an area by name string. Used by the v2 orchestrator."""
+    key = name.lower()
+    if key not in AREAS:
+        raise ValueError(f"Unknown area: {name}. Available: {', '.join(AREAS.keys())}")
+    return AREAS[key]
+
+
 def parse_area() -> Area:
     """Parse --area argument from command line. Returns the selected Area."""
     parser = argparse.ArgumentParser(add_help=False)
