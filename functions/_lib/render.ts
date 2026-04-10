@@ -523,10 +523,10 @@ export function renderPubPage(template: string, ctx: PubContext): string {
     spPub: slug,
     jsonLd: [breadcrumbListJsonLd(breadcrumbs), pubJsonLd],
     seoIntro,
-    // Per-pub OG card served by functions/og/pub/[slug].ts. Each pub gets
-    // a unique social-share preview with its own porthole + score + name.
-    ogImagePath: `/og/pub/${slug}.svg`,
-    ogImageType: "image/svg+xml",
+    // TODO: restore per-pub OG card once og/pub/[slug].ts serves PNG
+    // instead of SVG (social platforms don't support SVG). For now, fall
+    // back to the generic banner so WhatsApp/Facebook show *something*.
+    // ogImagePath: `/og/pub/${slug}.png`,
   });
 }
 

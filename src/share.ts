@@ -252,10 +252,10 @@ export async function shareSnapshot(): Promise<void> {
       return;
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      // File share rejected — fall back to text + URL.
-      console.warn("[share] file share failed, falling back to text+url", err);
+      console.warn("[share] file share failed, falling back", err);
     }
 
+    // Text + URL fallback (browsers without file sharing, e.g. Firefox).
     try {
       await navigator.share({ text: shareText, url: shareUrl });
       return;
