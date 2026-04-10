@@ -49,10 +49,7 @@ export default {
     }
 
     // Build subject
-    const subject =
-      type === "report" && pub
-        ? `[Report] ${pub}`
-        : `[Contact] ${name}`;
+    const subject = type === "report" && pub ? `[Report] ${pub}` : `[Contact] ${name}`;
 
     // Build plain-text body
     const body = [
@@ -79,11 +76,7 @@ export default {
       if (email) {
         raw = raw.replace("\r\nSubject:", `\r\nReply-To: ${email}\r\nSubject:`);
       }
-      const msg = new EmailMessage(
-        "noreply@sunny-pint.co.uk",
-        env.DESTINATION_EMAIL,
-        raw,
-      );
+      const msg = new EmailMessage("noreply@sunny-pint.co.uk", env.DESTINATION_EMAIL, raw);
       await env.SEB.send(msg);
     } catch (e) {
       console.error("send_email failed:", e);

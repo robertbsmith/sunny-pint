@@ -116,12 +116,7 @@ function hashCity(townPubs: Pub[]): string {
 
 /** Decide a URL's lastmod by comparing its hash to the previous run.
  *  Mutates `state` in place to record the new hash + lastmod. */
-function resolveLastmod(
-  state: LastmodState,
-  key: string,
-  hash: string,
-  today: string,
-): string {
+function resolveLastmod(state: LastmodState, key: string, hash: string, today: string): string {
   const prev = state[key];
   if (prev && prev.hash === hash) {
     return prev.lastmod;
@@ -139,10 +134,7 @@ interface SitemapEntry {
 
 function renderSitemap(entries: SitemapEntry[]): string {
   const body = entries
-    .map(
-      (e) =>
-        `  <url>\n    <loc>${e.url}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n  </url>`,
-    )
+    .map((e) => `  <url>\n    <loc>${e.url}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n  </url>`)
     .join("\n");
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -158,10 +150,7 @@ function renderSitemap(entries: SitemapEntry[]): string {
  *  page. Used for theme pages that have too few matching pubs to deserve
  *  indexing — they exist for navigation but not for ranking. */
 function injectNoindex(html: string): string {
-  return html.replace(
-    "</head>",
-    `    <meta name="robots" content="noindex,follow" />\n  </head>`,
-  );
+  return html.replace("</head>", `    <meta name="robots" content="noindex,follow" />\n  </head>`);
 }
 
 // ── 404 page ─────────────────────────────────────────────────────────────
@@ -224,7 +213,12 @@ function main(): void {
   // index. Compute a hash over all qualifying pubs.
   const allQualifying = pubs.filter(qualifying);
   const homeHash = createHash("sha256")
-    .update(allQualifying.map((p) => `${p.slug ?? ""}:${hashPub(p)}`).sort().join("|"))
+    .update(
+      allQualifying
+        .map((p) => `${p.slug ?? ""}:${hashPub(p)}`)
+        .sort()
+        .join("|"),
+    )
     .digest("hex")
     .slice(0, 16);
   sitemapEntries.push({

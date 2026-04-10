@@ -18,8 +18,8 @@ import { fileURLToPath } from "node:url";
 
 import { renderOgCard } from "../functions/_lib/og_card";
 import { bestWindowSunPosition, prefetchPortholeTiles } from "../functions/_lib/porthole_svg";
-import { loadBuildingsForPub } from "./lib/tiles_node";
 import type { Pub } from "../src/types";
+import { loadBuildingsForPub } from "./lib/tiles_node";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");

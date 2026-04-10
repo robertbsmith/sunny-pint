@@ -12,14 +12,13 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { loadBuildingsForPub } from "./lib/tiles_node";
 import {
   bestWindowSunPosition,
   prefetchPortholeTiles,
   renderPortholeSvg,
 } from "../functions/_lib/porthole_svg";
 import type { Pub } from "../src/types";
+import { loadBuildingsForPub } from "./lib/tiles_node";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -37,7 +36,9 @@ async function main(): Promise<void> {
   }
 
   console.log(`Pub: ${pub.name} (${pub.lat}, ${pub.lng})`);
-  console.log(`Sunny rating: ${pub.sun?.score ?? "n/a"}  best window: ${pub.sun?.best_window ?? "n/a"}`);
+  console.log(
+    `Sunny rating: ${pub.sun?.score ?? "n/a"}  best window: ${pub.sun?.best_window ?? "n/a"}`,
+  );
 
   const buildings = loadBuildingsForPub(pub);
   console.log(`Loaded ${buildings.length} buildings`);

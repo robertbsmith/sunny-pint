@@ -7,11 +7,11 @@
  * "buildings near a pub" means.
  */
 
-import { existsSync, openSync, readSync, readFileSync, statSync, closeSync } from "node:fs";
+import { existsSync, openSync, readFileSync, readSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PMTiles, Source, RangeResponse, TileType } from "pmtiles";
+import { PMTiles, type RangeResponse } from "pmtiles";
 import { decodeTile } from "../../src/buildings";
 import { BUILDING_TILE_ZOOM, LOAD_RADIUS_M, M_PER_DEG_LAT } from "../../src/config";
 import { lngLatToTileXY, mPerDegLng, polygonCentroid } from "../../src/geo";
@@ -25,13 +25,11 @@ const PMTILES_PATH = join(ROOT, "public", "data", "buildings.pmtiles");
 const tileCache = new Map<string, Building[]>();
 
 /** File-based PMTiles source for Node.js (synchronous reads). */
-class FileSource implements Source {
+class FileSource {
   private fd: number;
-  private fileSize: number;
 
   constructor(path: string) {
     this.fd = openSync(path, "r");
-    this.fileSize = statSync(path).size;
   }
 
   getKey(): string {

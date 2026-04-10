@@ -66,7 +66,7 @@ function initPortholeControls(): void {
   zoomIn?.addEventListener("click", () => {
     const idx = ZOOM_STEPS.indexOf(state.zoomStep);
     if (idx < ZOOM_STEPS.length - 1) {
-      state.zoomStep = ZOOM_STEPS[idx + 1];
+      state.zoomStep = ZOOM_STEPS[idx + 1]!;
       syncPortholeUI();
       updateScene();
     }
@@ -75,7 +75,7 @@ function initPortholeControls(): void {
   zoomOut?.addEventListener("click", () => {
     const idx = ZOOM_STEPS.indexOf(state.zoomStep);
     if (idx > 0) {
-      state.zoomStep = ZOOM_STEPS[idx - 1];
+      state.zoomStep = ZOOM_STEPS[idx - 1]!;
       if (state.zoomStep === 1) {
         state.panX = 0;
         state.panY = 0;

@@ -637,7 +637,7 @@ export function sizeCanvas(canvas: HTMLCanvasElement, container: HTMLElement): v
 
 /** Init the porthole canvas — call once on startup. */
 export function initCircle(): void {
-  const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement | null;
+  const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
   const wrap = document.getElementById("circle-wrap");
   if (!canvas || !wrap) return;
 
@@ -747,7 +747,7 @@ export function initCircle(): void {
     "touchstart",
     (e) => {
       if (e.touches.length !== 1) return;
-      const t = e.touches[0];
+      const t = e.touches[0]!;
       const rect = canvas.getBoundingClientRect();
       onDragStart(t.clientX - rect.left, t.clientY - rect.top);
       e.preventDefault();
@@ -758,7 +758,7 @@ export function initCircle(): void {
     "touchmove",
     (e) => {
       if (e.touches.length !== 1) return;
-      const t = e.touches[0];
+      const t = e.touches[0]!;
       const rect = canvas.getBoundingClientRect();
       onDragMove(t.clientX - rect.left, t.clientY - rect.top);
       e.preventDefault();
@@ -775,7 +775,7 @@ export function initCircle(): void {
     const idx = ZOOM_STEPS.indexOf(state.zoomStep);
     const next = idx + direction;
     if (next < 0 || next >= ZOOM_STEPS.length) return;
-    state.zoomStep = ZOOM_STEPS[next];
+    state.zoomStep = ZOOM_STEPS[next]!;
     if (state.zoomStep === 1) {
       state.panX = 0;
       state.panY = 0;
@@ -798,8 +798,8 @@ export function initCircle(): void {
   let pinchBaseZoom: 1 | 2 | 4 = 1;
 
   function touchDist(e: TouchEvent): number {
-    const a = e.touches[0];
-    const b = e.touches[1];
+    const a = e.touches[0]!;
+    const b = e.touches[1]!;
     const dx = a.clientX - b.clientX;
     const dy = a.clientY - b.clientY;
     return Math.sqrt(dx * dx + dy * dy);

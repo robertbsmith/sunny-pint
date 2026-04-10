@@ -5,12 +5,7 @@
       "settings": {
         "preset": "desktop",
         "throttlingMethod": "simulate",
-        "skipAudits": [
-          "uses-http2",
-          "is-on-https",
-          "deprecations",
-          "errors-in-console"
-        ]
+        "skipAudits": ["uses-http2", "is-on-https", "deprecations", "errors-in-console"]
       }
     },
     "assert": {

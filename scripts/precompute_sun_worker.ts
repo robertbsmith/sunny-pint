@@ -314,9 +314,9 @@ for (const item of batch) {
   }
 
   if (results.length % 25 === 0) {
-    const scored = results.filter(r => r.metrics !== null).length;
+    const scored = results.filter((r) => r.metrics !== null).length;
     process.stderr.write(
-      `  worker ${process.pid}: ${results.length}/${batch.length} (${scored} scored)\n`
+      `  worker ${process.pid}: ${results.length}/${batch.length} (${scored} scored)\n`,
     );
   }
 }
