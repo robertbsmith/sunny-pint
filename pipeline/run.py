@@ -65,7 +65,7 @@ def get_stage_inputs(stage: str) -> list[Path]:
 def run_stage(stage: str, area: Area, manifest: dict, report: RunReport, force: bool) -> bool:
     """Run a single stage if needed. Returns True if it ran."""
     inputs = hash_inputs(get_stage_inputs(stage))
-    needs_run, reason = stage_needs_run(manifest, stage, inputs)
+    needs_run, reason = stage_needs_run(manifest, stage, inputs, area.name)
 
     if not needs_run and not force:
         report.skip(stage, reason)
@@ -93,7 +93,7 @@ def run_stage(stage: str, area: Area, manifest: dict, report: RunReport, force: 
             raise ValueError(f"Unknown stage: {stage}")
 
         duration = time.time() - t0
-        record_stage(manifest, stage, inputs, stats, duration)
+        record_stage(manifest, stage, inputs, stats, duration, area.name)
         report.complete(stage, stats)
         return True
 

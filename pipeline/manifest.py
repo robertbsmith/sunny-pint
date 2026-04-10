@@ -62,13 +62,18 @@ def stage_needs_run(
     manifest: dict[str, Any],
     stage_name: str,
     current_inputs: dict[str, str],
+    area_name: str = "",
 ) -> tuple[bool, str]:
     """Check if a stage needs to run by comparing current input hashes
     against the manifest's recorded inputs.
 
+    The manifest is keyed by stage:area so different areas don't skip
+    each other (e.g., running Norwich doesn't cause Edinburgh to skip).
+
     Returns (needs_run, reason).
     """
-    prev = manifest.get(stage_name, {})
+    key = f"{stage_name}:{area_name}" if area_name else stage_name
+    prev = manifest.get(key, {})
     if not prev:
         return True, "never run"
     prev_inputs = prev.get("inputs", {})
@@ -87,9 +92,11 @@ def record_stage(
     inputs: dict[str, str],
     outputs: dict[str, Any],
     duration_s: float,
+    area_name: str = "",
 ) -> None:
     """Record a completed stage in the manifest."""
-    manifest[stage_name] = {
+    key = f"{stage_name}:{area_name}" if area_name else stage_name
+    manifest[key] = {
         "inputs": inputs,
         "outputs": outputs,
         "completed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
