@@ -642,12 +642,20 @@ def run(area) -> dict:
     area_pubs = [(i, p) for i, p in enumerate(all_pubs) if in_bbox(p["lat"], p["lng"], area.bbox)]
     print(f"  {len(area_pubs)} pubs in {area.name}")
 
-    # Identify pubs needing work via hash.
+    # Identify pubs needing work. A pub is skipped if it was already
+    # processed in a previous run (exists in enriched output by ID) AND
+    # its source data hasn't changed (same hash). Re-running a pub that
+    # was processed but missing fields (no parcel match, no LiDAR) is
+    # pointless — the source data hasn't changed so the result won't either.
+    prev_ids = set(enriched_by_id.keys()) if ENRICHED_PATH.exists() else set()
     pubs_to_process = []
     skipped = 0
     for i, pub in area_pubs:
         h = _pub_hash(pub)
-        if pub.get("_enrich_hash") == h and _pub_is_enriched(pub):
+        pub_id = pub.get("id") or pub.get("osm_id")
+        already_processed = pub_id in prev_ids
+        source_changed = pub.get("_enrich_hash") != h
+        if already_processed and not source_changed:
             skipped += 1
             continue
         pub["_enrich_hash"] = h
