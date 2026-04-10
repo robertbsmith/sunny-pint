@@ -67,7 +67,7 @@ export function readURL(): URLState {
   const d = params.get("d");
   if (d) {
     const m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m && m[1] && m[2] && m[3]) {
+    if (m?.[1] && m[2] && m[3]) {
       const date = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
       if (!Number.isNaN(date.getTime())) result.date = date;
     }

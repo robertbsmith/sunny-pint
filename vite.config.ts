@@ -55,12 +55,12 @@ export default defineConfig({
             },
           },
           {
-            // Cache Stadia Maps raster tiles
+            // Cache Stadia Maps raster tiles (normal + satellite)
             urlPattern: /^https:\/\/tiles\.stadiamaps\.com\//,
             handler: "CacheFirst",
             options: {
               cacheName: "map-tiles",
-              expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              expiration: { maxEntries: 1000, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
           {

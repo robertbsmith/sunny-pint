@@ -27,7 +27,7 @@ function hashStr(s: string): number {
 function hashN(base: number, n: number): number {
   let h = base;
   for (let i = 0; i < n; i++) {
-    h = ((h * 2654435761) >>> 0);
+    h = (h * 2654435761) >>> 0;
   }
   return h;
 }
@@ -56,8 +56,8 @@ const TINCTURES: readonly Tincture[] = [
   { name: "purpure", hex: "#522d5b", type: "colour" },
 ];
 
-const METALS = TINCTURES.filter(t => t.type === "metal");
-const COLOURS = TINCTURES.filter(t => t.type === "colour");
+const METALS = TINCTURES.filter((t) => t.type === "metal");
+const COLOURS = TINCTURES.filter((t) => t.type === "colour");
 
 /** Rule of Tincture: return a contrasting tincture type. */
 function contrastingTincture(against: Tincture, h: number): Tincture {
@@ -177,8 +177,10 @@ const CHARGES: readonly Charge[] = [
     name: "star",
     draw: (ctx) => {
       // 6-point star
-      const cx = 0.5, cy = 0.5;
-      const outer = 0.48, inner = 0.22;
+      const cx = 0.5,
+        cy = 0.5;
+      const outer = 0.48,
+        inner = 0.22;
       const points = 6;
       ctx.moveTo(cx, cy - outer);
       for (let i = 0; i < points; i++) {
@@ -251,33 +253,33 @@ const CHARGES: readonly Charge[] = [
       // Simplified rampant lion silhouette — bold blocky shape
       // Body
       ctx.moveTo(0.55, 0.15);
-      ctx.bezierCurveTo(0.65, 0.10, 0.75, 0.15, 0.72, 0.25);
+      ctx.bezierCurveTo(0.65, 0.1, 0.75, 0.15, 0.72, 0.25);
       ctx.bezierCurveTo(0.78, 0.22, 0.82, 0.18, 0.8, 0.12);
       ctx.lineTo(0.85, 0.15);
-      ctx.bezierCurveTo(0.85, 0.25, 0.78, 0.30, 0.72, 0.28);
+      ctx.bezierCurveTo(0.85, 0.25, 0.78, 0.3, 0.72, 0.28);
       // Front leg up
-      ctx.bezierCurveTo(0.75, 0.35, 0.82, 0.30, 0.85, 0.22);
+      ctx.bezierCurveTo(0.75, 0.35, 0.82, 0.3, 0.85, 0.22);
       ctx.lineTo(0.88, 0.25);
-      ctx.bezierCurveTo(0.85, 0.38, 0.75, 0.42, 0.68, 0.40);
+      ctx.bezierCurveTo(0.85, 0.38, 0.75, 0.42, 0.68, 0.4);
       // Torso
-      ctx.bezierCurveTo(0.65, 0.50, 0.60, 0.58, 0.55, 0.62);
+      ctx.bezierCurveTo(0.65, 0.5, 0.6, 0.58, 0.55, 0.62);
       // Hind leg
-      ctx.bezierCurveTo(0.52, 0.70, 0.55, 0.78, 0.58, 0.85);
+      ctx.bezierCurveTo(0.52, 0.7, 0.55, 0.78, 0.58, 0.85);
       ctx.lineTo(0.62, 0.92);
       ctx.lineTo(0.52, 0.92);
       ctx.lineTo(0.48, 0.82);
       // Other hind leg
-      ctx.bezierCurveTo(0.42, 0.85, 0.38, 0.90, 0.38, 0.92);
+      ctx.bezierCurveTo(0.42, 0.85, 0.38, 0.9, 0.38, 0.92);
       ctx.lineTo(0.28, 0.92);
       ctx.lineTo(0.32, 0.82);
-      ctx.bezierCurveTo(0.35, 0.72, 0.38, 0.65, 0.40, 0.58);
+      ctx.bezierCurveTo(0.35, 0.72, 0.38, 0.65, 0.4, 0.58);
       // Tail
-      ctx.bezierCurveTo(0.30, 0.55, 0.20, 0.45, 0.15, 0.30);
-      ctx.bezierCurveTo(0.12, 0.20, 0.15, 0.12, 0.22, 0.10);
-      ctx.bezierCurveTo(0.20, 0.18, 0.22, 0.28, 0.28, 0.38);
-      ctx.bezierCurveTo(0.32, 0.45, 0.38, 0.50, 0.42, 0.50);
+      ctx.bezierCurveTo(0.3, 0.55, 0.2, 0.45, 0.15, 0.3);
+      ctx.bezierCurveTo(0.12, 0.2, 0.15, 0.12, 0.22, 0.1);
+      ctx.bezierCurveTo(0.2, 0.18, 0.22, 0.28, 0.28, 0.38);
+      ctx.bezierCurveTo(0.32, 0.45, 0.38, 0.5, 0.42, 0.5);
       // Back up
-      ctx.bezierCurveTo(0.45, 0.42, 0.48, 0.32, 0.50, 0.22);
+      ctx.bezierCurveTo(0.45, 0.42, 0.48, 0.32, 0.5, 0.22);
       ctx.bezierCurveTo(0.52, 0.18, 0.53, 0.16, 0.55, 0.15);
       ctx.closePath();
     },
@@ -297,20 +299,20 @@ const CHARGES: readonly Charge[] = [
       ctx.lineTo(cx - 0.04, 0.72);
       ctx.closePath();
       // Cross bar
-      ctx.moveTo(0.25, 0.30);
-      ctx.lineTo(0.75, 0.30);
+      ctx.moveTo(0.25, 0.3);
+      ctx.lineTo(0.75, 0.3);
       ctx.lineTo(0.75, 0.37);
       ctx.lineTo(0.25, 0.37);
       ctx.closePath();
       // Left fluke
       ctx.moveTo(0.18, 0.62);
-      ctx.quadraticCurveTo(0.20, 0.78, 0.46, 0.78);
+      ctx.quadraticCurveTo(0.2, 0.78, 0.46, 0.78);
       ctx.lineTo(0.46, 0.72);
       ctx.quadraticCurveTo(0.26, 0.72, 0.25, 0.62);
       ctx.closePath();
       // Right fluke
       ctx.moveTo(0.82, 0.62);
-      ctx.quadraticCurveTo(0.80, 0.78, 0.54, 0.78);
+      ctx.quadraticCurveTo(0.8, 0.78, 0.54, 0.78);
       ctx.lineTo(0.54, 0.72);
       ctx.quadraticCurveTo(0.74, 0.72, 0.75, 0.62);
       ctx.closePath();
@@ -320,30 +322,30 @@ const CHARGES: readonly Charge[] = [
     name: "castle",
     draw: (ctx) => {
       // Simple castle / tower with 3 merlons
-      ctx.moveTo(0.15, 0.90);
+      ctx.moveTo(0.15, 0.9);
       ctx.lineTo(0.15, 0.45);
-      ctx.lineTo(0.15, 0.30);
-      ctx.lineTo(0.25, 0.30);
+      ctx.lineTo(0.15, 0.3);
+      ctx.lineTo(0.25, 0.3);
       ctx.lineTo(0.25, 0.38);
       ctx.lineTo(0.35, 0.38);
-      ctx.lineTo(0.35, 0.30);
-      ctx.lineTo(0.45, 0.30);
-      ctx.lineTo(0.45, 0.20);
-      ctx.lineTo(0.55, 0.20);
-      ctx.lineTo(0.55, 0.30);
-      ctx.lineTo(0.65, 0.30);
+      ctx.lineTo(0.35, 0.3);
+      ctx.lineTo(0.45, 0.3);
+      ctx.lineTo(0.45, 0.2);
+      ctx.lineTo(0.55, 0.2);
+      ctx.lineTo(0.55, 0.3);
+      ctx.lineTo(0.65, 0.3);
       ctx.lineTo(0.65, 0.38);
       ctx.lineTo(0.75, 0.38);
-      ctx.lineTo(0.75, 0.30);
-      ctx.lineTo(0.85, 0.30);
-      ctx.lineTo(0.85, 0.90);
+      ctx.lineTo(0.75, 0.3);
+      ctx.lineTo(0.85, 0.3);
+      ctx.lineTo(0.85, 0.9);
       ctx.closePath();
       // Door (will be drawn as cutout by winding)
-      ctx.moveTo(0.40, 0.90);
-      ctx.lineTo(0.40, 0.65);
-      ctx.quadraticCurveTo(0.40, 0.55, 0.50, 0.55);
-      ctx.quadraticCurveTo(0.60, 0.55, 0.60, 0.65);
-      ctx.lineTo(0.60, 0.90);
+      ctx.moveTo(0.4, 0.9);
+      ctx.lineTo(0.4, 0.65);
+      ctx.quadraticCurveTo(0.4, 0.55, 0.5, 0.55);
+      ctx.quadraticCurveTo(0.6, 0.55, 0.6, 0.65);
+      ctx.lineTo(0.6, 0.9);
       ctx.closePath();
     },
   },
@@ -352,28 +354,28 @@ const CHARGES: readonly Charge[] = [
     draw: (ctx) => {
       // Simplified oak leaf
       const cx = 0.5;
-      ctx.moveTo(cx, 0.90);
-      ctx.lineTo(cx, 0.50);
+      ctx.moveTo(cx, 0.9);
+      ctx.lineTo(cx, 0.5);
       // Left lobes
-      ctx.bezierCurveTo(cx - 0.05, 0.48, cx - 0.25, 0.50, cx - 0.30, 0.42);
-      ctx.bezierCurveTo(cx - 0.20, 0.42, cx - 0.10, 0.40, cx - 0.05, 0.38);
-      ctx.bezierCurveTo(cx - 0.15, 0.35, cx - 0.30, 0.35, cx - 0.32, 0.28);
-      ctx.bezierCurveTo(cx - 0.20, 0.30, cx - 0.10, 0.28, cx - 0.05, 0.26);
-      ctx.bezierCurveTo(cx - 0.12, 0.20, cx - 0.20, 0.18, cx - 0.18, 0.12);
-      ctx.bezierCurveTo(cx - 0.10, 0.15, cx - 0.05, 0.16, cx, 0.10);
+      ctx.bezierCurveTo(cx - 0.05, 0.48, cx - 0.25, 0.5, cx - 0.3, 0.42);
+      ctx.bezierCurveTo(cx - 0.2, 0.42, cx - 0.1, 0.4, cx - 0.05, 0.38);
+      ctx.bezierCurveTo(cx - 0.15, 0.35, cx - 0.3, 0.35, cx - 0.32, 0.28);
+      ctx.bezierCurveTo(cx - 0.2, 0.3, cx - 0.1, 0.28, cx - 0.05, 0.26);
+      ctx.bezierCurveTo(cx - 0.12, 0.2, cx - 0.2, 0.18, cx - 0.18, 0.12);
+      ctx.bezierCurveTo(cx - 0.1, 0.15, cx - 0.05, 0.16, cx, 0.1);
       // Right lobes (mirror)
-      ctx.bezierCurveTo(cx + 0.05, 0.16, cx + 0.10, 0.15, cx + 0.18, 0.12);
-      ctx.bezierCurveTo(cx + 0.20, 0.18, cx + 0.12, 0.20, cx + 0.05, 0.26);
-      ctx.bezierCurveTo(cx + 0.10, 0.28, cx + 0.20, 0.30, cx + 0.32, 0.28);
-      ctx.bezierCurveTo(cx + 0.30, 0.35, cx + 0.15, 0.35, cx + 0.05, 0.38);
-      ctx.bezierCurveTo(cx + 0.10, 0.40, cx + 0.20, 0.42, cx + 0.30, 0.42);
-      ctx.bezierCurveTo(cx + 0.25, 0.50, cx + 0.05, 0.48, cx, 0.50);
+      ctx.bezierCurveTo(cx + 0.05, 0.16, cx + 0.1, 0.15, cx + 0.18, 0.12);
+      ctx.bezierCurveTo(cx + 0.2, 0.18, cx + 0.12, 0.2, cx + 0.05, 0.26);
+      ctx.bezierCurveTo(cx + 0.1, 0.28, cx + 0.2, 0.3, cx + 0.32, 0.28);
+      ctx.bezierCurveTo(cx + 0.3, 0.35, cx + 0.15, 0.35, cx + 0.05, 0.38);
+      ctx.bezierCurveTo(cx + 0.1, 0.4, cx + 0.2, 0.42, cx + 0.3, 0.42);
+      ctx.bezierCurveTo(cx + 0.25, 0.5, cx + 0.05, 0.48, cx, 0.5);
       ctx.closePath();
       // Stem
-      ctx.moveTo(cx - 0.02, 0.50);
-      ctx.lineTo(cx + 0.02, 0.50);
-      ctx.lineTo(cx + 0.02, 0.90);
-      ctx.lineTo(cx - 0.02, 0.90);
+      ctx.moveTo(cx - 0.02, 0.5);
+      ctx.lineTo(cx + 0.02, 0.5);
+      ctx.lineTo(cx + 0.02, 0.9);
+      ctx.lineTo(cx - 0.02, 0.9);
       ctx.closePath();
     },
   },
@@ -422,7 +424,7 @@ export function drawHeraldicDevice(
   const division = DIVISIONS[divIdx];
 
   // Pick charge (~60% chance)
-  const hasCharge = (h4 % 10) < 6;
+  const hasCharge = h4 % 10 < 6;
   const charge = hasCharge ? pick(CHARGES, h5) : null;
   const chargeColour = hasCharge ? contrastingTincture(t1, h5 + 3) : null;
 

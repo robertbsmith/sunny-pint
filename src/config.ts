@@ -53,9 +53,10 @@ export const TWILIGHT_DAY = 0.7;
 
 // ── External services ────────────────────────────────────────────────
 
-/** Stadia Maps OSM Bright raster basemap tiles. */
-export const TILE_URL =
-  "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png";
+/** Stadia Maps raster basemap tile URL templates. */
+export const TILE_URL = "https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}.png";
+export const SATELLITE_TILE_URL =
+  "https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.png";
 
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";

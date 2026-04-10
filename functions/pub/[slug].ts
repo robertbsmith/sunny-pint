@@ -91,10 +91,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   // serve 7-day-old HTML still pointing at the previous CSS hash, which
   // means the layout fixes from a deploy don't reach returning users.
   const sha = ctx.env.CF_PAGES_COMMIT_SHA ?? "dev";
-  const cacheKey = new Request(
-    `${url.origin}${url.pathname}?_v=${sha}`,
-    ctx.request,
-  );
+  const cacheKey = new Request(`${url.origin}${url.pathname}?_v=${sha}`, ctx.request);
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;

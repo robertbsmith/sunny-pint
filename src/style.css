@@ -177,7 +177,6 @@ a {
   text-decoration: none;
 }
 
-
 .kofi-btn {
   display: inline-flex;
   align-items: center;
@@ -909,12 +908,100 @@ html.dark .sunny-badge--sunny {
 }
 
 #circle-wrap {
+  position: relative;
   width: 100%;
   max-width: min(400px, calc(100vw - 32px));
   /* Container query so the canvas can reserve its exact final height
      (width + 32px for the pub sign) before JS runs — eliminates the
      32px CLS jump on first paint. */
   container-type: inline-size;
+}
+
+/* ── Porthole controls (satellite + zoom) ────────────────────────── */
+
+#porthole-controls {
+  position: absolute;
+  right: 6px;
+  bottom: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 5;
+}
+
+.porthole-btn--rim {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  box-shadow: 0 1px 6px var(--shadow);
+  transition:
+    background 150ms,
+    color 150ms;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.porthole-btn--rim:hover {
+  background: var(--surface-container-high);
+}
+
+.porthole-btn--rim:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.porthole-btn--rim.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.porthole-btn--rim[hidden] {
+  display: none;
+}
+
+.porthole-zoom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 6px var(--shadow);
+  overflow: hidden;
+}
+
+.porthole-zoom .porthole-btn--rim {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  width: 36px;
+  height: 32px;
+}
+
+.porthole-zoom .porthole-btn--rim:first-child {
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.porthole-zoom .porthole-btn--rim:last-child {
+  border-top: 1px solid var(--outline-variant);
+}
+
+.zoom-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: system-ui, sans-serif;
+  color: var(--on-surface-variant);
+  padding: 2px 0;
+  text-align: center;
 }
 
 #arc-wrap {
@@ -1681,7 +1768,9 @@ html.dark .status-closed {
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: opacity 150ms ease, transform 80ms ease;
+  transition:
+    opacity 150ms ease,
+    transform 80ms ease;
 }
 
 .welcome-actions button:active {

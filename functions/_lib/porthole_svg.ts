@@ -16,7 +16,7 @@
 
 import SunCalc from "suncalc";
 
-import { SHADOW_CAP_M, TILE_URL, TILE_ZOOM } from "../../src/config";
+import { TILE_URL, TILE_ZOOM } from "../../src/config";
 import { lngLatToTile, tileMetresPerPixel, toPixel } from "../../src/geo";
 import { computeShadows, isTerrainOccluded } from "../../src/shadow";
 import type { Building, Pub, ShadowPoly, SunPosition } from "../../src/types";
@@ -89,7 +89,9 @@ async function fetchTileDataUri(z: number, x: number, y: number): Promise<string
 
   const promise = (async () => {
     try {
-      const url = TILE_URL.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+      const url = TILE_URL.replace("{z}", String(z))
+        .replace("{x}", String(x))
+        .replace("{y}", String(y));
       const resp = await fetch(url);
       if (!resp.ok) return null;
       const buf = await resp.arrayBuffer();
@@ -159,7 +161,11 @@ export function bestWindowSunPosition(pub: Pub, bestWindow: string | null): SunP
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function pubBuildingIndex(pub: Pub, buildings: Building[]): number {
@@ -232,13 +238,14 @@ function pathAttr(
   mpp: number,
 ): string {
   return rings
-    .map((ring) =>
-      ring
-        .map(([lat, lng], i) => {
-          const p = toPixel(lat, lng, centre, mpp);
-          return `${i === 0 ? "M" : "L"}${(cx + p.x).toFixed(1)},${(cy + p.y).toFixed(1)}`;
-        })
-        .join(" ") + " Z",
+    .map(
+      (ring) =>
+        `${ring
+          .map(([lat, lng], i) => {
+            const p = toPixel(lat, lng, centre, mpp);
+            return `${i === 0 ? "M" : "L"}${(cx + p.x).toFixed(1)},${(cy + p.y).toFixed(1)}`;
+          })
+          .join(" ")} Z`,
     )
     .join(" ");
 }

@@ -2,7 +2,7 @@ import "./style.css";
 
 import SunCalc from "suncalc";
 import { loadBuildingsForPub } from "./buildings";
-import { initCircle, renderCircle } from "./circle";
+import { initCircle, renderCircle, setPanChangeCallback, setViewChangeCallback } from "./circle";
 import {
   DEFAULT_LAT,
   DEFAULT_LNG,
@@ -11,6 +11,7 @@ import {
   NOMINATIM_URL,
   USER_AGENT,
 } from "./config";
+import { initContact, openContact } from "./contact";
 import { parseHours } from "./hours";
 import { initIcons } from "./icons";
 import { initLocation } from "./location";
@@ -18,7 +19,7 @@ import { initPubList, renderList, sortByDistance } from "./publist";
 import { computeShadows, isTerrainOccluded } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
-import { type LocationSource, loadLocation, saveLocation } from "./storage";
+import { type LocationSource, loadLocation, saveLocation, type ZoomStep } from "./storage";
 import { initSunArc, renderArc } from "./sunarc";
 import { largeSunBadgeHtml } from "./sunbadge";
 import type { Pub } from "./types";
@@ -35,13 +36,77 @@ import {
 } from "./url";
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
 import { maybeShowWelcome } from "./welcome";
-import { initContact, openContact } from "./contact";
 
 async function loadPubs(): Promise<void> {
   const resp = await fetch("/data/pubs.json");
   const pubs: Pub[] = await resp.json();
   state.pubs = pubs;
 }
+
+// ── Porthole controls (satellite + zoom) ────────────────────────────
+
+const ZOOM_STEPS: ZoomStep[] = [1, 2, 4];
+
+function initPortholeControls(): void {
+  const satBtn = document.getElementById("btn-satellite");
+  const zoomIn = document.getElementById("btn-zoom-in");
+  const zoomOut = document.getElementById("btn-zoom-out");
+  const zoomLabel = document.getElementById("zoom-label");
+  const resetBtn = document.getElementById("btn-reset-pan");
+
+  // Restore saved state to UI
+  syncPortholeUI();
+
+  satBtn?.addEventListener("click", () => {
+    state.satellite = !state.satellite;
+    syncPortholeUI();
+    updateScene();
+  });
+
+  zoomIn?.addEventListener("click", () => {
+    const idx = ZOOM_STEPS.indexOf(state.zoomStep);
+    if (idx < ZOOM_STEPS.length - 1) {
+      state.zoomStep = ZOOM_STEPS[idx + 1];
+      syncPortholeUI();
+      updateScene();
+    }
+  });
+
+  zoomOut?.addEventListener("click", () => {
+    const idx = ZOOM_STEPS.indexOf(state.zoomStep);
+    if (idx > 0) {
+      state.zoomStep = ZOOM_STEPS[idx - 1];
+      if (state.zoomStep === 1) {
+        state.panX = 0;
+        state.panY = 0;
+      }
+      syncPortholeUI();
+      updateScene();
+    }
+  });
+
+  resetBtn?.addEventListener("click", () => {
+    state.panX = 0;
+    state.panY = 0;
+    syncPortholeUI();
+    updateScene();
+  });
+
+  setPanChangeCallback(syncPortholeUI);
+  setViewChangeCallback(syncPortholeUI);
+  portholeUISync = syncPortholeUI;
+
+  function syncPortholeUI(): void {
+    satBtn?.classList.toggle("active", state.satellite);
+    if (zoomLabel) zoomLabel.textContent = `${state.zoomStep}x`;
+    if (zoomIn) (zoomIn as HTMLButtonElement).disabled = state.zoomStep >= 4;
+    if (zoomOut) (zoomOut as HTMLButtonElement).disabled = state.zoomStep <= 1;
+    const panned = state.panX !== 0 || state.panY !== 0;
+    if (resetBtn) (resetBtn as HTMLElement).hidden = !panned;
+  }
+}
+
+let portholeUISync: (() => void) | null = null;
 
 /** Recompute shadows and redraw everything for current time. */
 function updateScene(): void {
@@ -77,6 +142,11 @@ async function onPubSelected(pub: Pub): Promise<void> {
   document.getElementById("pubs")?.classList.remove("open");
   window.scrollTo({ top: 0, behavior: "smooth" });
   document.getElementById("main")?.scrollTo({ top: 0, behavior: "smooth" });
+  state.panX = 0;
+  state.panY = 0;
+  state.zoomStep = 1;
+  state.satellite = false;
+  portholeUISync?.();
   updatePubInfo(pub);
   // Immediate URL push so the browser back button has a real history entry
   // for this pub. updateScene() then runs the debounced writer for any
@@ -400,6 +470,7 @@ async function init(): Promise<void> {
     initPubList(onPubSelected);
     initCircle();
     initContact();
+    initPortholeControls();
     initSunArc(() => {
       markTimeUserDriven();
       updateScene();

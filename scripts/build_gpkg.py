@@ -16,8 +16,9 @@ import osmium
 
 from areas import parse_area
 
-PBF = Path(__file__).resolve().parent.parent / "data" / "england-latest.osm.pbf"
-OUT = Path(__file__).resolve().parent.parent / "data" / "buildings.gpkg"
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+PBF_PATHS = sorted(DATA_DIR.glob("*-latest.osm.pbf"))
+OUT = DATA_DIR / "buildings.gpkg"
 
 SCHEMA = {
     "geometry": "Polygon",
@@ -27,6 +28,8 @@ SCHEMA = {
         "name": "str",
         "height": "str",
         "levels": "str",
+        "lidar_height": "float",
+        "ground_elev": "float",
     },
 }
 
@@ -58,6 +61,8 @@ class BuildingExtractor(osmium.SimpleHandler):
                 "name": tags.get("name", ""),
                 "height": tags.get("height", tags.get("building:height", "")),
                 "levels": tags.get("building:levels", ""),
+                "lidar_height": None,
+                "ground_elev": None,
             },
         })
         self.count += 1
@@ -98,28 +103,81 @@ def main():
     if bbox is None:
         bbox = (-90, -180, 90, 180)  # world bbox — effectively no filter
 
+    if not PBF_PATHS:
+        print(f"ERROR: no *-latest.osm.pbf files found in {DATA_DIR}")
+        print("Download from: https://download.geofabrik.de/europe/great-britain/")
+        return
+
     print(f"Extracting buildings for {area.name}")
-    print(f"  PBF: {PBF.name}")
+    print(f"  PBF files: {', '.join(p.name for p in PBF_PATHS)}")
     print(f"  Bbox: {'all' if area.bbox is None else area.bbox}")
 
+    # If the gpkg already exists and we're adding new PBF files, append to it
+    # instead of rebuilding from scratch (preserves existing heights).
+    if OUT.exists() and len(PBF_PATHS) > 1:
+        # Check which PBFs have already been ingested by looking at a marker.
+        marker_file = OUT.with_suffix(".gpkg.ingested")
+        ingested = set()
+        if marker_file.exists():
+            ingested = set(marker_file.read_text().strip().splitlines())
+
+        new_pbfs = [p for p in PBF_PATHS if p.name not in ingested]
+        if not new_pbfs:
+            print("  All PBF files already ingested — nothing to do.")
+            return
+        print(f"  Appending {len(new_pbfs)} new PBF file(s) to existing gpkg")
+
+        t0 = time.time()
+        total = 0
+        for pbf in new_pbfs:
+            print(f"  Processing {pbf.name}...", flush=True)
+            with fiona.open(
+                str(OUT), "a",
+                driver="GPKG",
+                schema=SCHEMA,
+                crs=CRS.from_epsg(4326),
+                layer="buildings",
+            ) as dst:
+                handler = BuildingExtractor(bbox, dst)
+                handler.apply_file(str(pbf), locations=True)
+            total += handler.count
+            print(f"    {handler.count} buildings from {pbf.name}")
+            ingested.add(pbf.name)
+
+        marker_file.write_text("\n".join(sorted(ingested)) + "\n")
+        elapsed = time.time() - t0
+        size_mb = OUT.stat().st_size / 1e6
+        print(f"  Appended {total} buildings in {elapsed:.1f}s (gpkg now {size_mb:.1f} MB)")
+        return
+
+    # Fresh build — write all PBFs to a new gpkg.
     TMP = OUT.with_suffix(".gpkg.tmp")
     print(f"  Streaming to {TMP}...")
     t0 = time.time()
-    with fiona.open(
-        str(TMP), "w",
-        driver="GPKG",
-        schema=SCHEMA,
-        crs=CRS.from_epsg(4326),
-        layer="buildings",
-    ) as dst:
-        handler = BuildingExtractor(bbox, dst)
-        handler.apply_file(str(PBF), locations=True)
+    total = 0
+    for i, pbf in enumerate(PBF_PATHS):
+        mode = "w" if i == 0 else "a"
+        print(f"  Processing {pbf.name}...", flush=True)
+        with fiona.open(
+            str(TMP), mode,
+            driver="GPKG",
+            schema=SCHEMA,
+            crs=CRS.from_epsg(4326),
+            layer="buildings",
+        ) as dst:
+            handler = BuildingExtractor(bbox, dst)
+            handler.apply_file(str(pbf), locations=True)
+        total += handler.count
+        print(f"    {handler.count} buildings from {pbf.name}")
 
     elapsed = time.time() - t0
-    print(f"  {handler.count} buildings in {elapsed:.0f}s")
+    print(f"  {total} buildings in {elapsed:.0f}s")
     shutil.move(str(TMP), str(OUT))
+    # Write ingested marker.
+    marker = OUT.with_suffix(".gpkg.ingested")
+    marker.write_text("\n".join(p.name for p in PBF_PATHS) + "\n")
     size_mb = OUT.stat().st_size / 1e6
-    print(f"  Wrote {handler.count} buildings in {elapsed:.1f}s ({size_mb:.1f} MB)")
+    print(f"  Wrote {total} buildings in {elapsed:.1f}s ({size_mb:.1f} MB)")
     print(f"  Saved to {OUT}")
 
 

@@ -17,7 +17,8 @@ from areas import parse_area, in_bbox, Area
 # ── Paths ──────────────────────────────────────────────────────────────────
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-PBF_PATH = DATA_DIR / "england-latest.osm.pbf"
+# Process all available *-latest.osm.pbf files (england, scotland, wales).
+PBF_PATHS = sorted(DATA_DIR.glob("*-latest.osm.pbf"))
 OUTPUT_PATH = DATA_DIR / "pubs_merged.json"
 
 # ── OSM pub extraction from .pbf ──────────────────────────────────────────
@@ -100,15 +101,26 @@ def main():
     print(f"Extracting pubs for {area.name}")
     print()
 
-    if not PBF_PATH.exists():
-        print(f"ERROR: {PBF_PATH} not found.")
-        print("Download from: https://download.geofabrik.de/europe/great-britain/england.html")
+    if not PBF_PATHS:
+        print(f"ERROR: no *-latest.osm.pbf files found in {DATA_DIR}")
+        print("Download from: https://download.geofabrik.de/europe/great-britain/")
         return
 
-    print(f"  Extracting pubs from {PBF_PATH.name}...", flush=True)
-    handler = PubHandler(area)
-    handler.apply_file(str(PBF_PATH), locations=True)
-    pubs = handler.pubs
+    pubs: list[dict] = []
+    seen_ids: set[int] = set()
+    for pbf_path in PBF_PATHS:
+        print(f"  Extracting pubs from {pbf_path.name}...", flush=True)
+        handler = PubHandler(area)
+        handler.apply_file(str(pbf_path), locations=True)
+        # Deduplicate by OSM ID across extracts.
+        for p in handler.pubs:
+            oid = p.get("osm_id")
+            if oid and oid in seen_ids:
+                continue
+            if oid:
+                seen_ids.add(oid)
+            pubs.append(p)
+        print(f"    {len(handler.pubs)} pubs from {pbf_path.name}")
 
     # Sort by name.
     pubs.sort(key=lambda p: p.get("name", ""))

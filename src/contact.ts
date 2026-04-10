@@ -85,7 +85,6 @@ async function handleSubmit(e: Event): Promise<void> {
   const website = (document.getElementById("cf-website") as HTMLInputElement).value;
   const pub = overlayEl?.dataset.pub;
 
-  const statusEl = document.getElementById("contact-status");
   const btn = document.getElementById("contact-submit") as HTMLButtonElement | null;
 
   if (!message) {
@@ -116,7 +115,7 @@ async function handleSubmit(e: Event): Promise<void> {
         pub: pub || undefined,
       }),
     });
-    const data = await resp.json() as { ok?: boolean; error?: string };
+    const data = (await resp.json()) as { ok?: boolean; error?: string };
 
     if (resp.ok && data.ok) {
       showStatus("Sent! Thanks for getting in touch.", "success");

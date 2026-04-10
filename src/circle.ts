@@ -12,13 +12,36 @@
 
 import SunCalc from "suncalc";
 import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
-import { DAY_FRAC_OFFSET, DAY_FRAC_RANGE, TILE_ZOOM, TWILIGHT_DAY, TWILIGHT_NIGHT } from "./config";
+import {
+  DAY_FRAC_OFFSET,
+  DAY_FRAC_RANGE,
+  M_PER_DEG_LAT,
+  PORTHOLE_RADIUS_M,
+  TILE_ZOOM,
+  TWILIGHT_DAY,
+  TWILIGHT_NIGHT,
+} from "./config";
 import { lngLatToTile, tileMetresPerPixel, toPixel } from "./geo";
 import { drawPubSign, measureSignLayout, type SignLayout } from "./sign";
-import { pubCenter, selectedPub, state } from "./state";
+import { pubCenter, pubOrigin, selectedPub, state } from "./state";
 import { isDark, lerpColor } from "./theme";
 import { loadTile, setSuppressTileRedraw, setTileRedrawCallback } from "./tiles";
 import type { SunPosition } from "./types";
+
+// ── Callbacks ────────────────────────────────────────────────────────────
+
+let panChangeCallback: (() => void) | null = null;
+let viewChangeCallback: (() => void) | null = null;
+
+/** Register a callback for when the user finishes a pan drag. */
+export function setPanChangeCallback(cb: () => void): void {
+  panChangeCallback = cb;
+}
+
+/** Register a callback for when zoom/satellite changes via gesture. */
+export function setViewChangeCallback(cb: () => void): void {
+  viewChangeCallback = cb;
+}
 
 // ── Drawing constants ─────────────────────────────────────────────────────
 
@@ -83,7 +106,9 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   const dark = isDark();
 
   const centre = pubCenter();
-  const mpp = tileMetresPerPixel(centre.lat, TILE_ZOOM);
+  const zoom = TILE_ZOOM + Math.log2(state.zoomStep);
+  const mpp = tileMetresPerPixel(centre.lat, zoom);
+  const sat = state.satellite;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -95,7 +120,7 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
 
-  drawTiles(ctx, cx, cy, centre);
+  drawTiles(ctx, cx, cy, centre, zoom, sat);
 
   if (dayFrac < 1) {
     const alpha = (1 - dayFrac) * 0.6;
@@ -103,16 +128,90 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  if (dayFrac > 0 && state.shadowPolys.length > 0) {
-    drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
+  if (sat) {
+    // In satellite mode: black out everything outside the garden + pub
+    // building, then draw shadows clipped to the garden only.
+    const pub = selectedPub();
+    if (pub?.outdoor && pub.outdoor.length > 0) {
+      // Black out everything outside the garden and pub building
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx - r, cy - r, r * 2, r * 2);
+      // Cut out the garden (evenodd leaves it visible)
+      for (const ring of pub.outdoor) {
+        for (let i = 0; i < ring.length; i++) {
+          const point = ring[i];
+          if (!point) continue;
+          const p = toPixel(point[0], point[1], centre, mpp);
+          if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
+          else ctx.lineTo(cx + p.x, cy + p.y);
+        }
+        ctx.closePath();
+      }
+      ctx.fillStyle = "#000";
+      ctx.fill("evenodd");
+      ctx.restore();
+
+      // Draw the pub building filled + orange border (same as normal mode)
+      const pubB = state.buildings[state.pubBuildingIndex];
+      if (pubB) {
+        const pubFillR = Math.round(180 + 37 * dayFrac);
+        const pubFillG = Math.round(100 + 19 * dayFrac);
+        const pubFillB = Math.round(50 - 44 * dayFrac);
+        ctx.beginPath();
+        for (let j = 0; j < pubB.coords.length; j++) {
+          const coord = pubB.coords[j];
+          if (!coord) continue;
+          const p = toPixel(coord[0], coord[1], centre, mpp);
+          if (j === 0) ctx.moveTo(cx + p.x, cy + p.y);
+          else ctx.lineTo(cx + p.x, cy + p.y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${pubFillR},${pubFillG},${pubFillB},0.65)`;
+        ctx.strokeStyle = lerpColor("#B45C32", "#B45309", dayFrac);
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Draw shadows clipped to the garden area only
+      if (dayFrac > 0 && state.shadowPolys.length > 0) {
+        ctx.save();
+        ctx.beginPath();
+        for (const ring of pub.outdoor) {
+          for (let i = 0; i < ring.length; i++) {
+            const point = ring[i];
+            if (!point) continue;
+            const p = toPixel(point[0], point[1], centre, mpp);
+            if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
+            else ctx.lineTo(cx + p.x, cy + p.y);
+          }
+          ctx.closePath();
+        }
+        ctx.clip("evenodd");
+        drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
+        ctx.restore();
+      }
+    } else {
+      // No outdoor area — just show shadows normally
+      if (dayFrac > 0 && state.shadowPolys.length > 0) {
+        drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
+      }
+    }
+  } else {
+    if (dayFrac > 0 && state.shadowPolys.length > 0) {
+      drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
+    }
+
+    drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
+    drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
   }
 
-  drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
-  drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
-
-  // Pub marker dot.
+  // Pub marker dot — drawn at real pub position (moves when panned).
+  const origin = pubOrigin();
+  const markerP = toPixel(origin.lat, origin.lng, centre, mpp);
   ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+  ctx.arc(cx + markerP.x, cy + markerP.y, 4, 0, Math.PI * 2);
   ctx.fillStyle = COLORS.pubMarker;
   ctx.fill();
   ctx.strokeStyle = "#fff";
@@ -193,11 +292,16 @@ function drawTiles(
   cx: number,
   cy: number,
   centre: { lat: number; lng: number },
+  zoom: number,
+  satellite: boolean,
 ): void {
-  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, TILE_ZOOM);
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const img = loadTile(TILE_ZOOM, tx + dx, ty + dy);
+  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, zoom);
+  // At higher zooms each tile covers fewer pixels relative to the viewport,
+  // so we need more tiles. 3x3 at z18, 5x5 at z19, 7x7 at z20.
+  const span = Math.ceil(1 + Math.log2(Math.max(1, zoom - TILE_ZOOM + 1)));
+  for (let dx = -span; dx <= span; dx++) {
+    for (let dy = -span; dy <= span; dy++) {
+      const img = loadTile(zoom, tx + dx, ty + dy, satellite);
       if (img) {
         ctx.drawImage(img, cx - px + dx * 256, cy - py + dy * 256, 256, 256);
       }
@@ -546,4 +650,202 @@ export function initCircle(): void {
   setTileRedrawCallback(() => renderCircle(canvas));
   window.addEventListener("resize", resize);
   resize();
+
+  // ── Pan / drag ──────────────────────────────────────────────────
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  function getMpp(): number {
+    const zoom = TILE_ZOOM + Math.log2(state.zoomStep);
+    return tileMetresPerPixel(pubCenter().lat, zoom);
+  }
+
+  function onDragStart(px: number, py: number): void {
+    dragging = true;
+    lastX = px;
+    lastY = py;
+  }
+
+  /** Max pan distance in metres — bounded by outdoor area + building extent,
+   *  or PORTHOLE_RADIUS_M if no outdoor area. */
+  function panLimit(): number {
+    const pub = selectedPub();
+    if (!pub) return 0;
+    const origin = pubOrigin();
+    let maxDist = 0;
+    const mPerDegLng = M_PER_DEG_LAT * Math.cos((origin.lat * Math.PI) / 180);
+
+    // Check outdoor area coords
+    if (pub.outdoor) {
+      for (const ring of pub.outdoor) {
+        for (const point of ring) {
+          if (!point) continue;
+          const dx = (point[1] - origin.lng) * mPerDegLng;
+          const dy = (point[0] - origin.lat) * M_PER_DEG_LAT;
+          maxDist = Math.max(maxDist, Math.sqrt(dx * dx + dy * dy));
+        }
+      }
+    }
+
+    // Check pub building coords
+    const pubB = state.buildings[state.pubBuildingIndex];
+    if (pubB) {
+      for (const coord of pubB.coords) {
+        if (!coord) continue;
+        const dx = (coord[1] - origin.lng) * mPerDegLng;
+        const dy = (coord[0] - origin.lat) * M_PER_DEG_LAT;
+        maxDist = Math.max(maxDist, Math.sqrt(dx * dx + dy * dy));
+      }
+    }
+
+    // Allow panning up to the extent of the garden/building, scaled by zoom,
+    // but at least enough to see the whole porthole radius at current zoom
+    const viewRadius = PORTHOLE_RADIUS_M / state.zoomStep;
+    return Math.max(maxDist, viewRadius);
+  }
+
+  function clampPan(): void {
+    const limit = panLimit();
+    const dist = Math.sqrt(state.panX ** 2 + state.panY ** 2);
+    if (dist > limit) {
+      const scale = limit / dist;
+      state.panX *= scale;
+      state.panY *= scale;
+    }
+  }
+
+  function onDragMove(px: number, py: number): void {
+    if (!dragging) return;
+    const mpp = getMpp();
+    const dx = px - lastX;
+    const dy = py - lastY;
+    state.panX -= dx * mpp;
+    state.panY += dy * mpp;
+    clampPan();
+    lastX = px;
+    lastY = py;
+    renderCircle(canvas);
+  }
+
+  function onDragEnd(): void {
+    if (dragging) {
+      dragging = false;
+      panChangeCallback?.();
+    }
+  }
+
+  canvas.addEventListener("mousedown", (e) => {
+    onDragStart(e.offsetX, e.offsetY);
+    e.preventDefault();
+  });
+  canvas.addEventListener("mousemove", (e) => onDragMove(e.offsetX, e.offsetY));
+  canvas.addEventListener("mouseup", onDragEnd);
+  canvas.addEventListener("mouseleave", onDragEnd);
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      onDragStart(t.clientX - rect.left, t.clientY - rect.top);
+      e.preventDefault();
+    },
+    { passive: false },
+  );
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      onDragMove(t.clientX - rect.left, t.clientY - rect.top);
+      e.preventDefault();
+    },
+    { passive: false },
+  );
+  canvas.addEventListener("touchend", onDragEnd);
+  canvas.addEventListener("touchcancel", onDragEnd);
+
+  // ── Mouse wheel zoom ────────────────────────────────────────────
+  const ZOOM_STEPS: (1 | 2 | 4)[] = [1, 2, 4];
+
+  function stepZoom(direction: 1 | -1): void {
+    const idx = ZOOM_STEPS.indexOf(state.zoomStep);
+    const next = idx + direction;
+    if (next < 0 || next >= ZOOM_STEPS.length) return;
+    state.zoomStep = ZOOM_STEPS[next];
+    if (state.zoomStep === 1) {
+      state.panX = 0;
+      state.panY = 0;
+    }
+    renderCircle(canvas);
+    viewChangeCallback?.();
+  }
+
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      stepZoom(e.deltaY < 0 ? 1 : -1);
+    },
+    { passive: false },
+  );
+
+  // ── Pinch zoom ──────────────────────────────────────────────────
+  let pinchStartDist = 0;
+  let pinchBaseZoom: 1 | 2 | 4 = 1;
+
+  function touchDist(e: TouchEvent): number {
+    const a = e.touches[0];
+    const b = e.touches[1];
+    const dx = a.clientX - b.clientX;
+    const dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length === 2) {
+        pinchStartDist = touchDist(e);
+        pinchBaseZoom = state.zoomStep;
+        e.preventDefault();
+      }
+    },
+    { passive: false },
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length === 2) {
+        const dist = touchDist(e);
+        const ratio = dist / pinchStartDist;
+        let target: 1 | 2 | 4;
+        if (ratio > 1.5) {
+          target = Math.min(4, pinchBaseZoom * 2) as 1 | 2 | 4;
+        } else if (ratio < 0.67) {
+          target = Math.max(1, pinchBaseZoom / 2) as 1 | 2 | 4;
+        } else {
+          target = pinchBaseZoom;
+        }
+        if (target !== state.zoomStep) {
+          state.zoomStep = target;
+          if (state.zoomStep === 1) {
+            state.panX = 0;
+            state.panY = 0;
+          }
+          renderCircle(canvas);
+          viewChangeCallback?.();
+          // Reset pinch baseline so continued pinching can step again
+          pinchStartDist = dist;
+          pinchBaseZoom = target;
+        }
+        e.preventDefault();
+      }
+    },
+    { passive: false },
+  );
 }

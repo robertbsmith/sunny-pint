@@ -90,4 +90,9 @@ export interface AppState {
   weatherState: WeatherState;
   userLat: number | null;
   userLng: number | null;
+  satellite: boolean;
+  zoomStep: 1 | 2 | 4;
+  /** Pan offset in metres from pub centre. */
+  panX: number;
+  panY: number;
 }

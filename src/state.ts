@@ -3,7 +3,7 @@
  * No framework, no store, just shared mutable state.
  */
 
-import { DEFAULT_LAT, DEFAULT_LNG } from "./config";
+import { DEFAULT_LAT, DEFAULT_LNG, M_PER_DEG_LAT } from "./config";
 import type { AppState, Pub } from "./types";
 
 export const state: AppState = {
@@ -18,6 +18,10 @@ export const state: AppState = {
   weatherState: "unknown",
   userLat: null,
   userLng: null,
+  satellite: false,
+  zoomStep: 1,
+  panX: 0,
+  panY: 0,
 };
 
 /** Get the selected pub object, or null. */
@@ -25,12 +29,23 @@ export function selectedPub(): Pub | null {
   return state.pubs.find((p) => p.id === state.selectedPubId) ?? null;
 }
 
-/** Get the pub centre, preferring the OSM building centroid over the node coord. */
-export function pubCenter(): { lat: number; lng: number } {
+/** Get the pub centre (no pan offset). */
+export function pubOrigin(): { lat: number; lng: number } {
   const pub = selectedPub();
   if (!pub) return { lat: DEFAULT_LAT, lng: DEFAULT_LNG };
   if (pub.clat != null && pub.clng != null) {
     return { lat: pub.clat, lng: pub.clng };
   }
   return { lat: pub.lat, lng: pub.lng };
+}
+
+/** Get the view centre, with pan offset applied. */
+export function pubCenter(): { lat: number; lng: number } {
+  const origin = pubOrigin();
+  if (state.panX === 0 && state.panY === 0) return origin;
+  const mPerDegLng = M_PER_DEG_LAT * Math.cos((origin.lat * Math.PI) / 180);
+  return {
+    lat: origin.lat + state.panY / M_PER_DEG_LAT,
+    lng: origin.lng + state.panX / mPerDegLng,
+  };
 }

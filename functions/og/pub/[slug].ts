@@ -14,10 +14,10 @@
  *   GET /og/pub/no-such-pub     → 404
  */
 
+import type { Pub } from "../../../src/types";
+import { loadBuildingsForPubAsync, type TileFetcher } from "../../_lib/buildings_async";
 import { renderOgCard } from "../../_lib/og_card";
 import { bestWindowSunPosition, prefetchPortholeTiles } from "../../_lib/porthole_svg";
-import { loadBuildingsForPubAsync, type TileFetcher } from "../../_lib/buildings_async";
-import type { Pub } from "../../../src/types";
 
 interface Env {
   ASSETS: Fetcher;
@@ -28,7 +28,6 @@ interface Env {
 // V8 isolates persist between requests on the same instance, so the parsed
 // pubs.json + slug index survive across invocations on a warm Worker.
 
-let cachedPubs: Pub[] | null = null;
 let cachedIndex: Map<string, Pub> | null = null;
 
 async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
@@ -40,7 +39,6 @@ async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
   for (const p of pubs) {
     if (p.slug) index.set(p.slug, p);
   }
-  cachedPubs = pubs;
   cachedIndex = index;
   return index;
 }

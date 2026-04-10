@@ -97,7 +97,11 @@ export const onRequestOptions: PagesFunction<Env> = async (context) => {
   });
 };
 
-function json(data: Record<string, unknown>, status: number, extra?: Record<string, string>): Response {
+function json(
+  data: Record<string, unknown>,
+  status: number,
+  extra?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", ...extra },

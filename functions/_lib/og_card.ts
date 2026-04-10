@@ -25,8 +25,8 @@
  * inside a translated <g> here. Single source of truth.
  */
 
-import { renderPortholeSvg } from "./porthole_svg";
 import type { Building, Pub, SunPosition } from "../../src/types";
+import { renderPortholeSvg } from "./porthole_svg";
 
 // ── Card dimensions ─────────────────────────────────────────────────────
 
@@ -163,7 +163,9 @@ function topText(
   const y = baselineFromTop(top, fontSize);
   const natural = approxTextWidth(content, fontSize, attrs.family);
   const lengthAttr =
-    natural > maxWidth ? ` textLength="${maxWidth.toFixed(0)}" lengthAdjust="spacingAndGlyphs"` : "";
+    natural > maxWidth
+      ? ` textLength="${maxWidth.toFixed(0)}" lengthAdjust="spacingAndGlyphs"`
+      : "";
   const familyAttr =
     attrs.family === "serif"
       ? `font-family="Georgia, 'Times New Roman', serif"`
