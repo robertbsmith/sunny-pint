@@ -43,8 +43,12 @@ app/
 # Reference repos
 ref/
 
-# Generated app data (PMTiles for future use)
+# Pipeline-generated data served from R2 (too large for git + CF Pages).
+# pubs.json (~70MB at UK scale), tiles (~1.4GB as PMTiles).
+# Local copies kept for dev; production fetches from data.sunny-pint.co.uk.
+public/data/pubs.json
 public/data/buildings.pmtiles
+public/data/tiles/
 
 # PWA generated
 dev-dist/
