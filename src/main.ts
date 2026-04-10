@@ -45,9 +45,40 @@ const DATA_BASE_URL = (() => {
 })();
 
 async function loadPubs(): Promise<void> {
-  const resp = await fetch(`${DATA_BASE_URL}/pubs.json`);
+  const resp = await fetch(`${DATA_BASE_URL}/pubs-index.json`);
   const pubs: Pub[] = await resp.json();
   state.pubs = pubs;
+}
+
+/** Cache of loaded detail chunks keyed by grid cell (e.g. "52.6_1.2"). */
+const detailCache = new Map<string, Record<string, Partial<Pub>>>();
+
+/** Load heavy per-pub fields (outdoor, elev, horizon, tags) from an R2
+ *  detail chunk and merge them onto the pub object. Nearby pubs in the
+ *  same ~11km grid cell are loaded for free (same chunk). */
+async function loadPubDetail(pub: Pub): Promise<void> {
+  if (pub.outdoor !== undefined) return; // already loaded
+
+  const cellLat = Math.floor(pub.lat * 10) / 10;
+  const cellLng = Math.floor(pub.lng * 10) / 10;
+  const cellKey = `${cellLat}_${cellLng}`;
+
+  let chunk = detailCache.get(cellKey);
+  if (!chunk) {
+    try {
+      const resp = await fetch(`${DATA_BASE_URL}/detail/${cellKey}.json`);
+      if (resp.ok) {
+        chunk = (await resp.json()) as Record<string, Partial<Pub>>;
+        detailCache.set(cellKey, chunk);
+      }
+    } catch {
+      // Network error — pub renders without outdoor/horizon data.
+    }
+  }
+
+  if (chunk && pub.slug && chunk[pub.slug]) {
+    Object.assign(pub, chunk[pub.slug]);
+  }
 }
 
 // ── Porthole controls (satellite + zoom) ────────────────────────────
@@ -159,7 +190,12 @@ async function onPubSelected(pub: Pub): Promise<void> {
   // for this pub. updateScene() then runs the debounced writer for any
   // subsequent time scrubbing on top.
   writeURL();
-  await loadBuildingsForPub(pub);
+  // Load detail data (outdoor polygon, elev, horizon) + building tiles
+  // in parallel. Detail typically arrives first (~80 KB chunk from CDN)
+  // while building tiles stream from PMTiles range requests.
+  await Promise.all([loadPubDetail(pub), loadBuildingsForPub(pub)]);
+  // Re-render pub info now that detail fields are available.
+  updatePubInfo(pub);
   updateScene();
 }
 

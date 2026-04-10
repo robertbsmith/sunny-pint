@@ -23,11 +23,11 @@ generate-pages:
     pnpm tsx scripts/generate_pages.ts
 
 # Full release: build the SPA, generate SEO landing pages, strip data
-# files that are served from R2 (pubs.json + tiles exceed CF Pages limits).
+# files that are served from R2 (pubs.json, detail chunks, tiles).
+# pubs-index.json STAYS in dist/ (slim, ~5 MB, loaded by the SPA + Functions).
 release: build generate-pages
-    rm -rf dist/data/tiles dist/data/buildings.pmtiles
-    rm -f dist/data/pubs.json
-    @echo "Stripped R2-hosted data from dist/"
+    rm -rf dist/data/
+    @echo "Stripped all data from dist/ (served from R2)"
 
 # Local Cloudflare Pages dev — serves dist/ AND the per-pub Pages Function on
 # http://localhost:8788, identical to production. Use this instead of
@@ -58,12 +58,19 @@ typecheck:
 # All quality checks
 ci: typecheck lint build
 
-# Upload pipeline data to R2 (pubs.json + building tiles).
+# Upload pipeline data to R2 (detail chunks + building tiles).
 # Run after pipeline changes — R2 is separate from the Pages deploy.
 deploy-data:
-    @echo "Uploading to R2..."
-    pnpm wrangler r2 object put sunny-pint-data/data/pubs.json \
-        --file public/data/pubs.json --content-type application/json --remote
+    @echo "Uploading pubs-index.json to R2..."
+    pnpm wrangler r2 object put sunny-pint-data/data/pubs-index.json \
+        --file public/data/pubs-index.json --content-type application/json --remote
+    @echo "Uploading detail chunks to R2..."
+    @for f in public/data/detail/*.json; do \
+        name=$$(basename "$$f"); \
+        pnpm wrangler r2 object put "sunny-pint-data/data/detail/$$name" \
+            --file "$$f" --content-type application/json --remote 2>/dev/null; \
+    done
+    @echo "  $$(ls public/data/detail/*.json 2>/dev/null | wc -l) detail chunks uploaded"
     @test -f public/data/buildings.pmtiles && \
         pnpm wrangler r2 object put sunny-pint-data/data/buildings.pmtiles \
             --file public/data/buildings.pmtiles --content-type application/octet-stream --remote || \

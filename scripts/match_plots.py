@@ -33,7 +33,10 @@ from localities import la_to_country, la_to_town_fallback
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
-PUBS_OUT = Path(__file__).resolve().parent.parent / "public" / "data" / "pubs.json"
+PUBLIC_DATA = Path(__file__).resolve().parent.parent / "public" / "data"
+PUBS_OUT = PUBLIC_DATA / "pubs.json"
+PUBS_INDEX_OUT = PUBLIC_DATA / "pubs-index.json"
+DETAIL_DIR = PUBLIC_DATA / "detail"
 SLUG_LOCK = DATA / "slug_lock.json"
 INSPIRE_DIR = DATA / "inspire"
 INSPIRE_GPKG = DATA / "inspire.gpkg"
@@ -587,23 +590,93 @@ def main():
     print(f"\n  {with_la}/{len(pubs)} pubs have a local authority")
     print(f"  {with_town}/{len(pubs)} pubs have a town")
 
-    # Write to public/data/pubs.json — strip pipeline-internal fields and
-    # replace the full polygon with a centroid to save bandwidth.
-    PUBS_OUT.parent.mkdir(parents=True, exist_ok=True)
+    # ── Output: three files ──────────────────────────────────────────
+    #
+    # 1. pubs.json        — full data (local pipeline use + precompute_sun)
+    # 2. pubs-index.json  — slim (~1.2 MB gz) for browser startup
+    # 3. detail/*.json    — per-grid-cell chunks (~7 KB gz avg) for on-demand load
+    #
+    # pubs-index.json goes in dist/ (CF Pages). Detail chunks go on R2.
+    # pubs.json stays local (too big for Pages, only used by scripts).
+
+    import math
+
+    PUBLIC_DATA.mkdir(parents=True, exist_ok=True)
+
+    # Fields for the slim index (everything the pub list + search needs).
+    INDEX_FIELDS = {
+        "name", "lat", "lng", "slug", "town", "country",
+        "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
+    }
+    # Heavy fields that go in detail chunks (loaded on pub selection).
+    DETAIL_FIELDS = {
+        "outdoor", "elev", "horizon", "clat", "clng",
+        "real_ale", "food", "wheelchair", "dog", "wifi",
+        "phone", "website", "brand", "brewery",
+        "local_authority", "addr_postcode", "addr_street", "addr_housenumber",
+    }
+
     output_pubs = []
+    index_pubs = []
+    detail_chunks: dict[str, dict] = {}
+
     for pub in pubs:
         out = dict(pub)
-        # Replace full polygon with centroid for the public file.
+        # Compute centroid from polygon.
         if "polygon" in out and out["polygon"] and len(out["polygon"]) > 2:
             out["clat"] = round(sum(c[0] for c in out["polygon"]) / len(out["polygon"]), 6)
             out["clng"] = round(sum(c[1] for c in out["polygon"]) / len(out["polygon"]), 6)
-        # Remove fields that are only used during pipeline processing.
         out.pop("polygon", None)
         out.pop("plot", None)
+        out.pop("_enrich_hash", None)
         output_pubs.append(out)
+
+        # Slim index entry.
+        idx = {}
+        for k in INDEX_FIELDS:
+            if k in out and out[k]:
+                idx[k] = out[k]
+        # Always include lat/lng even if somehow falsy.
+        idx["lat"] = out["lat"]
+        idx["lng"] = out["lng"]
+        # Sun: only score + label for the list badge.
+        if out.get("sun"):
+            idx["sun"] = {"score": out["sun"]["score"], "label": out["sun"]["label"]}
+        index_pubs.append(idx)
+
+        # Detail chunk entry (keyed by slug, grouped by 0.1° grid cell).
+        slug = out.get("slug")
+        if slug:
+            cell_lat = math.floor(out["lat"] * 10) / 10
+            cell_lng = math.floor(out["lng"] * 10) / 10
+            cell_key = f"{cell_lat}_{cell_lng}"
+            detail = {}
+            for k in DETAIL_FIELDS:
+                if k in out and out[k] is not None:
+                    detail[k] = out[k]
+            # Include full sun metrics in detail (best_window, morning/evening etc).
+            if out.get("sun"):
+                detail["sun"] = out["sun"]
+            if detail:
+                detail_chunks.setdefault(cell_key, {})[slug] = detail
+
+    # 1. Full pubs.json (local use).
     PUBS_OUT.write_text(json.dumps(output_pubs))
-    size_mb = PUBS_OUT.stat().st_size / 1e6
-    print(f"  Written to {PUBS_OUT} ({size_mb:.1f} MB)")
+    print(f"  pubs.json:       {PUBS_OUT.stat().st_size / 1e6:.1f} MB (local pipeline use)")
+
+    # 2. Slim index (deployed to dist/).
+    PUBS_INDEX_OUT.write_text(json.dumps(index_pubs))
+    print(f"  pubs-index.json: {PUBS_INDEX_OUT.stat().st_size / 1e6:.1f} MB (browser startup)")
+
+    # 3. Detail chunks (deployed to R2).
+    DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    # Clean old chunks.
+    for old in DETAIL_DIR.glob("*.json"):
+        old.unlink()
+    for cell_key, slugs in detail_chunks.items():
+        (DETAIL_DIR / f"{cell_key}.json").write_text(json.dumps(slugs))
+    total_detail = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json"))
+    print(f"  detail/:         {len(detail_chunks)} chunks, {total_detail / 1e6:.1f} MB total (R2)")
 
 
 if __name__ == "__main__":

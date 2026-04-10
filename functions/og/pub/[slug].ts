@@ -30,10 +30,12 @@ interface Env {
 
 let cachedIndex: Map<string, Pub> | null = null;
 
+const R2_DATA_URL = "https://data.sunny-pint.co.uk/data";
+
 async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
   if (cachedIndex) return cachedIndex;
-  const res = await env.ASSETS.fetch(`${origin}/data/pubs.json`);
-  if (!res.ok) throw new Error(`Failed to load pubs.json: ${res.status}`);
+  const res = await env.ASSETS.fetch(`${origin}/data/pubs-index.json`);
+  if (!res.ok) throw new Error(`Failed to load pubs-index.json: ${res.status}`);
   const pubs = (await res.json()) as Pub[];
   const index = new Map<string, Pub>();
   for (const p of pubs) {
@@ -41,6 +43,23 @@ async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
   }
   cachedIndex = index;
   return index;
+}
+
+/** Fetch heavy per-pub fields (outdoor, elev, horizon) from R2 detail chunk. */
+async function loadPubDetail(pub: Pub): Promise<void> {
+  if (pub.outdoor !== undefined) return;
+  const cellLat = Math.floor(pub.lat * 10) / 10;
+  const cellLng = Math.floor(pub.lng * 10) / 10;
+  try {
+    const resp = await fetch(`${R2_DATA_URL}/detail/${cellLat}_${cellLng}.json`);
+    if (!resp.ok) return;
+    const chunk = (await resp.json()) as Record<string, Partial<Pub>>;
+    if (pub.slug && chunk[pub.slug]) {
+      Object.assign(pub, chunk[pub.slug]);
+    }
+  } catch {
+    // Render without outdoor/elev if detail unavailable.
+  }
 }
 
 // ── Tile fetcher backed by env.ASSETS ───────────────────────────────────
@@ -51,7 +70,11 @@ async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
 
 function makeTileFetcher(env: Env, origin: string): TileFetcher {
   return async (key: string) => {
-    const res = await env.ASSETS.fetch(`${origin}/data/tiles/${key}.pbf`);
+    // Try local assets first (dev), then R2 (production).
+    let res = await env.ASSETS.fetch(`${origin}/data/tiles/${key}.pbf`);
+    if (!res.ok) {
+      res = await fetch(`${R2_DATA_URL}/tiles/${key}.pbf`);
+    }
     if (!res.ok) return null;
     return await res.arrayBuffer();
   };
@@ -83,6 +106,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const pub = index.get(slug);
   if (!pub) return new Response("Pub not found", { status: 404 });
+
+  // Fetch heavy detail fields (outdoor, elev) from R2.
+  await loadPubDetail(pub);
 
   // Load buildings, sun position, map tiles in parallel.
   const tileFetcher = makeTileFetcher(ctx.env, url.origin);

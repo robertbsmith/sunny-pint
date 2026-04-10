@@ -56,14 +56,14 @@ async function loadAssets(
 
   const [tplRes, pubsRes] = await Promise.all([
     env.ASSETS.fetch(`${origin}/index.html`),
-    env.ASSETS.fetch(`${origin}/data/pubs.json`),
+    fetch("https://data.sunny-pint.co.uk/data/pubs-index.json"),
   ]);
 
   if (!tplRes.ok) {
     throw new Error(`Failed to load template: ${tplRes.status}`);
   }
   if (!pubsRes.ok) {
-    throw new Error(`Failed to load pubs.json: ${pubsRes.status}`);
+    throw new Error(`Failed to load pubs-index.json from R2: ${pubsRes.status}`);
   }
 
   const template = await tplRes.text();
