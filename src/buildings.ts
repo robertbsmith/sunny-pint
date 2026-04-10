@@ -35,9 +35,11 @@ const TILES_URL = `${DATA_BASE_URL}/buildings.pmtiles`;
 /** True if we're using a PMTiles archive instead of individual tile files. */
 const USE_PMTILES = TILES_URL.endsWith(".pmtiles");
 
-/** PMTiles instance — lazy-initialised on first tile request. */
-let pmtilesInstance: PMTiles | null = null;
-function getPMTiles(): PMTiles {
+/** PMTiles instance — lazy-initialised on first tile request.
+ *  Set to false if the archive is unavailable (404). */
+let pmtilesInstance: PMTiles | false | null = null;
+function getPMTiles(): PMTiles | null {
+  if (pmtilesInstance === false) return null; // known unavailable
   if (!pmtilesInstance) {
     pmtilesInstance = new PMTiles(TILES_URL);
   }
@@ -87,12 +89,25 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
   try {
     let data: ArrayBuffer;
     if (USE_PMTILES) {
-      const resp = await getPMTiles().getZxy(BUILDING_TILE_ZOOM, tx, ty);
-      if (!resp?.data) {
+      const pm = getPMTiles();
+      if (!pm) {
         tileCache.set(key, []);
         return [];
       }
-      data = resp.data;
+      try {
+        const resp = await pm.getZxy(BUILDING_TILE_ZOOM, tx, ty);
+        if (!resp?.data) {
+          tileCache.set(key, []);
+          return [];
+        }
+        data = resp.data;
+      } catch {
+        // PMTiles archive unavailable (404 or network error).
+        // Mark as unavailable so we don't retry every tile.
+        pmtilesInstance = false;
+        tileCache.set(key, []);
+        return [];
+      }
     } else {
       // Individual .pbf files (local dev fallback).
       const resp = await fetch(`${TILES_URL}/${key}.pbf`);

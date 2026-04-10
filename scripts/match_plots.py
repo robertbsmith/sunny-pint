@@ -605,7 +605,7 @@ def main():
 
     # Fields for the slim index (everything the pub list + search needs).
     INDEX_FIELDS = {
-        "name", "lat", "lng", "slug", "town", "country",
+        "id", "name", "lat", "lng", "slug", "town", "country",
         "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
     }
     # Heavy fields that go in detail chunks (loaded on pub selection).
