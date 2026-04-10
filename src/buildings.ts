@@ -20,10 +20,13 @@ import type { Building, Pub } from "./types";
 const tileCache = new Map<string, Building[]>();
 
 /** Base URL for data files (shared with main.ts). R2 in production,
- *  local public/ dir in dev. */
+ *  local public/ dir in dev. Guarded for Workers environment (no document). */
 const DATA_BASE_URL = (() => {
-  const meta = document.querySelector('meta[name="data-url"]');
-  return meta?.getAttribute("content") || "/data";
+  if (typeof document !== "undefined") {
+    const meta = document.querySelector('meta[name="data-url"]');
+    return meta?.getAttribute("content") || "/data";
+  }
+  return "/data";
 })();
 
 /** URL for the building tiles PMTiles archive (or directory of .pbf files). */
