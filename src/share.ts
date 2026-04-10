@@ -218,42 +218,50 @@ export async function shareSnapshot(): Promise<void> {
   ctx.fillText(`sunny-pint.co.uk/pub/${pub.slug ?? ""}`, W - PAD, FOOTER_TEXT_TOP + 4);
 
   // ── Convert and share ───────────────────────────────────────────────
+  // Use JPEG for smaller file size (~500 KB vs ~5 MB PNG). Most share
+  // targets handle JPEG fine and some silently reject large files.
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/png");
+    canvas.toBlob(resolve, "image/jpeg", 0.92);
   });
   if (!blob) {
     console.warn("[share] toBlob returned null — falling back to dialog");
     return;
   }
 
-  const filename = `sunny-pint-${pub.slug ?? pub.name.toLowerCase().replace(/\s+/g, "-")}.png`;
-  const file = new File([blob], filename, { type: "image/png", lastModified: Date.now() });
+  const filename = `sunny-pint-${pub.slug ?? pub.name.toLowerCase().replace(/\s+/g, "-")}.jpg`;
+  const file = new File([blob], filename, { type: "image/jpeg", lastModified: Date.now() });
 
   const shareText = buildShareText(pub, tier);
   const shareUrl = pub.slug ? `${window.location.origin}/pub/${pub.slug}/` : window.location.href;
 
   if (navigator.share) {
+    // Try sharing the image file directly. Two platform quirks:
+    //
+    // 1. iOS Safari historically drops files when text/title are also
+    //    present in the share data — only the text gets shared. Safest
+    //    to share {files} alone. The share text + URL are baked into
+    //    the card footer so nothing is lost visually.
+    //
+    // 2. WhatsApp drops images when it detects a URL in the text body,
+    //    switching to link-preview mode instead. Sharing files-only
+    //    sidesteps this too.
+    //
+    // Skip canShare() — it returns false on iOS even when sharing works.
     try {
-      const filePayload = { files: [file], title: "Sunny Pint", text: shareText };
-      if (navigator.canShare?.(filePayload)) {
-        // Critical WhatsApp quirk: WhatsApp's Android share receiver
-        // scans the text body for URLs and, if it finds one, routes the
-        // intent to its link-preview composer — silently DROPPING the
-        // image file. So when sharing a file we must keep the text body
-        // URL-free. The pub URL is already baked into the share card
-        // footer (it's drawn as the bottom-right text), so users still
-        // see it on the image itself. Forwarding the WhatsApp message
-        // afterwards preserves the image.
-        await navigator.share(filePayload);
-        return;
-      }
-      // Fallback path: target doesn't accept files at all (rare). Send
-      // text + url only — link card is still better than nothing.
+      await navigator.share({ files: [file] });
+      return;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      // File share rejected — fall back to text + URL.
+      console.warn("[share] file share failed, falling back to text+url", err);
+    }
+
+    try {
       await navigator.share({ text: shareText, url: shareUrl });
       return;
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      console.warn("[share] navigator.share failed", err);
+      console.warn("[share] text share failed", err);
     }
   }
 
