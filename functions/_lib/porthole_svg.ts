@@ -82,16 +82,22 @@ const tileFetchCache = new Map<string, Promise<string | null>>();
  * level so multiple pubs in the same neighbourhood share fetches. Returns
  * null on 404 / network error so the porthole still renders without tiles.
  */
-async function fetchTileDataUri(z: number, x: number, y: number): Promise<string | null> {
+async function fetchTileDataUri(
+  z: number,
+  x: number,
+  y: number,
+  stadiaApiKey?: string,
+): Promise<string | null> {
   const key = `${z}_${x}_${y}`;
   const existing = tileFetchCache.get(key);
   if (existing) return existing;
 
   const promise = (async () => {
     try {
-      const url = TILE_URL.replace("{z}", String(z))
+      let url = TILE_URL.replace("{z}", String(z))
         .replace("{x}", String(x))
         .replace("{y}", String(y));
+      if (stadiaApiKey) url += `?api_key=${stadiaApiKey}`;
       const resp = await fetch(url);
       if (!resp.ok) return null;
       const buf = await resp.arrayBuffer();
@@ -113,7 +119,10 @@ async function fetchTileDataUri(z: number, x: number, y: number): Promise<string
  * Pre-fetch every map tile a porthole needs for the given pub. Call this
  * before `renderPortholeSvg` so the renderer can run synchronously.
  */
-export async function prefetchPortholeTiles(pub: Pub): Promise<Map<string, string>> {
+export async function prefetchPortholeTiles(
+  pub: Pub,
+  stadiaApiKey?: string,
+): Promise<Map<string, string>> {
   const centre = { lat: pub.clat ?? pub.lat, lng: pub.clng ?? pub.lng };
   const { tx, ty } = lngLatToTile(centre.lng, centre.lat, TILE_ZOOM);
   const cache = new Map<string, string>();
@@ -125,7 +134,7 @@ export async function prefetchPortholeTiles(pub: Pub): Promise<Map<string, strin
       const x = tx + dx;
       const y = ty + dy;
       fetches.push(
-        fetchTileDataUri(z, x, y).then((uri) => {
+        fetchTileDataUri(z, x, y, stadiaApiKey).then((uri) => {
           if (uri) cache.set(`${z}_${x}_${y}`, uri);
         }),
       );

@@ -17,7 +17,7 @@
  *   GET /og/pub/no-such-pub     → 404
  */
 
-import { Resvg, initWasm } from "@resvg/resvg-wasm";
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
 // @ts-expect-error — WASM import handled by wrangler's asset bundler
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
 
@@ -46,6 +46,7 @@ import { bestWindowSunPosition, prefetchPortholeTiles } from "../../_lib/porthol
 
 interface Env {
   ASSETS: Fetcher;
+  STADIA_API_KEY?: string;
 }
 
 // ── Module-scope cache ───────────────────────────────────────────────────
@@ -140,7 +141,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   const [buildings, tileCache] = await Promise.all([
     loadBuildingsForPubAsync(pub, tileFetcher),
-    prefetchPortholeTiles(pub),
+    prefetchPortholeTiles(pub, ctx.env.STADIA_API_KEY),
   ]);
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });
