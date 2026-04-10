@@ -40,8 +40,12 @@ def get_stage_inputs(stage: str) -> list[Path]:
         gmls = sorted((DATA_DIR / "inspire").glob("*.gml"))
         return gmls[:5] + gmls[-5:]  # sample for quick hash
     if stage == "enrich":
+        # Accept v1 (pubs_merged.json) or v2 (pubs_extracted.json).
+        pubs_file = DATA_DIR / "pubs_extracted.json"
+        if not pubs_file.exists():
+            pubs_file = DATA_DIR / "pubs_merged.json"
         return [
-            DATA_DIR / "pubs_extracted.json",
+            pubs_file,
             DATA_DIR / "buildings.gpkg",
             DATA_DIR / "inspire.gpkg",
         ]

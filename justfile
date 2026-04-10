@@ -175,6 +175,10 @@ precompute-sun:
 render-og:
     pnpm tsx scripts/render_og_cards.ts
 
+# Download Scottish INSPIRE cadastral parcels from Registers of Scotland
+download-inspire-scotland:
+    uv run --project scripts python scripts/download_inspire_scotland.py
+
 # Download EA LiDAR DSM + DTM tiles for Norwich area
 download-lidar:
     uv run --project scripts python scripts/download_lidar.py

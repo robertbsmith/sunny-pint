@@ -40,6 +40,7 @@ DETAIL_DIR = PUBLIC_DATA / "detail"
 SLUG_LOCK = DATA / "slug_lock.json"
 INSPIRE_DIR = DATA / "inspire"
 INSPIRE_GPKG = DATA / "inspire.gpkg"
+SCOTLAND_GPKG = DATA / "scotland_parcels.gpkg"
 GPKG_PATH = DATA / "buildings.gpkg"
 
 to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True)
@@ -193,8 +194,18 @@ def load_parcels_near_pubs(pubs: list[dict], area_name: str | None = None) -> tu
     pub_tree = STRtree(pub_points_osgb)
     BUF = 50
 
-    if INSPIRE_GPKG.exists():
-        return _load_from_gpkg(pub_points_osgb, pub_tree, BUF)
+    if INSPIRE_GPKG.exists() or SCOTLAND_GPKG.exists():
+        # Load from both INSPIRE (England+Wales) and Scotland GPKGs.
+        result = _load_from_gpkg(pub_points_osgb, pub_tree, BUF) if INSPIRE_GPKG.exists() else None
+        scot_result = _load_from_gpkg(pub_points_osgb, pub_tree, BUF, gpkg_path=SCOTLAND_GPKG) if SCOTLAND_GPKG.exists() else None
+
+        if result and scot_result:
+            # Merge both parcel sets.
+            parcels = list(result[1]) + list(scot_result[1])
+            parcel_las = list(result[2]) + list(scot_result[2])
+            print(f"  Merged: {len(result[1]):,} INSPIRE + {len(scot_result[1]):,} Scotland = {len(parcels):,} parcels")
+            return STRtree(parcels), parcels, parcel_las
+        return result or scot_result
 
     # Fast path: load specific GML files for known areas.
     area_key = (area_name or "").lower()
@@ -247,15 +258,13 @@ def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
     return STRtree(parcels), parcels, parcel_las
 
 
-def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
-    """Load parcels from the INSPIRE GeoPackage using R-tree spatial queries.
+def _load_from_gpkg(pub_points_osgb, pub_tree, buf, gpkg_path=None):
+    """Load parcels from a GeoPackage (INSPIRE or Scotland) using R-tree.
 
     Returns (STRtree, parcels, parcel_las) where parcel_las is parallel to
     parcels and contains the local_authority value from each parcel row.
-    Older GeoPackages built before the local_authority column was added will
-    return None for every entry — match_plots.py will warn the user to
-    rebuild.
     """
+    gpkg_path = gpkg_path or INSPIRE_GPKG
     import sqlite3 as _sqlite3
 
     # Query parcels near each pub using the GeoPackage R-tree index.
@@ -266,7 +275,8 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
     min_y, max_y = min(pub_ys) - buf, max(pub_ys) + buf
     print(f"  Querying INSPIRE GeoPackage for parcels in pub area...", flush=True)
 
-    conn = _sqlite3.connect(str(INSPIRE_GPKG))
+    print(f"  Loading parcels from {gpkg_path.name}...")
+    conn = _sqlite3.connect(str(gpkg_path))
 
     # Detect whether this gpkg has the local_authority column. Older builds
     # (before build_inspire_gpkg.py started recording it) won't have it.

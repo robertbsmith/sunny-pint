@@ -64,7 +64,9 @@ from measure_heights import fetch_ndsm as _fetch_ndsm_wcs
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
 INSPIRE_GPKG = DATA_DIR / "inspire.gpkg"
+# Accept both v2 filename (pubs_extracted.json) and v1 (pubs_merged.json).
 PUBS_PATH = DATA_DIR / "pubs_extracted.json"
+PUBS_PATH_V1 = DATA_DIR / "pubs_merged.json"
 ENRICHED_PATH = DATA_DIR / "pubs_enriched.json"
 
 # Constants.
@@ -578,11 +580,13 @@ def run(area) -> dict:
     """Run the ENRICH stage. Returns stats dict."""
     from areas import in_bbox
 
-    if not PUBS_PATH.exists():
-        raise FileNotFoundError(f"{PUBS_PATH} not found — run extract first")
+    pubs_file = PUBS_PATH if PUBS_PATH.exists() else PUBS_PATH_V1
+    if not pubs_file.exists():
+        raise FileNotFoundError(f"Neither {PUBS_PATH} nor {PUBS_PATH_V1} found — run extract first")
 
     # Load pubs.
-    all_pubs = json.loads(PUBS_PATH.read_text())
+    print(f"  Reading pubs from {pubs_file.name}")
+    all_pubs = json.loads(pubs_file.read_text())
     # If enriched file exists, merge existing enrichments.
     if ENRICHED_PATH.exists():
         enriched = json.loads(ENRICHED_PATH.read_text())
