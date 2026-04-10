@@ -37,8 +37,15 @@ import {
 import { getWeather, weatherEmoji, weatherLabel } from "./weather";
 import { maybeShowWelcome } from "./welcome";
 
+/** Base URL for data files. In production, served from R2 via custom
+ *  domain. In dev, falls back to Vite's local public/ dir. */
+const DATA_BASE_URL = (() => {
+  const meta = document.querySelector('meta[name="data-url"]');
+  return meta?.getAttribute("content") || "/data";
+})();
+
 async function loadPubs(): Promise<void> {
-  const resp = await fetch("/data/pubs.json");
+  const resp = await fetch(`${DATA_BASE_URL}/pubs.json`);
   const pubs: Pub[] = await resp.json();
   state.pubs = pubs;
 }

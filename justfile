@@ -22,8 +22,12 @@ build:
 generate-pages:
     pnpm tsx scripts/generate_pages.ts
 
-# Full release: build the SPA, then generate the SEO landing pages on top.
+# Full release: build the SPA, generate SEO landing pages, strip data
+# files that are served from R2 (pubs.json + tiles exceed CF Pages limits).
 release: build generate-pages
+    rm -rf dist/data/tiles dist/data/buildings.pmtiles
+    rm -f dist/data/pubs.json
+    @echo "Stripped R2-hosted data from dist/"
 
 # Local Cloudflare Pages dev — serves dist/ AND the per-pub Pages Function on
 # http://localhost:8788, identical to production. Use this instead of

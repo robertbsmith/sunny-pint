@@ -19,13 +19,15 @@ import type { Building, Pub } from "./types";
 
 const tileCache = new Map<string, Building[]>();
 
-/** Data URL for building tiles. PMTiles on R2 in production, individual
- *  .pbf files in local dev. Set via <meta name="tiles-url"> or falls back
- *  to the R2 bucket. */
-const TILES_URL = (() => {
-  const meta = document.querySelector('meta[name="tiles-url"]');
-  return meta?.getAttribute("content") || "/data/tiles/buildings.pmtiles";
+/** Base URL for data files (shared with main.ts). R2 in production,
+ *  local public/ dir in dev. */
+const DATA_BASE_URL = (() => {
+  const meta = document.querySelector('meta[name="data-url"]');
+  return meta?.getAttribute("content") || "/data";
 })();
+
+/** URL for the building tiles PMTiles archive (or directory of .pbf files). */
+const TILES_URL = `${DATA_BASE_URL}/buildings.pmtiles`;
 
 /** True if we're using a PMTiles archive instead of individual tile files. */
 const USE_PMTILES = TILES_URL.endsWith(".pmtiles");

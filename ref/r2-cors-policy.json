@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://sunny-pint.co.uk",
+      "https://www.sunny-pint.co.uk"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["Range", "If-None-Match"],
+    "ExposeHeaders": ["Content-Length", "Content-Range", "ETag"],
+    "MaxAgeSeconds": 86400
+  }
+]
