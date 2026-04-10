@@ -38,8 +38,8 @@ const R2_DATA_URL = "https://data.sunny-pint.co.uk/data";
 
 async function loadPubs(env: Env, origin: string): Promise<Map<string, Pub>> {
   if (cachedIndex) return cachedIndex;
-  const res = await env.ASSETS.fetch(`${origin}/data/pubs-index.json`);
-  if (!res.ok) throw new Error(`Failed to load pubs-index.json: ${res.status}`);
+  const res = await fetch(`${R2_DATA_URL}/pubs-index.json`);
+  if (!res.ok) throw new Error(`Failed to load pubs-index.json from R2: ${res.status}`);
   const pubs = (await res.json()) as Pub[];
   const index = new Map<string, Pub>();
   for (const p of pubs) {
