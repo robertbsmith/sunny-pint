@@ -2,6 +2,8 @@ name = "sunny-pint-email"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
+# DESTINATION_EMAIL must be set via `wrangler secret put DESTINATION_EMAIL`
+# It should be the verified destination address from Email Routing.
+
 [[send_email]]
 name = "SEB"
-destination_address = "hello@sunny-pint.co.uk"

@@ -11,6 +11,7 @@ import { createMimeMessage } from "mimetext/browser";
 
 interface Env {
   SEB: SendEmail;
+  DESTINATION_EMAIL: string;
 }
 
 interface ContactPayload {
@@ -66,16 +67,22 @@ export default {
 
     const mime = createMimeMessage();
     mime.setSender({ name: "Sunny Pint", addr: "noreply@sunny-pint.co.uk" });
-    mime.setRecipient("hello@sunny-pint.co.uk");
-    if (email) mime.setHeader("Reply-To", { addr: email, name });
+    mime.setRecipient(env.DESTINATION_EMAIL);
+    // Reply-To is already visible in the body text. mimetext's setHeader
+    // rejects the Reply-To key, so we set it directly on the raw MIME output
+    // after building the message.
     mime.setSubject(subject);
     mime.addMessage({ contentType: "text/plain", data: body });
 
     try {
+      let raw = mime.asRaw();
+      if (email) {
+        raw = raw.replace("\r\nSubject:", `\r\nReply-To: ${email}\r\nSubject:`);
+      }
       const msg = new EmailMessage(
         "noreply@sunny-pint.co.uk",
-        "hello@sunny-pint.co.uk",
-        mime.asRaw(),
+        env.DESTINATION_EMAIL,
+        raw,
       );
       await env.SEB.send(msg);
     } catch (e) {
