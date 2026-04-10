@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy — Sunny Pint</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon-192-v2.png" />
+  <link rel="stylesheet" href="/docs.css" />
+  <script src="/docs.js"></script>
+</head>
+<body>
+  <main class="article">
+    <a class="back-link" href="/">&larr; Back to Sunny Pint</a>
+    <h1>Privacy</h1>
+    <p>Sunny Pint is a static site with no backend, no accounts, and no tracking. This page explains what happens when you use it.</p>
+
+    <h2>What we don't do</h2>
+    <ul>
+      <li>We don't set cookies</li>
+      <li>We don't track you across sessions</li>
+      <li>We don't collect personal information</li>
+      <li>We don't run ads or share data with advertisers</li>
+      <li>We don't have a database of users</li>
+    </ul>
+
+    <h2>Analytics</h2>
+    <p>We use <a href="https://www.cloudflare.com/web-analytics/">Cloudflare Web Analytics</a> to see how many people visit the site. It counts page views without using cookies or collecting personal data. We can see aggregates (e.g. "200 people visited today") but cannot identify individual visitors.</p>
+
+    <h2>Location</h2>
+    <p>If you tap the location button, your browser asks for permission before sharing your GPS coordinates. These are used entirely within your browser to sort pubs by distance and to look up your place name via <a href="https://nominatim.openstreetmap.org/">Nominatim</a> (OpenStreetMap's geocoding service). Your coordinates are never sent to Sunny Pint servers because there are none.</p>
+
+    <h2>External services</h2>
+    <p>Your browser makes requests to these third-party services as part of normal use:</p>
+    <table>
+      <thead>
+        <tr><th>Service</th><th>What for</th><th>Data sent</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><a href="https://carto.com/">CARTO</a></td><td>Map tiles</td><td>Map coordinates only</td></tr>
+        <tr><td><a href="https://open-meteo.com/">Open-Meteo</a></td><td>Cloud cover</td><td>Pub's coordinates</td></tr>
+        <tr><td><a href="https://nominatim.openstreetmap.org/">Nominatim</a></td><td>Place names</td><td>Coordinates or search text</td></tr>
+        <tr><td><a href="https://azgaar.github.io/Armoria/">Armoria</a></td><td>Pub sign heraldry</td><td>Pub name</td></tr>
+      </tbody>
+    </table>
+    <p>These services receive standard HTTP request data (your IP address, browser type) as part of any web request. None of them receive your identity or any personal information from Sunny Pint.</p>
+
+    <h2>Local storage</h2>
+    <p>Your browser stores a few preferences locally on your device (theme, sort order, last location). This data never leaves your device and you can clear it at any time via your browser settings.</p>
+
+    <h2>Hosting</h2>
+    <p>The site is hosted on <a href="https://pages.cloudflare.com/">Cloudflare Pages</a>. Cloudflare processes requests to serve the site and may temporarily log IP addresses as part of their infrastructure. See <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare's privacy policy</a>.</p>
+
+    <h2>Contact</h2>
+    <p>Questions? Open an issue on <a href="https://github.com/robertbsmith/sunny-pint">GitHub</a>.</p>
+  </main>
+</body>
+</html>
