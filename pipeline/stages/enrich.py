@@ -651,14 +651,17 @@ def run(area) -> dict:
     pubs_to_process = []
     skipped = 0
     for i, pub in area_pubs:
-        h = _pub_hash(pub)
         pub_id = pub.get("id") or pub.get("osm_id")
-        already_processed = pub_id in prev_ids
-        source_changed = pub.get("_enrich_hash") != h
-        if already_processed and not source_changed:
-            skipped += 1
-            continue
-        pub["_enrich_hash"] = h
+        if pub_id in prev_ids:
+            # Already processed in a previous run. Only re-process if
+            # source data actually changed (hash mismatch). On the first
+            # v2 run after v1 migration, no hashes exist yet — skip anyway.
+            h = _pub_hash(pub)
+            prev_hash = pub.get("_enrich_hash")
+            if prev_hash is None or prev_hash == h:
+                skipped += 1
+                continue
+        pub["_enrich_hash"] = _pub_hash(pub)
         pubs_to_process.append((i, pub))
 
     print(f"  {skipped} pubs skipped (unchanged + already enriched)")
