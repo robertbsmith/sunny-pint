@@ -922,8 +922,9 @@ html.dark .sunny-badge--sunny {
 
 #porthole-controls {
   position: absolute;
-  right: 6px;
-  bottom: 50px;
+  right: -44px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -963,10 +964,6 @@ html.dark .sunny-badge--sunny {
   background: var(--primary);
   color: white;
   border-color: var(--primary);
-}
-
-.porthole-btn--rim[hidden] {
-  display: none;
 }
 
 .porthole-zoom {

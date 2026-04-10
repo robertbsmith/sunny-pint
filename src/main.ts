@@ -140,7 +140,7 @@ function initPortholeControls(): void {
     if (zoomIn) (zoomIn as HTMLButtonElement).disabled = state.zoomStep >= 4;
     if (zoomOut) (zoomOut as HTMLButtonElement).disabled = state.zoomStep <= 1;
     const panned = state.panX !== 0 || state.panY !== 0;
-    if (resetBtn) (resetBtn as HTMLElement).hidden = !panned;
+    if (resetBtn) (resetBtn as HTMLButtonElement).disabled = !panned;
   }
 }
 
