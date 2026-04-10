@@ -22,6 +22,23 @@ import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
 
 let wasmInitialized = false;
+let cachedFonts: Uint8Array[] | null = null;
+
+const R2_FONTS_URL = "https://data.sunny-pint.co.uk/fonts";
+const FONT_FILES = ["Inter-Bold.ttf", "Inter-Regular.ttf", "CrimsonText-Regular.ttf"];
+
+async function loadFonts(): Promise<Uint8Array[]> {
+  if (cachedFonts) return cachedFonts;
+  const buffers = await Promise.all(
+    FONT_FILES.map(async (name) => {
+      const res = await fetch(`${R2_FONTS_URL}/${name}`);
+      return new Uint8Array(await res.arrayBuffer());
+    }),
+  );
+  cachedFonts = buffers;
+  return buffers;
+}
+
 import type { Pub } from "../../../src/types";
 import { loadBuildingsForPubAsync, type TileFetcher } from "../../_lib/buildings_async";
 import { renderOgCard } from "../../_lib/og_card";
@@ -128,14 +145,21 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });
 
-  // Initialize resvg WASM on first invocation (persists across warm requests).
+  // Initialize resvg WASM + load fonts on first invocation (persists across warm requests).
   if (!wasmInitialized) {
     await initWasm(resvgWasm);
     wasmInitialized = true;
   }
+  const fonts = await loadFonts();
 
-  // Convert SVG → PNG so social platforms can render the preview.
-  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } });
+  // Convert SVG → PNG with fonts so text renders correctly.
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: 1200 },
+    font: {
+      fontBuffers: fonts,
+      defaultFontFamily: "Inter",
+    },
+  });
   const pngData = resvg.render();
   const pngBuffer = pngData.asPng();
 
