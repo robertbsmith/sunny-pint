@@ -545,12 +545,16 @@ def process_tile(
     tn: int,
     gpkg_path: str,
     existing_fids: set[int],
+    pubs_osgb_in_tile: list[tuple[float, float]] | None = None,
 ):
     """Worker: load buildings for an OSGB tile, fetch LiDAR, sample heights.
 
     Runs in a thread pool. Each call opens its own read-only sqlite
     connection (sqlite handles concurrent readers fine). DB writes happen
     in the main thread to keep the writer single.
+
+    If pubs_osgb_in_tile is provided, buildings further than 300m from any
+    pub in the list are skipped (same optimisation as the bundle path).
 
     Returns dict: te, tn, n_buildings, height_updates, elev_updates,
     measured, fallback, status ("ok"/"no_lidar"/"empty").
@@ -564,6 +568,19 @@ def process_tile(
         conn.close()
 
     tile_buildings = [b for b in tile_buildings if b[0] not in existing_fids]
+
+    # 300m-from-pub filter — same as the bundle path.
+    if pubs_osgb_in_tile:
+        filtered = []
+        for item in tile_buildings:
+            _, poly, _, _ = item
+            cx, cy = poly.centroid.x, poly.centroid.y
+            for pe, pn in pubs_osgb_in_tile:
+                if (cx - pe) ** 2 + (cy - pn) ** 2 <= SHADOW_RADIUS_SQ:
+                    filtered.append(item)
+                    break
+        tile_buildings = filtered
+
     if not tile_buildings:
         return {
             "te": te, "tn": tn, "n_buildings": 0,
@@ -1278,6 +1295,10 @@ def run_wcs_phase(conn: sqlite3.Connection, area: Area, gpkg_path_str: str) -> d
     print("Phase 2: WCS path (Wales/Scotland/gaps)")
     print("=" * 60)
 
+    # Pre-project pubs to OSGB for the 300m filter (same as bundle phase).
+    pubs = _load_pubs(area)
+    all_pubs_osgb = [to_osgb.transform(p["lng"], p["lat"]) for p in pubs]
+
     print("Finding tiles near pubs that still need heights...", flush=True)
     pub_tiles = find_pub_tiles(area)
     if not pub_tiles:
@@ -1294,6 +1315,20 @@ def run_wcs_phase(conn: sqlite3.Connection, area: Area, gpkg_path_str: str) -> d
         ).fetchall()
     }
     print(f"  {len(existing_fids)} buildings already have heights (will be skipped)")
+
+    # Pre-compute per-tile pub lists for the 300m filter.
+    # Each tile gets only pubs whose OSGB centroid is within (tile + 300m).
+    tile_pubs: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    for te, tn in pub_tiles:
+        local = [
+            (pe, pn) for (pe, pn) in all_pubs_osgb
+            if te - SHADOW_RADIUS_M <= pe <= te + TILE_SIZE_M + SHADOW_RADIUS_M
+            and tn - SHADOW_RADIUS_M <= pn <= tn + TILE_SIZE_M + SHADOW_RADIUS_M
+        ]
+        tile_pubs[(te, tn)] = local
+    # Drop tiles with zero nearby pubs (can happen due to tile grid rounding).
+    pub_tiles = {k for k in pub_tiles if tile_pubs.get(k)}
+    print(f"  {len(pub_tiles)} tiles have pubs within {SHADOW_RADIUS_M}m")
     print()
 
     stats = {
@@ -1315,7 +1350,7 @@ def run_wcs_phase(conn: sqlite3.Connection, area: Area, gpkg_path_str: str) -> d
 
     with ThreadPoolExecutor(max_workers=WCS_WORKERS) as ex:
         futures = {
-            ex.submit(process_tile, te, tn, gpkg_path_str, existing_fids): (te, tn)
+            ex.submit(process_tile, te, tn, gpkg_path_str, existing_fids, tile_pubs[(te, tn)]): (te, tn)
             for te, tn in sorted_tiles
         }
         for future in as_completed(futures):
