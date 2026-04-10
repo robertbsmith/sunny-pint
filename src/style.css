@@ -920,18 +920,30 @@ html.dark .sunny-badge--sunny {
 
 /* ── Porthole controls (satellite + zoom) ────────────────────────── */
 
-#porthole-controls {
+#porthole-controls-left,
+#porthole-controls-right {
+  position: absolute;
+  bottom: 4px;
   display: flex;
   align-items: center;
   gap: 4px;
+  z-index: 5;
+}
+
+#porthole-controls-left {
+  left: 4px;
+}
+
+#porthole-controls-right {
+  right: 4px;
 }
 
 .porthole-btn--rim {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius-md);
   background: var(--surface-container);
@@ -976,7 +988,7 @@ html.dark .sunny-badge--sunny {
   box-shadow: none;
   border-radius: 0;
   width: 30px;
-  height: 28px;
+  height: 26px;
 }
 
 .porthole-zoom .porthole-btn--rim:first-child {
