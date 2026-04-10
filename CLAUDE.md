@@ -57,6 +57,7 @@ Key modules (see `.claude/rules/frontend.md` for full list):
 ### Data Pipeline (`scripts/`)
 - `merge_pubs.py` — OSM .pbf → pub list (`data/pubs_merged.json`)
 - `download_inspire.py` — bulk download all INSPIRE GML files (318 local authorities)
+- `download_inspire_scotland.py` — ROS INSPIRE shapefiles (33 counties) → `scotland_parcels.gpkg`
 - `build_inspire_gpkg.py` — index downloaded GML files into a spatial GeoPackage
 - `build_gpkg.py` — OSM .pbf → GeoPackage with buildings (streaming, no OOM)
 - `measure_heights.py` — LiDAR DSM/DTM → building heights
@@ -64,8 +65,14 @@ Key modules (see `.claude/rules/frontend.md` for full list):
 - `compute_horizons.py` — terrain horizon profiles from DTM for each pub
 - `generate_tiles.py` — GeoPackage → PMTiles archive (buildings.pmtiles)
 - `precompute_sun.ts` — simulate sun path on equinox → Sunny Rating per pub
+- `render_og_cards.ts` — pre-render OG card JPEGs for all pubs → `public/data/og/`
 - `generate_pages.ts` — build-time SEO landing pages (city, theme, sitemap)
 - `areas.py` — shared `--area` flag (norwich/bristol/london/uk)
+
+**Critical pipeline order**: match_plots writes `pubs.json` (with slugs, towns, outdoor areas), then precompute_sun reads and writes sun scores back to it. The split files (pubs-index.json + detail chunks) must be regenerated AFTER precompute_sun. The correct sequence is:
+```
+measure_heights → compute_horizons → match_plots → generate_tiles → precompute_sun → regenerate splits → render_og_cards → deploy_data
+```
 
 ### Data Serving
 - **Cloudflare R2** — bucket `sunny-pint-data`, domain `data.sunny-pint.co.uk`

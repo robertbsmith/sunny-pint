@@ -192,24 +192,60 @@ pipeline/
     progress.py       Progress tracking + JSON writer
 ```
 
+## Lessons learned from first UK run
+
+### v1→v2 migration
+- Seed `pubs_enriched.json` from v1's `pubs.json` before first v2 run
+- Pub IDs use the `id` field (e.g. `node_12345`), NOT `osm_id`
+- v1's `pubs_merged.json` lacks outdoor/slug/town — those are only in `pubs.json`
+- `_enrich_hash` doesn't exist in v1 data — skip logic must handle missing hashes
+
+### Manifest gotchas
+- Manifest keys by stage:area (e.g. `enrich:UK`) — different areas don't skip each other
+- A broken run that completes with 0 work still records in manifest → must clear stale entries
+- Use `--force` sparingly — prefer deleting the specific manifest entry
+
+### Skip logic
+- "Pub is enriched" = has ANY enrichment field (elev, horizon, outdoor, local_authority)
+- A pub written to enriched output during a killed run exists by ID but has no data — must check fields, not just ID presence
+- English pubs processed by v1 should skip even without `_enrich_hash`
+
+### LiDAR routing
+- `fetch_ndsm` must route by OSGB coordinates BEFORE trying EA WCS
+- Scottish coords → JNCC WCS directly (northing >540k)
+- Welsh coords → NRW COG directly (easting <340k)
+- EA WCS returns 500 for non-England coords — ~8s wasted per failed request
+
+### Data dependencies
+- match_plots writes pubs.json with slugs + towns (needed for SEO pages)
+- precompute_sun writes sun scores back to the same pubs.json
+- Split files (index + detail chunks) must be generated AFTER precompute_sun
+- OG card pre-render needs both sun scores AND building tiles
+
 ## Migration
 
 Pipeline v2 reads/writes the same data files as v1:
 - data/buildings.gpkg
-- data/pubs_merged.json (renamed pubs_enriched.json internally)
-- data/inspire.gpkg
-- public/data/pubs.json
+- data/pubs_merged.json (read by v2 as input)
+- data/pubs_enriched.json (v2's output — carries forward enrichments)
+- data/inspire.gpkg + data/scotland_parcels.gpkg
+- public/data/pubs.json (final output with all fields)
 - public/data/buildings.pmtiles
 
-So v1 and v2 can coexist. Run v2, check outputs match, then delete v1
-scripts when confident.
+v1 and v2 coexist. v2 ENRICH reads pubs_merged.json and writes
+pubs_enriched.json. v1's match_plots still needed for slug generation
+and split file output until PACKAGE stage is fully implemented.
 
-## Estimated times
+## Estimated times (actual, measured)
 
-| Scenario | v1 | v2 |
-|----------|----|----|
-| Full UK first run | ~16h | ~10h (LiDAR pass halved) |
-| Weekly OSM refresh (~1% pubs changed) | ~8h | ~30min (skip 99% of enrichment + scoring) |
-| INSPIRE refresh | ~4h | ~2h (only re-enrich parcels, keep heights) |
-| Code tweak to sun scoring | ~3h | ~3h (score stage only, but with skip logic ~20min if outdoor unchanged) |
-| Nothing changed | ~2h (downloads + skips) | ~10s (manifest check, all skipped) |
+| Scenario | Time |
+|----------|------|
+| Full UK first run (v1) | ~12h (9h heights + 3h horizons) |
+| Full UK enrich (v2, England done) | ~2h (Scotland+Wales only) |
+| Scotland+Wales enrich only | ~2h (4,736 pubs via WCS/COG) |
+| generate_tiles | ~30 min |
+| precompute_sun (12 workers) | ~5 min |
+| OG card pre-render (8 workers) | ~18 min |
+| OG upload to R2 (boto3) | ~6 min |
+| Detail chunk upload (boto3) | ~30s |
+| Nothing changed | ~7s (manifest skip) |
