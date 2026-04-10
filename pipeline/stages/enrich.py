@@ -668,9 +668,46 @@ def run(area) -> dict:
         ENRICHED_PATH.write_text(json.dumps(all_pubs, indent=2))
         return {"pubs_enriched": 0, "pubs_skipped": skipped}
 
-    # Load INSPIRE parcels.
-    pubs_osgb = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_to_process]
-    parcel_tree, all_parcels, all_parcel_las = _load_parcels(pubs_osgb)
+    # Load parcels — but only scan GPKGs that are relevant to the pubs
+    # needing work. Split by rough geography to keep R-tree bboxes tight
+    # (a combined Scotland+Wales bbox spans most of England → 24M scans).
+    SCOTLAND_LAT_THRESHOLD = 55.3  # rough border
+    pubs_scotland = [(i, p) for i, p in pubs_to_process if p["lat"] > SCOTLAND_LAT_THRESHOLD]
+    pubs_south = [(i, p) for i, p in pubs_to_process if p["lat"] <= SCOTLAND_LAT_THRESHOLD]
+
+    all_parcels_list: list = []
+    all_las_list: list[str | None] = []
+
+    if pubs_south and INSPIRE_GPKG.exists():
+        osgb_south = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_south]
+        print(f"  Loading INSPIRE parcels for {len(pubs_south)} England/Wales pubs...")
+        p, l, s = _load_parcels_from_gpkg(
+            INSPIRE_GPKG,
+            STRtree([Point(x, y) for x, y in osgb_south]),
+            min(x for x, y in osgb_south) - 50, max(x for x, y in osgb_south) + 50,
+            min(y for x, y in osgb_south) - 50, max(y for x, y in osgb_south) + 50,
+        )
+        all_parcels_list.extend(p)
+        all_las_list.extend(l)
+        print(f"    {len(p):,} INSPIRE parcels kept")
+
+    if pubs_scotland and SCOTLAND_GPKG.exists():
+        osgb_scot = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_scotland]
+        print(f"  Loading Scotland parcels for {len(pubs_scotland)} Scottish pubs...")
+        p, l, s = _load_parcels_from_gpkg(
+            SCOTLAND_GPKG,
+            STRtree([Point(x, y) for x, y in osgb_scot]),
+            min(x for x, y in osgb_scot) - 50, max(x for x, y in osgb_scot) + 50,
+            min(y for x, y in osgb_scot) - 50, max(y for x, y in osgb_scot) + 50,
+        )
+        all_parcels_list.extend(p)
+        all_las_list.extend(l)
+        print(f"    {len(p):,} Scotland parcels kept")
+
+    parcel_tree = STRtree(all_parcels_list) if all_parcels_list else None
+    all_parcels = all_parcels_list if all_parcels_list else None
+    all_parcel_las = all_las_list if all_las_list else None
+    print(f"  {len(all_parcels_list):,} total parcels loaded")
 
     # Discover DTM+DSM bundles.
     print("\n  Discovering LiDAR bundles...")
