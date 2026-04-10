@@ -41,9 +41,10 @@
          off the time-to-first-pub-render on a cold load. -->
     <link rel="preload" href="/data/pubs.json" as="fetch" type="application/json" crossorigin />
 
-    <!-- Preload the Stadia Maps tile host so the porthole's first tile fetch
+    <!-- Preconnect to tile hosts so the porthole's first tile fetch
          skips the DNS + TLS handshake. -->
-    <link rel="preconnect" href="https://tiles.stadiamaps.com" crossorigin />
+    <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin />
+    <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin />
 
     <!-- Structured data: WebSite + SearchAction so Google can show a
          sitelinks search box. -->

@@ -1,7 +1,7 @@
 /**
  * Map tile loader for the porthole basemap.
  *
- * Fetches and caches Stadia Maps raster tiles for use as a Canvas 2D
+ * Fetches and caches raster map tiles for use as a Canvas 2D
  * background. Supports both normal and satellite tile sets with separate
  * caches. Tile loads schedule a single deferred re-render via
  * requestAnimationFrame to avoid render storms when many tiles arrive.
