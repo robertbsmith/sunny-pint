@@ -172,7 +172,7 @@ function render404(template: string): string {
 
 // ── Main ─────────────────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const templatePath = join(DIST, "index.html");
 
   let template: string;
@@ -184,11 +184,27 @@ function main(): void {
   }
 
   let pubs: Pub[];
+  const INDEX_JSON = join(ROOT, "public", "data", "pubs-index.json");
+  const R2_INDEX_URL = "https://data.sunny-pint.co.uk/data/pubs-index.json";
   try {
+    // Prefer full pubs.json (local pipeline), fall back to slim index
+    // (local or R2). SEO pages only need name/slug/town/sun — all in the index.
     pubs = JSON.parse(readFileSync(PUBS_JSON, "utf-8")) as Pub[];
   } catch {
-    console.error(`ERROR: ${PUBS_JSON} not found. Run the data pipeline first.`);
-    process.exit(1);
+    try {
+      pubs = JSON.parse(readFileSync(INDEX_JSON, "utf-8")) as Pub[];
+    } catch {
+      // Neither local file exists (CI/CD build) — fetch index from R2.
+      console.log(`  Local pubs files not found, fetching from R2...`);
+      try {
+        const resp = await fetch(R2_INDEX_URL);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        pubs = (await resp.json()) as Pub[];
+      } catch (err) {
+        console.error(`ERROR: Could not load pub data from local files or R2: ${err}`);
+        process.exit(1);
+      }
+    }
   }
 
   console.log(`Loaded ${pubs.length} pubs from ${PUBS_JSON}`);
