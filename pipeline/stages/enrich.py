@@ -1,13 +1,16 @@
-"""Stage 3: ENRICH — per-5km-tile enrichment of pubs and buildings.
+"""Stage 3: ENRICH — per-tile enrichment of pubs and buildings.
 
-Downloads each LiDAR bundle ONCE and in a single pass:
+Two phases:
+  Phase 1 (England): Downloads 5km LZW bundles from the Defra survey
+    catalogue. Each bundle processed once for heights + horizons + parcels.
+  Phase 2 (Wales/Scotland): Falls back to per-1km WCS/COG fetchers for
+    pubs not covered by Defra bundles. Uses NRW COG (Wales) and JNCC WCS
+    (Scotland) — the same data sources as v1 measure_heights.
+
+Both phases perform a single pass:
   - Samples building heights (DSM - DTM)
   - Computes pub ground elevation + terrain horizon (DTM)
   - Matches pub to INSPIRE parcel + computes outdoor area
-
-This merges the v1 measure_heights + compute_horizons + match_plots
-into one parallel loop, eliminating redundant LiDAR downloads and
-multiple passes over the data.
 
 Idempotency: each pub's source data is hashed. If the hash matches a
 previous run and all enrichment fields are present, the pub is skipped.
@@ -52,6 +55,11 @@ from pipeline.utils.grid import (
     to_wgs,
 )
 from pipeline.utils.progress import eta_str, write_progress
+
+# Import WCS/COG fallback fetchers from v1 for Wales + Scotland.
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+from measure_heights import fetch_ndsm as _fetch_ndsm_wcs
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
@@ -621,7 +629,7 @@ def run(area) -> dict:
 
     # Assign pubs to bundles by 5km tile.
     tile_pub_map: dict[str, list[tuple[int, dict]]] = {tid: [] for tid in bundles}
-    unmatched = 0
+    unmatched_pubs: list[tuple[int, dict]] = []
     tile_bboxes = {tid: label_to_bbox(b["label"]) for tid, b in bundles.items()}
     tile_bboxes = {tid: bb for tid, bb in tile_bboxes.items() if bb}
 
@@ -634,13 +642,13 @@ def run(area) -> dict:
                 matched = True
                 break
         if not matched:
-            unmatched += 1
+            unmatched_pubs.append((gi, pub))
 
     # Drop empty tiles.
     tile_pub_map = {tid: pubs for tid, pubs in tile_pub_map.items() if pubs}
-    if unmatched:
-        print(f"  {unmatched} pubs not matched to any tile (outside England?)")
-    print(f"  {len(tile_pub_map)} tiles have pubs to process\n")
+    if unmatched_pubs:
+        print(f"  {len(unmatched_pubs)} pubs not in Defra bundles (Wales/Scotland — Phase 2)")
+    print(f"  {len(tile_pub_map)} bundle tiles + {len(unmatched_pubs)} WCS/COG pubs to process\n")
 
     # Load existing building heights for skip logic.
     conn = sqlite3.connect(str(GPKG_PATH), timeout=60.0)
@@ -750,6 +758,112 @@ def run(area) -> dict:
                 last_save = time.time()
 
     conn.commit()
+
+    # ── Phase 2: WCS/COG fallback for Wales + Scotland ───────────────
+    #
+    # Pubs not matched to any Defra bundle (unmatched_pubs) are processed
+    # via the v1 WCS/COG fetchers: NRW COG for Wales, JNCC WCS for
+    # Scotland. Each pub gets a 1km OSGB tile fetch. Heights + horizons
+    # are computed in the same pass since we have the DTM in memory.
+
+    if unmatched_pubs:
+        print(f"\n  Phase 2: processing {len(unmatched_pubs)} Wales/Scotland pubs via WCS/COG...")
+        phase2_t0 = time.time()
+        phase2_done = 0
+        TILE_SIZE = 1000
+
+        for gi, pub in unmatched_pubs:
+            cx, cy = to_osgb.transform(pub["lng"], pub["lat"])
+            # 1km OSGB tile containing this pub.
+            te = int(cx // TILE_SIZE) * TILE_SIZE
+            tn = int(cy // TILE_SIZE) * TILE_SIZE
+            w, s, e, n = te, tn, te + TILE_SIZE, tn + TILE_SIZE
+
+            ndsm, dtm_arr, tfm = _fetch_ndsm_wcs(w, s, e, n)
+
+            result: dict = {"index": gi}
+
+            # Horizon + elevation from DTM.
+            if dtm_arr is not None:
+                pub_elev, horizon_bytes = _compute_horizon(dtm_arr, tfm, cx, cy)
+                if pub_elev is not None:
+                    result["elev"] = round(pub_elev, 1)
+                if horizon_bytes is not None:
+                    result["horizon"] = base64.b64encode(horizon_bytes).decode("ascii")
+
+            # Building heights from nDSM.
+            if ndsm is not None:
+                # Query nearby buildings from GPKG.
+                lng1, lat1 = to_wgs.transform(w, s)
+                lng2, lat2 = to_wgs.transform(e, n)
+                min_lng, max_lng = min(lng1, lng2), max(lng1, lng2)
+                min_lat, max_lat = min(lat1, lat2), max(lat1, lat2)
+                try:
+                    rows = conn.execute(
+                        "SELECT b.fid, b.geom, b.height, b.levels FROM buildings b "
+                        "JOIN rtree_buildings_geom r ON b.fid = r.id "
+                        "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+                        (min_lng, max_lng, min_lat, max_lat),
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    rows = []
+
+                tile_buildings = []
+                for fid, blob, osm_h, levels in rows:
+                    if fid in existing_fids:
+                        continue
+                    try:
+                        hl = _gpkg_header_len(blob)
+                        geom = wkb.loads(blob[hl:])
+                        if geom.is_empty or not geom.is_valid:
+                            continue
+                        osgb_coords = [to_osgb.transform(x, y) for x, y in geom.exterior.coords]
+                        poly = Polygon(osgb_coords)
+                        if poly.is_valid and not poly.is_empty:
+                            pcx, pcy = poly.centroid.x, poly.centroid.y
+                            if (pcx - cx) ** 2 + (pcy - cy) ** 2 <= SHADOW_RADIUS_M ** 2:
+                                tile_buildings.append((fid, poly, osm_h, levels))
+                    except Exception:
+                        continue
+
+                if tile_buildings:
+                    osgb_polys = [b[1] for b in tile_buildings]
+                    ht_results = _sample_building_heights(ndsm, dtm_arr, tfm, osgb_polys)
+                    for (fid, _, osm_h, levels), (h, ground) in zip(tile_buildings, ht_results):
+                        if h is not None and h >= MIN_HEIGHT_M:
+                            conn.execute("UPDATE buildings SET lidar_height = ? WHERE fid = ?", (round(h, 1), fid))
+                        if ground is not None:
+                            conn.execute("UPDATE buildings SET ground_elev = ? WHERE fid = ?", (round(ground, 1), fid))
+                    stats["buildings_heighted"] += len(tile_buildings)
+
+            # INSPIRE parcel matching (same as Phase 1).
+            if parcel_tree is not None and all_parcels is not None:
+                pt = Point(cx, cy)
+                candidates = parcel_tree.query(pt)
+                for idx in candidates:
+                    if all_parcels[idx].contains(pt):
+                        result["local_authority"] = all_parcel_las[idx] if all_parcel_las else None
+                        break
+
+            # Apply enrichments.
+            for k in ("elev", "horizon", "local_authority"):
+                if k in result:
+                    all_pubs[gi][k] = result[k]
+
+            phase2_done += 1
+            stats["pubs_enriched"] += 1
+            if phase2_done % 50 == 0:
+                conn.commit()
+                elapsed = time.time() - phase2_t0
+                rate = phase2_done / elapsed if elapsed else 0
+                print(
+                    f"  Phase 2: [{phase2_done}/{len(unmatched_pubs)}] "
+                    f"{rate:.1f}/s {eta_str(phase2_done, len(unmatched_pubs), phase2_t0)}"
+                )
+
+        conn.commit()
+        print(f"  Phase 2 done: {phase2_done} pubs enriched")
+
     conn.close()
 
     # Final save.
