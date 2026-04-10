@@ -17,7 +17,11 @@
  *   GET /og/pub/no-such-pub     → 404
  */
 
-import { Resvg } from "@resvg/resvg-js";
+import { Resvg, initWasm } from "@resvg/resvg-wasm";
+// @ts-expect-error — WASM import handled by wrangler's asset bundler
+import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
+
+let wasmInitialized = false;
 import type { Pub } from "../../../src/types";
 import { loadBuildingsForPubAsync, type TileFetcher } from "../../_lib/buildings_async";
 import { renderOgCard } from "../../_lib/og_card";
@@ -123,6 +127,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   ]);
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });
+
+  // Initialize resvg WASM on first invocation (persists across warm requests).
+  if (!wasmInitialized) {
+    await initWasm(resvgWasm);
+    wasmInitialized = true;
+  }
 
   // Convert SVG → PNG so social platforms can render the preview.
   const resvg = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } });

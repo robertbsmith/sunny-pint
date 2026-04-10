@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@mapbox/vector-tile": "^2.0.4",
+    "@resvg/resvg-wasm": "^2.6.2",
     "lucide": "^1.7.0",
     "opening_hours": "^3.12.0",
     "pbf": "^4.0.1",
