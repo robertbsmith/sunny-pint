@@ -39,14 +39,15 @@ async function main(): Promise<void> {
   console.log(`Pub: ${pub.name}, ${pub.town}`);
   console.log(`Sunny rating: ${pub.sun?.score} (${pub.sun?.label}), best ${pub.sun?.best_window}`);
 
-  const buildings = loadBuildingsForPub(pub);
+  const buildings = await loadBuildingsForPub(pub);
   console.log(`Buildings: ${buildings.length}`);
 
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   console.log(`Sun: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
   console.log("Fetching map tiles…");
-  const tileCache = await prefetchPortholeTiles(pub);
+  const stadiaKey = process.env.STADIA_API_KEY;
+  const tileCache = await prefetchPortholeTiles(pub, stadiaKey);
   console.log(`Got ${tileCache.size} tiles`);
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });

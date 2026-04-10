@@ -69,7 +69,12 @@ export function computeShadows(buildings: Building[], sun: SunPosition, pubElev 
   for (const { coords, height, elev } of buildings) {
     if (height <= 0 || coords.length < 3) continue;
 
-    const effectiveHeight = height + (elev - pubElev);
+    // If a building has no ground elevation data (elev=0), assume it sits
+    // at the same elevation as the pub — they're nearby so this is a safe
+    // default. Without this, buildings without elev data produce negative
+    // effectiveHeight and cast no shadows.
+    const buildingElev = elev > 0 ? elev : pubElev;
+    const effectiveHeight = height + (buildingElev - pubElev);
     if (effectiveHeight <= 0) continue;
 
     const shadowLen = Math.min(effectiveHeight / tanAlt, SHADOW_CAP_M);
