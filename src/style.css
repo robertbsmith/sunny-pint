@@ -854,6 +854,7 @@ html.dark .sunny-badge--sunny {
   column-gap: 24px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: targets SEO landing page list, not the search results list above */
 .seo-intro--landing .seo-pub-list li {
   break-inside: avoid;
 }
@@ -1587,6 +1588,7 @@ html.dark .status-closed {
   text-decoration: none;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: different element than the higher-specificity selector above */
 .pub-info-links a:hover {
   text-decoration: underline;
 }
@@ -1625,6 +1627,7 @@ html.dark .status-closed {
   color: var(--on-surface);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: different element than the higher-specificity selector above */
 .footer-attr a:hover {
   text-decoration: underline;
 }

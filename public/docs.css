@@ -234,7 +234,8 @@ code {
 
 .diagram figcaption,
 .diagram .fig-caption,
-.fig-caption {
+/* biome-ignore lint/style/noDescendingSpecificity: standalone fig-caption also needs these styles */
+  .fig-caption {
   font-size: 0.8rem;
   color: #64748b;
   margin-top: 0.4rem;
