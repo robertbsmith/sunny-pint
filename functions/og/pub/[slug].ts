@@ -1,19 +1,23 @@
 /**
  * Cloudflare Pages Function — per-pub OG card image.
  *
- * Serves /og/pub/<slug>.svg for every pub. Renders a 1200x630 social card
- * with the actual pub's porthole (real map tiles + real building shadows
- * for that pub's location), score, identity, and footer.
+ * Renders a 1200x630 social card PNG for every pub, with the actual pub's
+ * porthole (real map tiles + real building shadows), score, and identity.
+ *
+ * SVG is rendered first via og_card.ts, then converted to PNG via resvg
+ * so WhatsApp/Facebook/Twitter can display it (they don't support SVG).
  *
  * Edge-cached aggressively via the Cache API so the renderer almost never
  * runs more than once per POP per week even under heavy crawler traffic.
  *
- * Endpoints (matching the per-pub HTML in functions/pub/[slug].ts):
- *   GET /og/pub/<slug>          → 200 image/svg+xml
- *   GET /og/pub/<slug>.svg      → 200 image/svg+xml
+ * Endpoints:
+ *   GET /og/pub/<slug>          → 200 image/png
+ *   GET /og/pub/<slug>.png      → 200 image/png
+ *   GET /og/pub/<slug>.svg      → 200 image/png (compat)
  *   GET /og/pub/no-such-pub     → 404
  */
 
+import { Resvg } from "@resvg/resvg-js";
 import type { Pub } from "../../../src/types";
 import { loadBuildingsForPubAsync, type TileFetcher } from "../../_lib/buildings_async";
 import { renderOgCard } from "../../_lib/og_card";
@@ -92,9 +96,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
-  // Slug param — accept both /og/pub/<slug> and /og/pub/<slug>.svg
+  // Slug param — accept /og/pub/<slug>, /og/pub/<slug>.png, /og/pub/<slug>.svg
   let slug = String(ctx.params.slug ?? "");
-  if (slug.endsWith(".svg")) slug = slug.slice(0, -4);
+  if (slug.endsWith(".svg") || slug.endsWith(".png")) slug = slug.slice(0, -4);
   if (!slug) return new Response("Not found", { status: 404 });
 
   let index: Map<string, Pub>;
@@ -120,9 +124,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });
 
-  const response = new Response(svg, {
+  // Convert SVG → PNG so social platforms can render the preview.
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: 1200 } });
+  const pngData = resvg.render();
+  const pngBuffer = pngData.asPng();
+
+  const response = new Response(pngBuffer, {
     headers: {
-      "content-type": "image/svg+xml; charset=utf-8",
+      "content-type": "image/png",
       // Browser cache 1h, edge cache 7 days. Pipeline reruns redeploy and
       // automatically invalidate the edge cache, so updated ratings show
       // up within minutes of a fresh deploy.

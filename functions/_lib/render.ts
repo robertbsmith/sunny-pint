@@ -523,10 +523,7 @@ export function renderPubPage(template: string, ctx: PubContext): string {
     spPub: slug,
     jsonLd: [breadcrumbListJsonLd(breadcrumbs), pubJsonLd],
     seoIntro,
-    // TODO: restore per-pub OG card once og/pub/[slug].ts serves PNG
-    // instead of SVG (social platforms don't support SVG). For now, fall
-    // back to the generic banner so WhatsApp/Facebook show *something*.
-    // ogImagePath: `/og/pub/${slug}.png`,
+    ogImagePath: `/og/pub/${slug}.png`,
   });
 }
 
