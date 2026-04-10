@@ -278,43 +278,59 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf):
 
     la_select = "p.local_authority" if has_la_column else "NULL AS local_authority"
 
-    # Use R-tree spatial index for fast bbox query.
+    import time as _time
+
+    # Use R-tree spatial index for fast bbox query. Stream via cursor
+    # instead of fetchall() to show progress on large result sets.
+    BATCH = 50000
     try:
-        rows = conn.execute(
+        cursor = conn.execute(
             f"SELECT p.fid, p.geom, {la_select} FROM parcels p "
             "JOIN rtree_parcels_geom r ON p.fid = r.id "
             "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
             (min_x, max_x, min_y, max_y),
-        ).fetchall()
+        )
     except _sqlite3.OperationalError:
         # No R-tree — fall back to full scan (slow).
         print("  WARNING: no R-tree index, falling back to full scan")
-        rows = conn.execute(f"SELECT fid, geom, {la_select} FROM parcels").fetchall()
-    conn.close()
-
-    print(f"  {len(rows)} parcels in pub area bbox", flush=True)
+        cursor = conn.execute(f"SELECT fid, geom, {la_select} FROM parcels")
 
     # Parse geometries and filter to those actually near a pub.
     parcels = []
     parcel_las: list[str | None] = []
-    for fid, blob, la in rows:
-        try:
-            hl = gpkg_header_len(blob)
-            geom = wkb.loads(blob[hl:])
-            if geom.is_empty or not geom.is_valid:
+    scanned = 0
+    t0 = _time.time()
+    while True:
+        batch = cursor.fetchmany(BATCH)
+        if not batch:
+            break
+        for fid, blob, la in batch:
+            scanned += 1
+            try:
+                hl = gpkg_header_len(blob)
+                geom = wkb.loads(blob[hl:])
+                if geom.is_empty or not geom.is_valid:
+                    continue
+
+                nearby = pub_tree.query(geom.buffer(buf))
+                if len(nearby) == 0:
+                    continue
+
+                prepare(geom)
+                parcels.append(geom)
+                parcel_las.append(la)
+            except Exception:
                 continue
+        elapsed = _time.time() - t0
+        rate = scanned / elapsed if elapsed else 0
+        print(
+            f"  parcels: {scanned:,} scanned, {len(parcels):,} kept  "
+            f"{rate:,.0f}/s",
+            flush=True,
+        )
+    conn.close()
 
-            nearby = pub_tree.query(geom.buffer(buf))
-            if len(nearby) == 0:
-                continue
-
-            prepare(geom)
-            parcels.append(geom)
-            parcel_las.append(la)
-        except Exception:
-            continue
-
-    print(f"  {len(parcels)} parcels near pubs")
+    print(f"  {len(parcels)} parcels near pubs (from {scanned:,} scanned)")
     if not parcels:
         return None
 

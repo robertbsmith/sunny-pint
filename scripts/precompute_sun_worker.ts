@@ -313,9 +313,11 @@ for (const item of batch) {
     results.push({ index: item.index, metrics: null });
   }
 
-  // Progress to stderr so main can see it.
-  if (results.length % 50 === 0) {
-    process.stderr.write(`  worker: ${results.length}/${batch.length}\n`);
+  if (results.length % 25 === 0) {
+    const scored = results.filter(r => r.metrics !== null).length;
+    process.stderr.write(
+      `  worker ${process.pid}: ${results.length}/${batch.length} (${scored} scored)\n`
+    );
   }
 }
 

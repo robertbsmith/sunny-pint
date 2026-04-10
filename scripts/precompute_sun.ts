@@ -422,8 +422,50 @@ async function main(): Promise<void> {
 
   console.log(`\nWaiting for ${workerPromises.length} workers...`);
 
+  // Poll result files for progress while workers run.
+  const progressFile = join(ROOT, "data", "sun_progress.json");
+  const progressInterval = setInterval(() => {
+    let totalDone = 0;
+    let totalScored = 0;
+    for (let w = 0; w < workerPromises.length; w++) {
+      const rf = join(tmpDir, `result_${w}.json`);
+      try {
+        // Result file only exists once worker finishes — check batch file size
+        // as a proxy. Instead, check if result exists = worker done.
+        if (existsSync(rf)) {
+          const data = JSON.parse(readFileSync(rf, "utf-8")) as { metrics: unknown }[];
+          totalDone += data.length;
+          totalScored += data.filter((r) => r.metrics !== null).length;
+        }
+      } catch {
+        // Worker still running or file being written.
+      }
+    }
+    const elapsed = (Date.now() - t0) / 1000;
+    const rate = totalDone / elapsed;
+    const eta = totalDone > 0 ? (pubs.length - totalDone) / rate : 0;
+    const progress = {
+      total: pubs.length,
+      done: totalDone,
+      scored: totalScored,
+      rate: Math.round(rate * 10) / 10,
+      eta_s: Math.round(eta),
+      elapsed_s: Math.round(elapsed),
+    };
+    try {
+      writeFileSync(progressFile, JSON.stringify(progress, null, 2));
+    } catch { /* ignore */ }
+    if (totalDone > 0) {
+      console.log(
+        `  progress: ${totalDone}/${pubs.length} done, ${totalScored} scored, ` +
+          `${rate.toFixed(1)}/s, ETA ${Math.round(eta)}s`,
+      );
+    }
+  }, 30000); // every 30 seconds
+
   // Wait for all workers.
   const results = await Promise.allSettled(workerPromises);
+  clearInterval(progressInterval);
 
   let scored = 0;
   let skipped = 0;

@@ -502,9 +502,10 @@ def main():
             "--force",
             str(geojson_path),
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        print(f"  cmd: {' '.join(cmd)}", flush=True)
+        result = subprocess.run(cmd, text=True)
         if result.returncode != 0:
-            print(f"  tippecanoe failed: {result.stderr}")
+            print(f"  tippecanoe failed (exit code {result.returncode})")
             return
         pm_size = pmtiles_path.stat().st_size / 1e6
         print(f"  PMTiles: {pm_size:.1f} MB")
