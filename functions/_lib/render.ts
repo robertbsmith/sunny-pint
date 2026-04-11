@@ -705,7 +705,7 @@ export interface ExploreCountyStats {
   countrySlug: string;
   pubCount: number;
   avgScore: number | null;
-  towns: { name: string; slug: string; pubCount: number; avgScore: number | null }[];
+  towns: { name: string; slug: string; pubCount: number; avgScore: number | null; lat?: number; lng?: number }[];
   topPubs: Pub[];
 }
 
@@ -716,6 +716,7 @@ export function renderExplorePage(
   mapSvg: string,
   topCities: { name: string; slug: string; pubCount: number }[],
   totalPubs: number,
+  allCountyStats?: ExploreCountyStats[],
 ): string {
   const title = "Explore sunny beer gardens across the UK — Sunny Pint";
   const description =
@@ -752,12 +753,51 @@ export function renderExplorePage(
     `  <p>${totalPubs.toLocaleString()} pub gardens ranked by Sunny Rating — find where the sun shines longest.</p>\n` +
     `  <div class="explore-countries">\n${countryCards}\n  </div>\n` +
     `  <div class="explore-layout">\n` +
-    `    <div class="explore-map-wrap">${mapSvg}</div>\n` +
+    `    <div class="explore-map-wrap">\n` +
+    `      ${mapSvg}\n` +
+    `      <div class="explore-tooltip" id="map-tooltip"></div>\n` +
+    `    </div>\n` +
     `    <div class="explore-sidebar">\n` +
     `      <h2>Popular areas</h2>\n` +
     `      <ul class="explore-city-list">\n${cityList}\n      </ul>\n` +
     `    </div>\n` +
     `  </div>\n` +
+    `  <script>\n` +
+    `    (function(){\n` +
+    `      var tip=document.getElementById("map-tooltip");\n` +
+    `      var svg=document.querySelector(".explore-map");\n` +
+    `      if(!svg||!tip)return;\n` +
+    `      svg.addEventListener("mousemove",function(e){\n` +
+    `        var p=e.target.closest("path");\n` +
+    `        if(!p){tip.style.display="none";return;}\n` +
+    `        var t=p.querySelector("title");\n` +
+    `        if(!t){tip.style.display="none";return;}\n` +
+    `        tip.textContent=t.textContent;\n` +
+    `        tip.style.display="block";\n` +
+    `        var r=svg.getBoundingClientRect();\n` +
+    `        tip.style.left=(e.clientX-r.left+12)+"px";\n` +
+    `        tip.style.top=(e.clientY-r.top-28)+"px";\n` +
+    `      });\n` +
+    `      svg.addEventListener("mouseleave",function(){tip.style.display="none";});\n` +
+    `      svg.querySelectorAll("path").forEach(function(p){\n` +
+    `        p.addEventListener("mouseenter",function(){p.style.opacity="1";p.style.strokeWidth="1.5";});\n` +
+    `        p.addEventListener("mouseleave",function(){p.style.opacity="";p.style.strokeWidth="";});\n` +
+    `      });\n` +
+    `    })();\n` +
+    `  </script>\n` +
+    (allCountyStats
+      ? `  <script id="explore-data" type="application/json">${JSON.stringify(
+          allCountyStats.map((c) => ({
+            name: c.name,
+            slug: c.slug,
+            country: c.country,
+            countrySlug: c.countrySlug,
+            pubCount: c.pubCount,
+            avgScore: c.avgScore,
+            towns: c.towns,
+          })),
+        )}</script>\n`
+      : "") +
     `</section>`;
 
   return applyTemplate(template, {

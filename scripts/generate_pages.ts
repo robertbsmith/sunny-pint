@@ -368,6 +368,10 @@ async function main(): Promise<void> {
     const onsCountries = existsSync(ONS_COUNTRIES_PATH)
       ? JSON.parse(readFileSync(ONS_COUNTRIES_PATH, "utf-8"))
       : null;
+    const ONS_TO_COUNTY_PATH = join(ROOT, "data", "ons_to_county.json");
+    const onsToCounty: Record<string, string> = existsSync(ONS_TO_COUNTY_PATH)
+      ? JSON.parse(readFileSync(ONS_TO_COUNTY_PATH, "utf-8"))
+      : {};
 
     // Group all qualifying pubs by county.
     const pubsByCounty = new Map<string, { country: string; pubs: Pub[] }>();
@@ -399,7 +403,9 @@ async function main(): Promise<void> {
           const tAvg = tScored.length > 0
             ? Math.round(tScored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / tScored.length)
             : null;
-          return { name: town, slug: slugify(town), pubCount: tPubs.length, avgScore: tAvg };
+          const lat = tPubs.reduce((s, p) => s + p.lat, 0) / tPubs.length;
+          const lng = tPubs.reduce((s, p) => s + p.lng, 0) / tPubs.length;
+          return { name: town, slug: slugify(town), pubCount: tPubs.length, avgScore: tAvg, lat: +lat.toFixed(4), lng: +lng.toFixed(4) };
         })
         .sort((a, b) => b.pubCount - a.pubCount);
 
@@ -437,41 +443,8 @@ async function main(): Promise<void> {
       .slice(0, 20)
       .map(([town, tPubs]) => ({ name: town, slug: slugify(town), pubCount: tPubs.length }));
 
-    // Build Voronoi SVG for the UK overview using 0.1° grid cells (~2.5k points)
-    // instead of individual pubs (~28k) to keep the SVG lightweight.
-    const gridCells = new Map<string, { lat: number; lng: number; scores: number[]; count: number }>();
-    for (const p of allQualifying.filter((p) => p.sun != null)) {
-      const cellLat = Math.floor(p.lat * 10) / 10 + 0.05; // cell centroid
-      const cellLng = Math.floor(p.lng * 10) / 10 + 0.05;
-      const key = `${cellLat}_${cellLng}`;
-      const cell = gridCells.get(key) || { lat: cellLat, lng: cellLng, scores: [], count: 0 };
-      cell.scores.push(p.sun?.score ?? 0);
-      cell.count++;
-      gridCells.set(key, cell);
-    }
-
-    const voronoiPoints: VoronoiPoint[] = [...gridCells.values()].map((cell) => {
-      const avgScore = Math.round(cell.scores.reduce((a, b) => a + b, 0) / cell.scores.length);
-      return {
-        lng: cell.lng,
-        lat: cell.lat,
-        score: avgScore,
-        label: `${cell.count} pubs, avg ${avgScore}/100`,
-        href: "/explore/",
-      };
-    });
-
-    const countryOverlay = onsCountries
-      ? renderCountryOverlay(onsCountries.features)
-      : "";
-    // Clip Voronoi cells to GB coastline so ocean areas are empty.
-    const clipFeatures = onsCountries
-      ? onsCountries.features.filter((f: any) => f.properties.CTRY23NM !== "Northern Ireland")
-      : [];
-    const ukMapSvg = voronoiPoints.length > 10
-      ? renderVoronoiSvg(voronoiPoints, { overlayPaths: countryOverlay, clipFeatures })
-      : "";
-    console.log(`  Voronoi map: ${voronoiPoints.length} grid cells`);
+    // UK overview uses county boundary map — each county clickable, colored by avg score.
+    // Voronoi is reserved for county-level detail pages.
 
     // Build county boundary SVG data for country pages.
     const countyDataMap = new Map<string, CountyData>();
@@ -485,12 +458,17 @@ async function main(): Promise<void> {
       });
     }
 
-    // /explore/ overview page.
+    // /explore/ overview page — county boundary map of all GB.
+    const ukMapSvg = renderCountySvg(onsCounties.features, countyDataMap, {
+      linkPrefix: "/explore/",
+      onsToCounty,
+    });
+
     const exploreDir = join(DIST, "explore");
     mkdirSync(exploreDir, { recursive: true });
     writeFileSync(
       join(exploreDir, "index.html"),
-      renderExplorePage(template, countryStats, ukMapSvg, topCities, allQualifying.length),
+      renderExplorePage(template, countryStats, ukMapSvg, topCities, allQualifying.length, allCountyStats),
     );
     const exploreKey = "/explore/";
     const exploreHash = createHash("sha256")
@@ -509,6 +487,7 @@ async function main(): Promise<void> {
       const countrySvg = renderCountySvg(onsCounties.features, countyDataMap, {
         countryFilter: cs.name,
         linkPrefix: "/explore/",
+        onsToCounty,
       });
 
       const countryDir = join(exploreDir, cs.slug);

@@ -19,26 +19,26 @@ import { Delaunay } from "d3-delaunay";
 
 // ── Projection ─────────────────────────────────────────────────────────
 
-/** GB bounding box (WGS84). Covers mainland GB including Scottish Highlands.
- *  Excludes Shetland/Orkney. */
+/** GB bounding box (WGS84). Covers all of mainland GB + islands.
+ *  Derived from actual ONS boundary extents with padding. */
 const GB_BOUNDS = {
-  minLng: -6.5,
+  minLng: -8.9,
   maxLng: 2.0,
-  minLat: 49.8,
-  maxLat: 58.8,
+  minLat: 49.7,
+  maxLat: 61.1,
 };
 
 /** Latitude correction for equirectangular projection at UK mid-latitude. */
 const COS_LAT = Math.cos((55 * Math.PI) / 180);
 
 // Compute projected extent in "flat" units, then derive viewBox to fit.
-const PROJ_W = (GB_BOUNDS.maxLng - GB_BOUNDS.minLng) * COS_LAT; // ~5.74°
-const PROJ_H = GB_BOUNDS.maxLat - GB_BOUNDS.minLat; // 11°
+const PROJ_W = (GB_BOUNDS.maxLng - GB_BOUNDS.minLng) * COS_LAT;
+const PROJ_H = GB_BOUNDS.maxLat - GB_BOUNDS.minLat;
 
 // SVG viewBox: fit to projected aspect ratio with padding.
-const PAD = 8;
+const PAD = 12;
 const SVG_H = 600;
-const SVG_W = Math.round((SVG_H * PROJ_W) / PROJ_H) + PAD * 2; // ~313
+const SVG_W = Math.round((SVG_H * PROJ_W) / PROJ_H) + PAD * 2;
 
 /** Equirectangular projection to SVG coordinates. */
 function project(lng: number, lat: number): [number, number] {
@@ -55,18 +55,14 @@ function project(lng: number, lat: number): [number, number] {
 
 // ── Color ──────────────────────────────────────────────────────────────
 
-/** Sun score (0–100) → fill color. Cool slate → warm amber. */
+/** Sun score (0–100) → fill color. Matches the 5-tier badge system in sunbadge.ts. */
 export function scoreColor(score: number | null): string {
-  if (score === null || score === undefined) return "hsl(210, 10%, 85%)";
-  // Clamp 0–100.
-  const s = Math.max(0, Math.min(100, score));
-  // Interpolate hue: 210 (cool blue-grey) → 38 (warm amber).
-  const hue = 210 - (s / 100) * 172;
-  // Interpolate saturation: 15% → 85%.
-  const sat = 15 + (s / 100) * 70;
-  // Interpolate lightness: 75% → 55%.
-  const lit = 75 - (s / 100) * 20;
-  return `hsl(${Math.round(hue)}, ${Math.round(sat)}%, ${Math.round(lit)}%)`;
+  if (score === null || score === undefined) return "#e0deda"; // neutral grey
+  if (score >= 80) return "#fde68a"; // Sun trap — amber-200
+  if (score >= 60) return "#fef3c7"; // Very sunny — amber-100
+  if (score >= 40) return "#fffbeb"; // Sunny — amber-50
+  if (score >= 20) return "#e0dcda"; // Partly shaded — warm grey
+  return "#c4c0bb"; // Shaded — darker grey
 }
 
 // ── GeoJSON → SVG paths ──────────────────────────────────────────────
@@ -119,10 +115,12 @@ export interface CountyData {
 /**
  * Render county boundaries as an SVG string.
  *
- * @param features ONS county GeoJSON features
- * @param countyData Map of ONS county name → CountyData
- * @param options.highlight County slug to highlight (for county pages)
- * @param options.countryFilter Only show counties in this country
+ * ONS features are administrative units (boroughs, districts) which may be
+ * smaller than our "counties" (ceremonial/traditional). Multiple ONS features
+ * can map to one county. The onsToCounty mapping handles this aggregation.
+ *
+ * All ONS features are rendered (even counties without pubs) so the map
+ * has no holes. Counties without data get a neutral fill.
  */
 export function renderCountySvg(
   features: GeoJSONFeature[],
@@ -131,31 +129,57 @@ export function renderCountySvg(
     highlight?: string;
     countryFilter?: string;
     linkPrefix?: string;
+    /** ONS feature name → our county name mapping. */
+    onsToCounty?: Record<string, string>;
   } = {},
 ): string {
   const paths: string[] = [];
+  const onsMap = options.onsToCounty || {};
 
   for (const feature of features) {
     const onsName = feature.properties.CTYUA23NM as string;
-    const data = countyData.get(onsName);
-    if (!data) continue;
-    if (options.countryFilter && data.country !== options.countryFilter) continue;
+
+    // Map ONS name to our county name.
+    const countyName = onsMap[onsName] || onsName;
+    const data = countyData.get(countyName);
+
+    // Skip Northern Ireland.
+    if (!data && !onsMap[onsName]) {
+      // Render unmatched features as neutral fill (no holes).
+      const d = featureToPath(feature);
+      if (d) {
+        paths.push(
+          `<path d="${d}" fill="${scoreColor(null)}" stroke="#a8a29e" stroke-width="0.3" opacity="0.7">` +
+            `<title>${onsName}</title></path>`,
+        );
+      }
+      continue;
+    }
+
+    if (options.countryFilter && data && data.country !== options.countryFilter) continue;
 
     const d = featureToPath(feature);
     if (!d) continue;
 
-    const fill = scoreColor(data.avgScore);
-    const isHighlighted = options.highlight === data.slug;
-    const stroke = isHighlighted ? "#D97706" : "#fff";
+    const fill = data ? scoreColor(data.avgScore) : scoreColor(null);
+    const isHighlighted = data && options.highlight === data.slug;
+    const stroke = isHighlighted ? "#D97706" : "#a8a29e";
     const strokeWidth = isHighlighted ? "2" : "0.5";
-    const href = `${options.linkPrefix || "/explore/"}${data.country.toLowerCase()}/${data.slug}/`;
 
-    paths.push(
-      `<a href="${href}">` +
-        `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="0.9">` +
-        `<title>${data.name} — ${data.pubCount} pubs${data.avgScore !== null ? `, avg ${Math.round(data.avgScore)}/100` : ""}</title>` +
-        `</path></a>`,
-    );
+    if (data) {
+      const href = `${options.linkPrefix || "/explore/"}${data.country.toLowerCase()}/${data.slug}/`;
+      paths.push(
+        `<a href="${href}">` +
+          `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="0.95">` +
+          `<title>${data.name} — ${data.pubCount} pubs${data.avgScore !== null ? `, avg ${Math.round(data.avgScore)}/100` : ""}</title>` +
+          `</path></a>`,
+      );
+    } else {
+      paths.push(
+        `<path d="${d}" fill="${fill}" stroke="#a8a29e" stroke-width="0.3" opacity="0.7">` +
+          `<title>${countyName}</title></path>`,
+      );
+    }
   }
 
   return (

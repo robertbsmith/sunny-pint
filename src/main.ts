@@ -495,8 +495,7 @@ function dismissSeoContent(): void {
 }
 
 async function init(): Promise<void> {
-  // Explore pages are pure HTML — skip SPA initialization entirely.
-  // Hide the entire app (porthole, pub list, footer) so only explore content shows.
+  // Explore pages run their own mini-app instead of the porthole SPA.
   if (document.querySelector(".seo-intro--explore")) {
     applyTheme(getStoredTheme());
     initIcons();
@@ -504,6 +503,8 @@ async function init(): Promise<void> {
     if (main) main.style.display = "none";
     const footer = document.getElementById("footer");
     if (footer) footer.style.display = "none";
+    const { initExplore } = await import("./explore");
+    await initExplore();
     return;
   }
 

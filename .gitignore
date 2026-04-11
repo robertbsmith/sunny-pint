@@ -18,6 +18,7 @@ dist/
 !/data/slug_lock.json
 # Reference data for explore pages (small, rarely changes).
 !/data/county_map.json
+!/data/ons_to_county.json
 !/data/ons_counties.geojson
 !/data/ons_countries.geojson
 # Lastmod state IS committed for the same reason — it tracks per-URL hashes

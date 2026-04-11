@@ -898,31 +898,143 @@ html.dark .sunny-badge--sunny {
 
 .explore-layout {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   margin: 1.5rem 0;
   align-items: flex-start;
+  max-width: 900px;
 }
 
 .explore-map-wrap {
-  flex: 0 0 auto;
+  flex: 1 1 55%;
+  min-width: 0;
 }
 
 .explore-map {
-  width: auto;
-  height: 70vh;
-  max-height: 700px;
-  min-height: 400px;
+  width: 100%;
+  height: auto;
+  cursor: pointer;
+}
+
+.explore-map path:hover {
+  filter: brightness(1.1);
+}
+
+.explore-map-wrap {
+  position: relative;
+}
+
+.explore-tooltip {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px var(--shadow);
+  z-index: 10;
 }
 
 .explore-sidebar {
-  flex: 1;
-  min-width: 200px;
-  max-height: 70vh;
-  overflow-y: auto;
+  flex: 0 0 280px;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 0 0 1rem;
+  border-left: 1px solid var(--outline-variant);
 }
 
 .explore-sidebar h2 {
-  margin-top: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  padding: 0.4rem 0;
+}
+
+.explore-sidebar h2 a {
+  color: var(--primary);
+  text-decoration: none;
+  margin-right: 0.5rem;
+}
+
+.explore-sort-bar {
+  display: flex;
+  gap: 4px;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.explore-sort-btn {
+  background: none;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--on-surface-variant);
+  transition: all 0.15s;
+}
+
+.explore-sort-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.explore-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.explore-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--outline-variant);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.explore-list-item:hover {
+  background: var(--surface-container);
+}
+
+.explore-item-name {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--on-surface);
+  text-decoration: none;
+}
+
+a.explore-item-name {
+  color: var(--primary);
+}
+
+.explore-item-meta {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+}
+
+.explore-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .explore-countries {
@@ -964,16 +1076,16 @@ html.dark .sunny-badge--sunny {
 .explore-pub-list {
   list-style: none;
   padding: 0;
-  columns: 2;
-  gap: 0.5rem;
+  margin: 0;
 }
 
 .explore-county-list li,
 .explore-town-list li,
 .explore-city-list li,
 .explore-pub-list li {
-  padding: 0.3rem 0;
-  break-inside: avoid;
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--outline-variant);
+  font-size: 0.9rem;
 }
 
 .explore-county-list a,
@@ -996,22 +1108,14 @@ html.dark .sunny-badge--sunny {
     flex-direction: column;
   }
 
-  .explore-map {
-    height: auto;
-    max-height: 50vh;
-    width: 100%;
-  }
-
   .explore-sidebar {
+    flex: none;
     max-height: none;
     overflow-y: visible;
-  }
-
-  .explore-county-list,
-  .explore-town-list,
-  .explore-city-list,
-  .explore-pub-list {
-    columns: 1;
+    border-left: none;
+    padding: 0;
+    border-top: 1px solid var(--outline-variant);
+    padding-top: 1rem;
   }
 }
 
