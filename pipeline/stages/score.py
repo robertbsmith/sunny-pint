@@ -130,6 +130,20 @@ def run(area) -> dict:
     scored = sum(1 for p in pubs if p.get("sun"))
     print(f"  {scored}/{len(pubs)} pubs now have sun scores")
 
+    # Write sun scores back to pubs_enriched.json so they survive PACKAGE reruns.
+    ENRICHED_PATH = ROOT / "data" / "pubs_enriched.json"
+    if ENRICHED_PATH.exists():
+        enriched = json.loads(ENRICHED_PATH.read_text())
+        sun_by_id = {p.get("id"): p["sun"] for p in pubs if p.get("sun") and p.get("id")}
+        backfilled = 0
+        for ep in enriched:
+            sun = sun_by_id.get(ep.get("id"))
+            if sun:
+                ep["sun"] = sun
+                backfilled += 1
+        ENRICHED_PATH.write_text(json.dumps(enriched, indent=2))
+        print(f"  Backfilled {backfilled} sun scores to pubs_enriched.json")
+
     # Regenerate index + detail chunks with sun data.
     print("  Regenerating splits...")
     _regenerate_splits(pubs)
