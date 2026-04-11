@@ -18,7 +18,7 @@ import { lngLatToTileXY, mPerDegLng, polygonCentroid } from "../../../src/geo";
 import type { Building, Pub } from "../../../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..", "..");
+const ROOT = resolve(__dirname, "..", "..", "..");
 const TILES_DIR = join(ROOT, "public", "data", "tiles");
 const PMTILES_PATH = join(ROOT, "public", "data", "buildings.pmtiles");
 

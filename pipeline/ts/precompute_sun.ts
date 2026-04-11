@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 import type { Pub } from "../../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
+const ROOT = resolve(__dirname, "../..");
 const PUBS_JSON = join(ROOT, "public", "data", "pubs.json");
 
 // ── Types (must match worker) ───────────────────────────────────────────
