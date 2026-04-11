@@ -437,16 +437,29 @@ async function main(): Promise<void> {
       .slice(0, 20)
       .map(([town, tPubs]) => ({ name: town, slug: slugify(town), pubCount: tPubs.length }));
 
-    // Build Voronoi SVG for the UK overview.
-    const voronoiPoints: VoronoiPoint[] = allQualifying
-      .filter((p) => p.sun != null)
-      .map((p) => ({
-        lng: p.lng,
-        lat: p.lat,
-        score: p.sun?.score ?? null,
-        label: `${p.name}${p.sun ? ` — ${p.sun.score}/100` : ""}${p.town ? ` (${p.town})` : ""}`,
-        href: `/pub/${p.slug || ""}/`,
-      }));
+    // Build Voronoi SVG for the UK overview using 0.1° grid cells (~2.5k points)
+    // instead of individual pubs (~28k) to keep the SVG lightweight.
+    const gridCells = new Map<string, { lat: number; lng: number; scores: number[]; count: number }>();
+    for (const p of allQualifying.filter((p) => p.sun != null)) {
+      const cellLat = Math.floor(p.lat * 10) / 10 + 0.05; // cell centroid
+      const cellLng = Math.floor(p.lng * 10) / 10 + 0.05;
+      const key = `${cellLat}_${cellLng}`;
+      const cell = gridCells.get(key) || { lat: cellLat, lng: cellLng, scores: [], count: 0 };
+      cell.scores.push(p.sun?.score ?? 0);
+      cell.count++;
+      gridCells.set(key, cell);
+    }
+
+    const voronoiPoints: VoronoiPoint[] = [...gridCells.values()].map((cell) => {
+      const avgScore = Math.round(cell.scores.reduce((a, b) => a + b, 0) / cell.scores.length);
+      return {
+        lng: cell.lng,
+        lat: cell.lat,
+        score: avgScore,
+        label: `${cell.count} pubs, avg ${avgScore}/100`,
+        href: "/explore/",
+      };
+    });
 
     const countryOverlay = onsCountries
       ? renderCountryOverlay(onsCountries.features)
@@ -454,6 +467,7 @@ async function main(): Promise<void> {
     const ukMapSvg = voronoiPoints.length > 10
       ? renderVoronoiSvg(voronoiPoints, { overlayPaths: countryOverlay })
       : "";
+    console.log(`  Voronoi map: ${voronoiPoints.length} grid cells`);
 
     // Build county boundary SVG data for country pages.
     const countyDataMap = new Map<string, CountyData>();
