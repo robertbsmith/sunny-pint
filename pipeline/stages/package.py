@@ -13,15 +13,9 @@ stable slugs via data/slug_lock.json.
 import json
 import math
 import re
-import subprocess
-import sys
 from pathlib import Path
 
-# Add scripts/ to path for shared modules.
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
-
-from localities import la_to_country, la_to_town_fallback
+from pipeline.utils.localities import la_to_country, la_to_town_fallback
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 PUBLIC_DATA = Path(__file__).resolve().parent.parent.parent / "public" / "data"
@@ -205,16 +199,10 @@ def assemble_outputs(pubs: list[dict]) -> dict:
 
 
 def generate_tiles(area) -> dict:
-    """Run generate_tiles.py for PMTiles output."""
-    script = SCRIPTS_DIR / "generate_tiles.py"
-    print("  Running generate_tiles.py...", flush=True)
-    result = subprocess.run(
-        ["uv", "run", "--project", str(SCRIPTS_DIR), "python", str(script),
-         "--area", area.name.lower()],
-        text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"generate_tiles.py failed: {result.returncode}")
+    """Generate PMTiles from buildings GeoPackage."""
+    from pipeline.stages.tiles import main as tiles_main
+    print("  Generating building tiles...", flush=True)
+    tiles_main(area)
     return {}
 
 

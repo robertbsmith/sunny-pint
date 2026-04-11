@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import argparse
 import base64
 import json
 import math
@@ -25,11 +26,12 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import numpy as np
+# Ensure workspace root is on sys.path for `pipeline.*` imports.
+_root = str(Path(__file__).resolve().parent.parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
-# Add scripts/ to path for shared modules.
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "scripts"
-sys.path.insert(0, str(SCRIPTS_DIR))
+import numpy as np
 
 from pipeline.utils.terrain50 import Terrain50, download_terrain50
 

@@ -1,10 +1,10 @@
 """Pipeline v2 orchestrator.
 
 Usage:
-    uv run python pipeline/run.py --area uk
-    uv run python pipeline/run.py --area uk --stage enrich,package
-    uv run python pipeline/run.py --area uk --force
-    uv run python pipeline/run.py --area uk --dry-run
+    uv run --project pipeline python pipeline/run.py --area uk
+    uv run --project pipeline python pipeline/run.py --area uk --stage enrich,package
+    uv run --project pipeline python pipeline/run.py --area uk --force
+    uv run --project pipeline python pipeline/run.py --area uk --dry-run
 """
 
 import argparse
@@ -12,10 +12,13 @@ import sys
 import time
 from pathlib import Path
 
-# Add scripts/ to path so we can import areas.py.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+# Ensure the workspace root is on sys.path so `pipeline.*` imports resolve
+# regardless of which directory `uv run` uses as cwd.
+_root = str(Path(__file__).resolve().parent.parent)
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
-from areas import parse_area_name, Area
+from pipeline.utils.areas import parse_area_name, Area
 from pipeline.manifest import (
     hash_inputs,
     load_manifest,

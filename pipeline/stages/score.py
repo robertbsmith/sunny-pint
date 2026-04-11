@@ -1,6 +1,6 @@
 """Stage 5: SCORE — compute Sunny Ratings via TypeScript worker pool.
 
-Shells out to `pnpm tsx scripts/precompute_sun.ts`. The TypeScript code
+Shells out to `pnpm tsx pipeline/ts/precompute_sun.ts`. The TypeScript code
 uses the same shadow.ts as the browser — single source of truth.
 
 After scoring, regenerates pubs-index.json and detail chunks so they
@@ -114,7 +114,7 @@ def run(area) -> dict:
     # Run precompute_sun.ts.
     print("  Running precompute_sun.ts...", flush=True)
     result = subprocess.run(
-        ["pnpm", "tsx", str(ROOT / "scripts" / "precompute_sun.ts")],
+        ["pnpm", "tsx", str(ROOT / "pipeline" / "ts" / "precompute_sun.ts")],
         cwd=str(ROOT),
         text=True,
     )

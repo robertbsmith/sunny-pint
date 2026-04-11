@@ -61,7 +61,7 @@ ci: typecheck lint build
 # Upload pipeline data to R2 via S3 API (boto3, connection-pooled).
 # Requires: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY env vars.
 deploy-data:
-    uv run --project scripts python scripts/deploy_data.py
+    uv run --project pipeline python pipeline/deploy_data.py
 
 # Full deploy: build SPA + upload data to R2.
 # Code deploys via GitHub push → Cloudflare Pages auto-build.
@@ -72,12 +72,12 @@ deploy: release deploy-data
 
 # Run full v2 pipeline. Auto-downloads OSM extracts + OS Terrain 50.
 pipeline:
-    uv run --project scripts python pipeline/run.py --area {{area}}
+    uv run --project pipeline python pipeline/run.py --area {{area}}
 
 # Recompute terrain horizons with extended 3km range (OS Terrain 50).
 # No LiDAR re-download needed — runs in ~50s for 38k pubs.
 horizon:
-    uv run --project scripts python pipeline/stages/horizon.py --area {{area}}
+    uv run --project pipeline python pipeline/stages/horizon.py --area {{area}}
 
 # ── Legacy v1 Scripts (archived, not used by v2) ─────────────────────
 

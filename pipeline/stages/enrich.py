@@ -56,10 +56,7 @@ from pipeline.utils.grid import (
 )
 from pipeline.utils.progress import eta_str, write_progress
 
-# Import WCS/COG fallback fetchers from v1 for Wales + Scotland.
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
-from measure_heights import fetch_ndsm as _fetch_ndsm_wcs
+from pipeline.utils.lidar import fetch_ndsm as _fetch_ndsm_wcs
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
@@ -646,7 +643,7 @@ def _load_parcels(pubs_osgb: list[tuple[float, float]]) -> tuple:
 
 def run(area) -> dict:
     """Run the ENRICH stage. Returns stats dict."""
-    from areas import in_bbox
+    from pipeline.utils.areas import in_bbox
     from pipeline.utils.terrain50 import Terrain50, download_terrain50
 
     # Ensure OS Terrain 50 is available for long-range horizon rays.
