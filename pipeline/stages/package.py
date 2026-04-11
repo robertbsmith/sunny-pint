@@ -15,7 +15,7 @@ import math
 import re
 from pathlib import Path
 
-from pipeline.utils.localities import la_to_country, la_to_town_fallback
+from pipeline.utils.localities import la_to_country, la_to_county, la_to_town_fallback
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 PUBLIC_DATA = Path(__file__).resolve().parent.parent.parent / "public" / "data"
@@ -27,7 +27,7 @@ SLUG_LOCK = DATA_DIR / "slug_lock.json"
 
 # Fields for the slim index (everything the pub list + search needs).
 INDEX_FIELDS = {
-    "id", "name", "lat", "lng", "slug", "town", "country",
+    "id", "name", "lat", "lng", "slug", "town", "county", "country",
     "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
 }
 
@@ -164,6 +164,24 @@ def assemble_outputs(pubs: list[dict]) -> dict:
     # Deduplicate before processing.
     pubs = _dedup_pubs(pubs)
 
+    # Carry forward sun scores from existing pubs.json so PACKAGE reruns
+    # don't wipe out scores computed by SCORE. Scores live in pubs.json
+    # (written by precompute_sun) but not in pubs_enriched.json.
+    if PUBS_OUT.exists():
+        try:
+            existing = json.loads(PUBS_OUT.read_text())
+            sun_by_slug = {p["slug"]: p["sun"] for p in existing if p.get("sun") and p.get("slug")}
+            if sun_by_slug:
+                carried = 0
+                for pub in pubs:
+                    if not pub.get("sun") and pub.get("slug") in sun_by_slug:
+                        pub["sun"] = sun_by_slug[pub["slug"]]
+                        carried += 1
+                if carried:
+                    print(f"  Carried forward {carried} sun scores from existing pubs.json")
+        except (json.JSONDecodeError, KeyError):
+            pass
+
     # Derive town/country for every pub.
     for pub in pubs:
         if not pub.get("town"):
@@ -172,13 +190,19 @@ def assemble_outputs(pubs: list[dict]) -> dict:
                 pub["town"] = town
         if not pub.get("country"):
             pub["country"] = la_to_country(pub.get("local_authority"))
+        if not pub.get("county"):
+            county = la_to_county(pub.get("local_authority"))
+            if county:
+                pub["county"] = county
 
     # Generate stable slugs.
     new_slugs = assign_slugs(pubs)
     print(f"  {new_slugs} new slugs assigned")
 
     with_town = sum(1 for p in pubs if p.get("town"))
+    with_county = sum(1 for p in pubs if p.get("county"))
     print(f"  {with_town}/{len(pubs)} pubs have a town")
+    print(f"  {with_county}/{len(pubs)} pubs have a county")
 
     # Build output files.
     PUBLIC_DATA.mkdir(parents=True, exist_ok=True)

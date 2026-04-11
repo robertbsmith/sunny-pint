@@ -688,3 +688,202 @@ export function renderThemePage(template: string, ctx: ThemeContext): string {
     seoIntro,
   });
 }
+
+// ── Explore page renderers ─────────────────────────────────────────────
+
+export interface ExploreCountryStats {
+  name: string;
+  slug: string;
+  pubCount: number;
+  avgScore: number | null;
+}
+
+export interface ExploreCountyStats {
+  name: string;
+  slug: string;
+  country: string;
+  countrySlug: string;
+  pubCount: number;
+  avgScore: number | null;
+  towns: { name: string; slug: string; pubCount: number; avgScore: number | null }[];
+  topPubs: Pub[];
+}
+
+/** Render the /explore/ overview page. */
+export function renderExplorePage(
+  template: string,
+  countries: ExploreCountryStats[],
+  mapSvg: string,
+  topCities: { name: string; slug: string; pubCount: number }[],
+  totalPubs: number,
+): string {
+  const title = "Explore sunny beer gardens across the UK — Sunny Pint";
+  const description =
+    `Browse ${totalPubs.toLocaleString()} pub gardens across England, Scotland, and Wales. ` +
+    `Find the sunniest beer gardens near you with our interactive sun score map.`;
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { name: "Sunny Pint", path: "/" },
+    { name: "Explore", path: "/explore/" },
+  ];
+
+  const countryCards = countries
+    .map(
+      (c) =>
+        `  <a href="/explore/${c.slug}/" class="explore-card">\n` +
+        `    <h3>${htmlEscape(c.name)}</h3>\n` +
+        `    <p>${c.pubCount.toLocaleString()} pubs` +
+        `${c.avgScore !== null ? ` · avg ${Math.round(c.avgScore)}/100` : ""}</p>\n` +
+        `  </a>`,
+    )
+    .join("\n");
+
+  const cityList = topCities
+    .map(
+      (c) =>
+        `    <li><a href="/${c.slug}/">${htmlEscape(c.name)}</a> (${c.pubCount} pubs)</li>`,
+    )
+    .join("\n");
+
+  const seoIntro =
+    `<section id="seo-intro" class="seo-intro seo-intro--landing seo-intro--explore">\n` +
+    `  ${breadcrumbHtml(breadcrumbs)}\n` +
+    `  <h1>Explore sunny beer gardens across the UK</h1>\n` +
+    `  <p>${totalPubs.toLocaleString()} pub gardens ranked by Sunny Rating — find where the sun shines longest.</p>\n` +
+    `  <div class="explore-map-wrap">${mapSvg}</div>\n` +
+    `  <div class="explore-countries">\n${countryCards}\n  </div>\n` +
+    `  <h2>Popular areas</h2>\n` +
+    `  <ul class="explore-city-list">\n${cityList}\n  </ul>\n` +
+    `</section>`;
+
+  return applyTemplate(template, {
+    title,
+    description,
+    canonicalPath: "/explore/",
+    spArea: "",
+    spAreaName: "UK",
+    spAreaLat: 54.5,
+    spAreaLng: -2.0,
+    spPub: "",
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs)],
+    seoIntro,
+  });
+}
+
+/** Render a /explore/england/ country page. */
+export function renderCountryPage(
+  template: string,
+  countryName: string,
+  countrySlug: string,
+  counties: ExploreCountyStats[],
+  mapSvg: string,
+  totalPubs: number,
+): string {
+  const title = `Sunny beer gardens in ${countryName} — Sunny Pint`;
+  const description =
+    `${totalPubs.toLocaleString()} pub gardens across ${counties.length} counties in ${countryName}. ` +
+    `Browse by county to find the sunniest beer gardens.`;
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { name: "Sunny Pint", path: "/" },
+    { name: "Explore", path: "/explore/" },
+    { name: countryName, path: `/explore/${countrySlug}/` },
+  ];
+
+  const countyList = [...counties]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(
+      (c) =>
+        `    <li><a href="/explore/${countrySlug}/${c.slug}/">${htmlEscape(c.name)}</a> — ` +
+        `${c.pubCount} pubs${c.avgScore !== null ? `, avg ${Math.round(c.avgScore)}/100` : ""}</li>`,
+    )
+    .join("\n");
+
+  const seoIntro =
+    `<section id="seo-intro" class="seo-intro seo-intro--landing seo-intro--explore">\n` +
+    `  ${breadcrumbHtml(breadcrumbs)}\n` +
+    `  <h1>Sunny beer gardens in ${htmlEscape(countryName)}</h1>\n` +
+    `  <p>${totalPubs.toLocaleString()} pubs across ${counties.length} counties.</p>\n` +
+    `  <div class="explore-map-wrap">${mapSvg}</div>\n` +
+    `  <h2>Counties</h2>\n` +
+    `  <ul class="explore-county-list">\n${countyList}\n  </ul>\n` +
+    `</section>`;
+
+  return applyTemplate(template, {
+    title,
+    description,
+    canonicalPath: `/explore/${countrySlug}/`,
+    spArea: "",
+    spAreaName: countryName,
+    spAreaLat: countryName === "Scotland" ? 56.5 : countryName === "Wales" ? 52.3 : 52.5,
+    spAreaLng: countryName === "Scotland" ? -4.0 : countryName === "Wales" ? -3.5 : -1.5,
+    spPub: "",
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs)],
+    seoIntro,
+  });
+}
+
+/** Render a /explore/england/norfolk/ county page. */
+export function renderCountyPage(
+  template: string,
+  county: ExploreCountyStats,
+): string {
+  const title = `Sunny beer gardens in ${county.name} — Sunny Pint`;
+  const description =
+    `${county.pubCount} pub gardens across ${county.towns.length} towns in ${county.name}. ` +
+    `Browse by town to find the sunniest beer gardens.`;
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { name: "Sunny Pint", path: "/" },
+    { name: "Explore", path: "/explore/" },
+    { name: county.country, path: `/explore/${county.countrySlug}/` },
+    { name: county.name, path: `/explore/${county.countrySlug}/${county.slug}/` },
+  ];
+
+  const townList = [...county.towns]
+    .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0))
+    .map((t) => {
+      const link = t.pubCount >= 8
+        ? `<a href="/${t.slug}/">${htmlEscape(t.name)}</a>`
+        : htmlEscape(t.name);
+      return `    <li>${link} — ${t.pubCount} pubs${t.avgScore !== null ? `, avg ${Math.round(t.avgScore)}/100` : ""}</li>`;
+    })
+    .join("\n");
+
+  const topPubList = county.topPubs
+    .slice(0, 15)
+    .map(
+      (p) =>
+        `    <li><a href="/pub/${htmlEscape(p.slug ?? "")}/">${htmlEscape(p.name)}</a>` +
+        `${p.sun ? ` — ${p.sun.score}/100` : ""}` +
+        `${p.town ? ` <small>(${htmlEscape(p.town)})</small>` : ""}</li>`,
+    )
+    .join("\n");
+
+  const seoIntro =
+    `<section id="seo-intro" class="seo-intro seo-intro--landing seo-intro--explore">\n` +
+    `  ${breadcrumbHtml(breadcrumbs)}\n` +
+    `  <h1>Sunny beer gardens in ${htmlEscape(county.name)}</h1>\n` +
+    `  <p>${county.pubCount} pubs across ${county.towns.length} towns in ${htmlEscape(county.name)}` +
+    `${county.avgScore !== null ? `, average Sunny Rating ${Math.round(county.avgScore)}/100` : ""}.</p>\n` +
+    `  <h2>Towns</h2>\n` +
+    `  <ul class="explore-town-list">\n${townList}\n  </ul>\n` +
+    (county.topPubs.length > 0
+      ? `  <h2>Sunniest pubs in ${htmlEscape(county.name)}</h2>\n` +
+        `  <ul class="explore-pub-list">\n${topPubList}\n  </ul>\n`
+      : "") +
+    `</section>`;
+
+  return applyTemplate(template, {
+    title,
+    description,
+    canonicalPath: `/explore/${county.countrySlug}/${county.slug}/`,
+    spArea: "",
+    spAreaName: county.name,
+    spAreaLat: 0,
+    spAreaLng: 0,
+    spPub: "",
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs)],
+    seoIntro,
+  });
+}

@@ -41,6 +41,7 @@ export interface Pub {
   // Locality (added by match_plots.py — drives SEO landing pages and routing)
   slug?: string;
   town?: string;
+  county?: string;
   country?: string;
   local_authority?: string;
   // Raw OSM address tags (used by match_plots.py for town derivation)

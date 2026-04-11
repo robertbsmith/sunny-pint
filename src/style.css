@@ -886,6 +886,99 @@ html.dark .sunny-badge--sunny {
   }
 }
 
+/* ── Explore pages ─────────────────────────────────────────────── */
+
+.explore-map-wrap {
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.explore-map {
+  max-width: 100%;
+  height: auto;
+  max-height: 500px;
+}
+
+.explore-countries {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.explore-card {
+  display: block;
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--surface-container);
+  text-decoration: none;
+  color: var(--on-surface);
+  transition: background 0.15s;
+}
+
+.explore-card:hover {
+  background: var(--surface-container-high);
+}
+
+.explore-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  color: var(--primary);
+}
+
+.explore-card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--on-surface-variant);
+}
+
+.explore-county-list,
+.explore-town-list,
+.explore-city-list,
+.explore-pub-list {
+  list-style: none;
+  padding: 0;
+  columns: 2;
+  gap: 0.5rem;
+}
+
+.explore-county-list li,
+.explore-town-list li,
+.explore-city-list li,
+.explore-pub-list li {
+  padding: 0.3rem 0;
+  break-inside: avoid;
+}
+
+.explore-county-list a,
+.explore-town-list a,
+.explore-city-list a,
+.explore-pub-list a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.explore-county-list a:hover,
+.explore-town-list a:hover,
+.explore-city-list a:hover,
+.explore-pub-list a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .explore-county-list,
+  .explore-town-list,
+  .explore-city-list,
+  .explore-pub-list {
+    columns: 1;
+  }
+
+  .explore-map {
+    max-height: 300px;
+  }
+}
+
 /* ── Viz section (porthole + arc) ────────────────────────────────── */
 
 #viz {

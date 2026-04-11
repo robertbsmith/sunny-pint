@@ -32,11 +32,23 @@ import {
   type Pub,
   qualifying,
   renderCityPage,
+  renderCountryPage,
+  renderCountyPage,
+  renderExplorePage,
   renderThemePage,
   slugify,
   THEMES,
   type ThemeDef,
+  type ExploreCountryStats,
+  type ExploreCountyStats,
 } from "../functions/_lib/render";
+import {
+  renderCountySvg,
+  renderVoronoiSvg,
+  renderCountryOverlay,
+  type CountyData,
+  type VoronoiPoint,
+} from "../functions/_lib/geo_svg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -335,23 +347,209 @@ async function main(): Promise<void> {
     });
   }
 
+  console.log(
+    `  lastmod: ${cityChangedCount} cities + ${themeChangedCount} themes + ${pubChangedCount} pubs bumped (rest reuse previous date)`,
+  );
+
+  // ── Explore pages ─────────────────────────────────────────────────────
+
+  const COUNTY_MAP_PATH = join(ROOT, "data", "county_map.json");
+  const ONS_COUNTIES_PATH = join(ROOT, "data", "ons_counties.geojson");
+  const ONS_COUNTRIES_PATH = join(ROOT, "data", "ons_countries.geojson");
+  const MIN_COUNTY_PUBS = 8;
+  const MIN_COUNTY_INDEX = 20;
+
+  if (existsSync(COUNTY_MAP_PATH) && existsSync(ONS_COUNTIES_PATH)) {
+    console.log("\n  Generating explore pages...");
+
+    const countyMap: Record<string, { county: string; country: string }> =
+      JSON.parse(readFileSync(COUNTY_MAP_PATH, "utf-8"));
+    const onsCounties = JSON.parse(readFileSync(ONS_COUNTIES_PATH, "utf-8"));
+    const onsCountries = existsSync(ONS_COUNTRIES_PATH)
+      ? JSON.parse(readFileSync(ONS_COUNTRIES_PATH, "utf-8"))
+      : null;
+
+    // Group all qualifying pubs by county.
+    const pubsByCounty = new Map<string, { country: string; pubs: Pub[] }>();
+    for (const pub of allQualifying) {
+      const la = (pub as Record<string, unknown>).local_authority as string | undefined;
+      const mapping = la ? countyMap[la] : undefined;
+      const county = (pub as Record<string, unknown>).county as string | undefined
+        || mapping?.county;
+      const country = pub.country || mapping?.country || "England";
+      if (!county) continue;
+      const entry = pubsByCounty.get(county) || { country, pubs: [] };
+      entry.pubs.push(pub);
+      pubsByCounty.set(county, entry);
+    }
+
+    // Build county stats.
+    const allCountyStats: ExploreCountyStats[] = [];
+    for (const [countyName, { country, pubs: countyPubs }] of pubsByCounty) {
+      const scored = countyPubs.filter((p) => p.sun != null);
+      const avgScore = scored.length > 0
+        ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
+        : null;
+
+      // Group by town within county.
+      const townGroups = groupByTown(countyPubs);
+      const towns = [...townGroups.entries()]
+        .map(([town, tPubs]) => {
+          const tScored = tPubs.filter((p) => p.sun != null);
+          const tAvg = tScored.length > 0
+            ? Math.round(tScored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / tScored.length)
+            : null;
+          return { name: town, slug: slugify(town), pubCount: tPubs.length, avgScore: tAvg };
+        })
+        .sort((a, b) => b.pubCount - a.pubCount);
+
+      const topPubs = [...countyPubs]
+        .filter((p) => p.sun != null)
+        .sort((a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0))
+        .slice(0, 15);
+
+      allCountyStats.push({
+        name: countyName,
+        slug: slugify(countyName),
+        country,
+        countrySlug: slugify(country),
+        pubCount: countyPubs.length,
+        avgScore,
+        towns,
+        topPubs,
+      });
+    }
+
+    // Country stats.
+    const countryNames = ["England", "Scotland", "Wales"];
+    const countryStats: ExploreCountryStats[] = countryNames.map((name) => {
+      const cPubs = allQualifying.filter((p) => p.country === name);
+      const scored = cPubs.filter((p) => p.sun != null);
+      const avgScore = scored.length > 0
+        ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
+        : null;
+      return { name, slug: slugify(name), pubCount: cPubs.length, avgScore };
+    }).filter((c) => c.pubCount > 0);
+
+    // Top cities for the overview.
+    const topCities = qualifyingTowns
+      .sort(([, a], [, b]) => b.length - a.length)
+      .slice(0, 20)
+      .map(([town, tPubs]) => ({ name: town, slug: slugify(town), pubCount: tPubs.length }));
+
+    // Build Voronoi SVG for the UK overview.
+    const voronoiPoints: VoronoiPoint[] = allQualifying
+      .filter((p) => p.sun != null)
+      .map((p) => ({
+        lng: p.lng,
+        lat: p.lat,
+        score: p.sun?.score ?? null,
+        label: `${p.name}${p.sun ? ` — ${p.sun.score}/100` : ""}${p.town ? ` (${p.town})` : ""}`,
+        href: `/pub/${p.slug || ""}/`,
+      }));
+
+    const countryOverlay = onsCountries
+      ? renderCountryOverlay(onsCountries.features)
+      : "";
+    const ukMapSvg = voronoiPoints.length > 10
+      ? renderVoronoiSvg(voronoiPoints, { overlayPaths: countryOverlay })
+      : "";
+
+    // Build county boundary SVG data for country pages.
+    const countyDataMap = new Map<string, CountyData>();
+    for (const cs of allCountyStats) {
+      countyDataMap.set(cs.name, {
+        name: cs.name,
+        slug: cs.slug,
+        country: cs.country,
+        pubCount: cs.pubCount,
+        avgScore: cs.avgScore,
+      });
+    }
+
+    // /explore/ overview page.
+    const exploreDir = join(DIST, "explore");
+    mkdirSync(exploreDir, { recursive: true });
+    writeFileSync(
+      join(exploreDir, "index.html"),
+      renderExplorePage(template, countryStats, ukMapSvg, topCities, allQualifying.length),
+    );
+    const exploreKey = "/explore/";
+    const exploreHash = createHash("sha256")
+      .update(allQualifying.length.toString())
+      .digest("hex")
+      .slice(0, 16);
+    sitemapEntries.push({
+      url: `${SITE_URL}${exploreKey}`,
+      lastmod: resolveLastmod(lastmodState, exploreKey, exploreHash, today),
+    });
+    console.log(`  /explore/  (${allQualifying.length} pubs)`);
+
+    // Country pages.
+    for (const cs of countryStats) {
+      const countryCounties = allCountyStats.filter((c) => c.country === cs.name);
+      const countrySvg = renderCountySvg(onsCounties.features, countyDataMap, {
+        countryFilter: cs.name,
+        linkPrefix: "/explore/",
+      });
+
+      const countryDir = join(exploreDir, cs.slug);
+      mkdirSync(countryDir, { recursive: true });
+      writeFileSync(
+        join(countryDir, "index.html"),
+        renderCountryPage(template, cs.name, cs.slug, countryCounties, countrySvg, cs.pubCount),
+      );
+      const countryKey = `/explore/${cs.slug}/`;
+      sitemapEntries.push({
+        url: `${SITE_URL}${countryKey}`,
+        lastmod: resolveLastmod(lastmodState, countryKey, cs.pubCount.toString(), today),
+      });
+      console.log(`  /explore/${cs.slug}/  (${countryCounties.length} counties, ${cs.pubCount} pubs)`);
+
+      // County pages.
+      let countyEmitted = 0;
+      for (const county of countryCounties) {
+        if (county.pubCount < MIN_COUNTY_PUBS) continue;
+
+        let countyHtml = renderCountyPage(template, county);
+        if (county.pubCount < MIN_COUNTY_INDEX) {
+          countyHtml = injectNoindex(countyHtml);
+        }
+
+        const countyDir = join(exploreDir, cs.slug, county.slug);
+        mkdirSync(countyDir, { recursive: true });
+        writeFileSync(join(countyDir, "index.html"), countyHtml);
+        countyEmitted++;
+
+        if (county.pubCount >= MIN_COUNTY_INDEX) {
+          const countyKey = `/explore/${cs.slug}/${county.slug}/`;
+          sitemapEntries.push({
+            url: `${SITE_URL}${countyKey}`,
+            lastmod: resolveLastmod(lastmodState, countyKey, county.pubCount.toString(), today),
+          });
+        }
+      }
+      console.log(`    ${countyEmitted} county pages emitted`);
+    }
+  } else {
+    console.log("\n  Skipping explore pages (county_map.json or ONS boundaries not found)");
+  }
+
+  // ── Finalize ────────────────────────────────────────────────────────
+
   saveLastmodState(lastmodState);
 
   const sitemap = renderSitemap(sitemapEntries);
   writeFileSync(join(DIST, "sitemap.xml"), sitemap);
   console.log(
-    `  /sitemap.xml (${sitemapEntries.length} URLs: ` +
-      `1 home + ${qualifyingTowns.length} cities + ${pubSlugList.length} pubs)`,
-  );
-  console.log(
-    `  lastmod: ${cityChangedCount} cities + ${themeChangedCount} themes + ${pubChangedCount} pubs bumped (rest reuse previous date)`,
+    `\n  /sitemap.xml (${sitemapEntries.length} URLs)`,
   );
 
   // 404.
   writeFileSync(join(DIST, "404.html"), render404(template));
   console.log("  /404.html");
 
-  console.log(`\nDone. ${qualifyingTowns.length} city pages emitted to ${DIST}.`);
+  console.log(`\nDone.`);
 }
 
 main();

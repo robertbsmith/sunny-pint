@@ -123,18 +123,49 @@ _LA_PREFIXES: tuple[str, ...] = (
 )
 
 
-def la_to_country(local_authority: str | None) -> str:
-    """Classify a local authority as England, Wales, Scotland or Northern Ireland.
+def _load_county_map() -> dict[str, dict]:
+    """Load the LA → county mapping from county_map.json."""
+    import json
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent.parent / "data" / "county_map.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
 
-    INSPIRE only covers England + Wales, so any pub matched to a parcel will
-    return one of those. Pubs not matched to a parcel default to England (the
-    OSM data we ingest is England-only today via `england-latest.osm.pbf`).
-    """
+
+_county_map: dict[str, dict] | None = None
+
+
+def _get_county_map() -> dict[str, dict]:
+    global _county_map
+    if _county_map is None:
+        _county_map = _load_county_map()
+    return _county_map
+
+
+def la_to_country(local_authority: str | None) -> str:
+    """Classify a local authority as England, Wales, or Scotland."""
     if not local_authority:
         return "England"
     if local_authority in WELSH_LAS:
         return "Wales"
+    # Check county_map for Scottish (3-letter codes) and any other entries.
+    cm = _get_county_map()
+    entry = cm.get(local_authority)
+    if entry:
+        return entry.get("country", "England")
     return "England"
+
+
+def la_to_county(local_authority: str | None) -> str | None:
+    """Look up the county for a local authority. Returns None if not mapped."""
+    if not local_authority:
+        return None
+    cm = _get_county_map()
+    entry = cm.get(local_authority)
+    if entry:
+        return entry.get("county")
+    return None
 
 
 def la_to_town_fallback(local_authority: str | None) -> str | None:

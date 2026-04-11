@@ -1,7 +1,11 @@
 {
   "/": {
-    "hash": "f801dca99814bc37",
-    "lastmod": "2026-04-09"
+    "hash": "e3b0c44298fc1c14",
+    "lastmod": "2026-04-11"
+  },
+  "/explore/": {
+    "hash": "5feceb66ffc86f38",
+    "lastmod": "2026-04-11"
   },
   "/norwich/": {
     "hash": "33c4ae229a9c5a2e",
