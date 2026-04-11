@@ -464,8 +464,12 @@ async function main(): Promise<void> {
     const countryOverlay = onsCountries
       ? renderCountryOverlay(onsCountries.features)
       : "";
+    // Clip Voronoi cells to GB coastline so ocean areas are empty.
+    const clipFeatures = onsCountries
+      ? onsCountries.features.filter((f: any) => f.properties.CTRY23NM !== "Northern Ireland")
+      : [];
     const ukMapSvg = voronoiPoints.length > 10
-      ? renderVoronoiSvg(voronoiPoints, { overlayPaths: countryOverlay })
+      ? renderVoronoiSvg(voronoiPoints, { overlayPaths: countryOverlay, clipFeatures })
       : "";
     console.log(`  Voronoi map: ${voronoiPoints.length} grid cells`);
 

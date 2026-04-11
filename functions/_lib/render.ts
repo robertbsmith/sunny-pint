@@ -750,10 +750,14 @@ export function renderExplorePage(
     `  ${breadcrumbHtml(breadcrumbs)}\n` +
     `  <h1>Explore sunny beer gardens across the UK</h1>\n` +
     `  <p>${totalPubs.toLocaleString()} pub gardens ranked by Sunny Rating — find where the sun shines longest.</p>\n` +
-    `  <div class="explore-map-wrap">${mapSvg}</div>\n` +
     `  <div class="explore-countries">\n${countryCards}\n  </div>\n` +
-    `  <h2>Popular areas</h2>\n` +
-    `  <ul class="explore-city-list">\n${cityList}\n  </ul>\n` +
+    `  <div class="explore-layout">\n` +
+    `    <div class="explore-map-wrap">${mapSvg}</div>\n` +
+    `    <div class="explore-sidebar">\n` +
+    `      <h2>Popular areas</h2>\n` +
+    `      <ul class="explore-city-list">\n${cityList}\n      </ul>\n` +
+    `    </div>\n` +
+    `  </div>\n` +
     `</section>`;
 
   return applyTemplate(template, {

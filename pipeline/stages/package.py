@@ -43,11 +43,24 @@ DETAIL_FIELDS = {
 # ── Locality + slug derivation ───────────────────────────────────────────
 
 
-def derive_town(pub: dict) -> str | None:
+def derive_town(pub: dict, place_lookup=None, to_osgb=None) -> str | None:
+    """Derive town name for a pub.
+
+    Priority:
+    1. OSM addr tags (most accurate)
+    2. OS Open Names nearest populated place (geocoded from coordinates)
+    3. LA name fallback (stripped suffix, last resort)
+    """
     for key in ("addr_city", "addr_town", "addr_village", "addr_hamlet", "addr_place"):
         val = pub.get(key)
         if val:
             return val.strip()
+    # Geocode from coordinates via OS Open Names.
+    if place_lookup and place_lookup.available and to_osgb:
+        e, n = to_osgb.transform(pub["lng"], pub["lat"])
+        name = place_lookup.nearest_town(e, n)
+        if name:
+            return name
     return la_to_town_fallback(pub.get("local_authority"))
 
 
@@ -182,12 +195,22 @@ def assemble_outputs(pubs: list[dict]) -> dict:
         except (json.JSONDecodeError, KeyError):
             pass
 
+    # Initialize OS Open Names place lookup for town derivation.
+    from pipeline.utils.places import PlaceLookup
+    from pyproj import Transformer
+    place_lookup = PlaceLookup()
+    to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True) if place_lookup.available else None
+    if place_lookup.available:
+        print("  OS Open Names loaded for town derivation")
+
     # Derive town/country for every pub.
+    geocoded = 0
     for pub in pubs:
         if not pub.get("town"):
-            town = derive_town(pub)
+            town = derive_town(pub, place_lookup, to_osgb)
             if town:
                 pub["town"] = town
+                geocoded += 1
         if not pub.get("country"):
             pub["country"] = la_to_country(pub.get("local_authority"))
         if not pub.get("county"):
@@ -201,7 +224,7 @@ def assemble_outputs(pubs: list[dict]) -> dict:
 
     with_town = sum(1 for p in pubs if p.get("town"))
     with_county = sum(1 for p in pubs if p.get("county"))
-    print(f"  {with_town}/{len(pubs)} pubs have a town")
+    print(f"  {with_town}/{len(pubs)} pubs have a town ({geocoded} geocoded from OS Open Names)")
     print(f"  {with_county}/{len(pubs)} pubs have a county")
 
     # Build output files.

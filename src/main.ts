@@ -496,9 +496,14 @@ function dismissSeoContent(): void {
 
 async function init(): Promise<void> {
   // Explore pages are pure HTML — skip SPA initialization entirely.
+  // Hide the entire app (porthole, pub list, footer) so only explore content shows.
   if (document.querySelector(".seo-intro--explore")) {
     applyTheme(getStoredTheme());
     initIcons();
+    const main = document.getElementById("main");
+    if (main) main.style.display = "none";
+    const footer = document.getElementById("footer");
+    if (footer) footer.style.display = "none";
     return;
   }
 

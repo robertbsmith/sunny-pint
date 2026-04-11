@@ -15,37 +15,42 @@
  * UK latitudes (50°–60°N).
  */
 
-import Delaunator from "delaunator";
+import { Delaunay } from "d3-delaunay";
 
 // ── Projection ─────────────────────────────────────────────────────────
 
-/** GB bounding box (WGS84). */
+/** GB bounding box (WGS84). Covers mainland GB including Scottish Highlands.
+ *  Excludes Shetland/Orkney. */
 const GB_BOUNDS = {
-  minLng: -8.2,
-  maxLng: 1.8,
-  minLat: 49.9,
-  maxLat: 60.9,
+  minLng: -6.5,
+  maxLng: 2.0,
+  minLat: 49.8,
+  maxLat: 58.8,
 };
 
-/** SVG viewBox dimensions. */
-const SVG_W = 400;
-const SVG_H = 600;
+/** Latitude correction for equirectangular projection at UK mid-latitude. */
+const COS_LAT = Math.cos((55 * Math.PI) / 180);
 
-/** Equirectangular projection with latitude correction. */
+// Compute projected extent in "flat" units, then derive viewBox to fit.
+const PROJ_W = (GB_BOUNDS.maxLng - GB_BOUNDS.minLng) * COS_LAT; // ~5.74°
+const PROJ_H = GB_BOUNDS.maxLat - GB_BOUNDS.minLat; // 11°
+
+// SVG viewBox: fit to projected aspect ratio with padding.
+const PAD = 8;
+const SVG_H = 600;
+const SVG_W = Math.round((SVG_H * PROJ_W) / PROJ_H) + PAD * 2; // ~313
+
+/** Equirectangular projection to SVG coordinates. */
 function project(lng: number, lat: number): [number, number] {
-  // Correct for longitude compression at UK latitude (~55°).
-  const cosLat = Math.cos((55 * Math.PI) / 180);
   const x =
-    ((lng - GB_BOUNDS.minLng) / (GB_BOUNDS.maxLng - GB_BOUNDS.minLng)) *
-    cosLat *
-    SVG_W;
-  // SVG Y is top-down, lat is bottom-up.
+    PAD +
+    ((lng - GB_BOUNDS.minLng) * COS_LAT / PROJ_W) *
+      (SVG_W - PAD * 2);
   const y =
-    (1 - (lat - GB_BOUNDS.minLat) / (GB_BOUNDS.maxLat - GB_BOUNDS.minLat)) *
-    SVG_H;
-  // Center horizontally (GB is narrower than the viewBox after cos correction).
-  const xOffset = (SVG_W - SVG_W * cosLat) / 2;
-  return [x + xOffset, y];
+    PAD +
+    (1 - (lat - GB_BOUNDS.minLat) / PROJ_H) *
+      (SVG_H - PAD * 2);
+  return [x, y];
 }
 
 // ── Color ──────────────────────────────────────────────────────────────
@@ -181,30 +186,38 @@ export function renderVoronoiSvg(
   points: VoronoiPoint[],
   options: {
     bounds?: typeof GB_BOUNDS;
-    overlayPaths?: string; // Additional SVG paths (county boundaries as strokes)
+    overlayPaths?: string;
+    /** GeoJSON features to use as clip mask (e.g. country outlines). */
+    clipFeatures?: GeoJSONFeature[];
   } = {},
 ): string {
   if (points.length < 3) return "";
 
-  const bounds = options.bounds || GB_BOUNDS;
-
-  // Project all points.
+  // Project all points to SVG coordinates.
   const projected = points.map((p) => project(p.lng, p.lat));
-  const coords = new Float64Array(projected.length * 2);
-  for (let i = 0; i < projected.length; i++) {
-    coords[i * 2] = projected[i]![0];
-    coords[i * 2 + 1] = projected[i]![1];
+
+  // Use d3-delaunay for robust Voronoi computation.
+  const delaunay = Delaunay.from(projected);
+  const voronoi = delaunay.voronoi([0, 0, SVG_W, SVG_H]);
+
+  // Build clipPath from coastline if provided.
+  let clipDef = "";
+  let clipAttr = "";
+  if (options.clipFeatures && options.clipFeatures.length > 0) {
+    const clipPaths = options.clipFeatures
+      .map((f) => featureToPath(f))
+      .filter(Boolean)
+      .join(" ");
+    clipDef =
+      `<defs><clipPath id="gb-clip">` +
+      `<path d="${clipPaths}"/>` +
+      `</clipPath></defs>\n`;
+    clipAttr = ' clip-path="url(#gb-clip)"';
   }
 
-  // Compute Delaunay triangulation.
-  const delaunay = new Delaunator(coords);
-
-  // Compute Voronoi cells from Delaunay triangulation.
-  const cells = voronoiCells(delaunay, projected, SVG_W, SVG_H);
-
-  const paths: string[] = [];
-  for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i];
+  const cellPaths: string[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const cell = voronoi.cellPolygon(i);
     if (!cell || cell.length < 3) continue;
 
     const point = points[i]!;
@@ -215,7 +228,7 @@ export function renderVoronoiSvg(
       .join("")
       .concat("Z");
 
-    paths.push(
+    cellPaths.push(
       `<a href="${point.href}">` +
         `<path d="${d}" fill="${fill}" stroke="#fff" stroke-width="0.2" opacity="0.85">` +
         `<title>${point.label}</title>` +
@@ -226,145 +239,13 @@ export function renderVoronoiSvg(
   return (
     `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" xmlns="http://www.w3.org/2000/svg" ` +
     `class="explore-map" role="img" aria-label="Sun score map">\n` +
-    paths.join("\n") +
-    (options.overlayPaths ? `\n${options.overlayPaths}` : "") +
-    "\n</svg>"
+    clipDef +
+    `<g${clipAttr}>\n` +
+    cellPaths.join("\n") +
+    `\n</g>\n` +
+    (options.overlayPaths ? `${options.overlayPaths}\n` : "") +
+    "</svg>"
   );
-}
-
-/**
- * Compute Voronoi cells from a Delaunay triangulation.
- * Returns an array of polygons (one per input point).
- */
-function voronoiCells(
-  delaunay: Delaunator<ArrayLike<number>>,
-  points: [number, number][],
-  width: number,
-  height: number,
-): [number, number][][] {
-  const { triangles, halfedges } = delaunay;
-  const numPoints = points.length;
-  const numTriangles = triangles.length / 3;
-
-  // Compute circumcenters of all triangles.
-  const circumcenters: [number, number][] = [];
-  for (let t = 0; t < numTriangles; t++) {
-    const i0 = triangles[t * 3]!;
-    const i1 = triangles[t * 3 + 1]!;
-    const i2 = triangles[t * 3 + 2]!;
-    const [ax, ay] = points[i0]!;
-    const [bx, by] = points[i1]!;
-    const [cx, cy] = points[i2]!;
-
-    const dx = bx - ax;
-    const dy = by - ay;
-    const ex = cx - ax;
-    const ey = cy - ay;
-    const bl = dx * dx + dy * dy;
-    const cl = ex * ex + ey * ey;
-    const det = 2 * (dx * ey - dy * ex);
-
-    if (Math.abs(det) < 1e-10) {
-      circumcenters.push([(ax + bx + cx) / 3, (ay + by + cy) / 3]);
-    } else {
-      circumcenters.push([
-        ax + (ey * bl - dy * cl) / det,
-        ay + (dx * cl - ex * bl) / det,
-      ]);
-    }
-  }
-
-  // Build adjacency: for each point, collect surrounding triangles in order.
-  const pointToTriangles: number[][] = Array.from(
-    { length: numPoints },
-    () => [],
-  );
-  for (let t = 0; t < numTriangles; t++) {
-    for (let j = 0; j < 3; j++) {
-      pointToTriangles[triangles[t * 3 + j]!]!.push(t);
-    }
-  }
-
-  // For each point, walk around its triangles to build the Voronoi cell.
-  const cells: [number, number][][] = [];
-  for (let i = 0; i < numPoints; i++) {
-    const tris = pointToTriangles[i]!;
-    if (tris.length === 0) {
-      cells.push([]);
-      continue;
-    }
-
-    // Order circumcenters by angle around the point.
-    const [px, py] = points[i]!;
-    const sorted = tris
-      .map((t) => {
-        const [cx, cy] = circumcenters[t]!;
-        return { t, angle: Math.atan2(cy - py, cx - px) };
-      })
-      .sort((a, b) => a.angle - b.angle);
-
-    const cell: [number, number][] = sorted.map((s) => circumcenters[s.t]!);
-
-    // Clip to viewBox.
-    const clipped = clipPolygon(cell, width, height);
-    cells.push(clipped);
-  }
-
-  return cells;
-}
-
-/** Clip a polygon to a rectangle (0,0)-(w,h) using Sutherland-Hodgman. */
-function clipPolygon(
-  polygon: [number, number][],
-  w: number,
-  h: number,
-): [number, number][] {
-  type Edge = (p: [number, number]) => boolean;
-  type Intersect = (
-    a: [number, number],
-    b: [number, number],
-  ) => [number, number];
-
-  const edges: [Edge, Intersect][] = [
-    // Left
-    [
-      (p) => p[0] >= 0,
-      (a, b) => [0, a[1] + ((b[1] - a[1]) * (0 - a[0])) / (b[0] - a[0])],
-    ],
-    // Right
-    [
-      (p) => p[0] <= w,
-      (a, b) => [w, a[1] + ((b[1] - a[1]) * (w - a[0])) / (b[0] - a[0])],
-    ],
-    // Top
-    [
-      (p) => p[1] >= 0,
-      (a, b) => [a[0] + ((b[0] - a[0]) * (0 - a[1])) / (b[1] - a[1]), 0],
-    ],
-    // Bottom
-    [
-      (p) => p[1] <= h,
-      (a, b) => [a[0] + ((b[0] - a[0]) * (h - a[1])) / (b[1] - a[1]), h],
-    ],
-  ];
-
-  let output = polygon;
-  for (const [inside, intersect] of edges) {
-    if (output.length === 0) break;
-    const input = output;
-    output = [];
-    for (let i = 0; i < input.length; i++) {
-      const current = input[i]!;
-      const prev = input[(i + input.length - 1) % input.length]!;
-      if (inside(current)) {
-        if (!inside(prev)) output.push(intersect(prev, current));
-        output.push(current);
-      } else if (inside(prev)) {
-        output.push(intersect(prev, current));
-      }
-    }
-  }
-  return output;
 }
 
 // ── Country outline paths (for overlay) ──────────────────────────────

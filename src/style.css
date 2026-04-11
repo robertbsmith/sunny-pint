@@ -888,23 +888,48 @@ html.dark .sunny-badge--sunny {
 
 /* ── Explore pages ─────────────────────────────────────────────── */
 
-.explore-map-wrap {
-  margin: 1.5rem 0;
+/* Hide the app UI (porthole, pub list, viz) on explore pages. */
+.seo-intro--explore ~ #viz,
+.seo-intro--explore ~ #pub-list-section,
+.seo-intro--explore ~ #header .location-row,
+.seo-intro--explore ~ .main-row {
+  display: none !important;
+}
+
+.explore-layout {
   display: flex;
-  justify-content: center;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  align-items: flex-start;
+}
+
+.explore-map-wrap {
+  flex: 0 0 auto;
 }
 
 .explore-map {
-  max-width: 100%;
-  height: auto;
-  max-height: 500px;
+  width: auto;
+  height: 70vh;
+  max-height: 700px;
+  min-height: 400px;
+}
+
+.explore-sidebar {
+  flex: 1;
+  min-width: 200px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.explore-sidebar h2 {
+  margin-top: 0;
 }
 
 .explore-countries {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
-  margin: 1.5rem 0;
+  margin: 1rem 0 0.5rem;
 }
 
 .explore-card {
@@ -966,16 +991,27 @@ html.dark .sunny-badge--sunny {
   text-decoration: underline;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .explore-layout {
+    flex-direction: column;
+  }
+
+  .explore-map {
+    height: auto;
+    max-height: 50vh;
+    width: 100%;
+  }
+
+  .explore-sidebar {
+    max-height: none;
+    overflow-y: visible;
+  }
+
   .explore-county-list,
   .explore-town-list,
   .explore-city-list,
   .explore-pub-list {
     columns: 1;
-  }
-
-  .explore-map {
-    max-height: 300px;
   }
 }
 
