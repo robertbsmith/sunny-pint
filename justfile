@@ -58,77 +58,28 @@ typecheck:
 # All quality checks
 ci: typecheck lint build
 
-# Upload pipeline data to R2 (detail chunks + building tiles).
-# Run after pipeline changes — R2 is separate from the Pages deploy.
+# Upload pipeline data to R2 via S3 API (boto3, connection-pooled).
+# Requires: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY env vars.
 deploy-data:
-    @echo "Uploading pubs-index.json to R2..."
-    pnpm wrangler r2 object put sunny-pint-data/data/pubs-index.json \
-        --file public/data/pubs-index.json --content-type application/json --remote
-    @echo "Uploading detail chunks to R2..."
-    @for f in public/data/detail/*.json; do \
-        name=$$(basename "$$f"); \
-        pnpm wrangler r2 object put "sunny-pint-data/data/detail/$$name" \
-            --file "$$f" --content-type application/json --remote 2>/dev/null; \
-    done
-    @echo "  $$(ls public/data/detail/*.json 2>/dev/null | wc -l) detail chunks uploaded"
-    @test -f public/data/buildings.pmtiles && \
-        pnpm wrangler r2 object put sunny-pint-data/data/buildings.pmtiles \
-            --file public/data/buildings.pmtiles --content-type application/octet-stream --remote || \
-        echo "No buildings.pmtiles found — skipping tiles upload"
-    @if [ -d public/data/og ] && [ "$$(ls public/data/og/*.jpg 2>/dev/null | wc -l)" -gt 0 ]; then \
-        echo "Uploading OG cards to R2..."; \
-        python3 -c "\
-import os, urllib.request, json, time; \
-from concurrent.futures import ThreadPoolExecutor; \
-TOKEN=os.environ['CLOUDFLARE_API_TOKEN']; \
-ACCOUNT=os.environ.get('CF_ACCOUNT_ID','a1f3acf0ef2a2839f9d87d84da3ac117'); \
-og_dir='public/data/og'; \
-files=[f for f in os.listdir(og_dir) if f.endswith('.jpg')]; \
-print(f'  {len(files)} OG cards to upload'); \
-t0=time.time(); done=0; \
-def upload(f): \
-    global done; \
-    key=f'og/{f}'; \
-    url=f'https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/r2/buckets/sunny-pint-data/objects/{key}'; \
-    data=open(f'{og_dir}/{f}','rb').read(); \
-    req=urllib.request.Request(url,data=data,method='PUT'); \
-    req.add_header('Authorization',f'Bearer {TOKEN}'); \
-    req.add_header('Content-Type','image/jpeg'); \
-    urllib.request.urlopen(req,timeout=30); \
-    done+=1; \
-    if done%500==0: print(f'  {done}/{len(files)}',flush=True); \
-with ThreadPoolExecutor(max_workers=16) as ex: list(ex.map(upload,files)); \
-print(f'  {done} OG cards uploaded in {time.time()-t0:.0f}s')"; \
-    else echo "No OG cards found — skipping"; fi
-    @echo "R2 upload complete"
+    uv run --project scripts python scripts/deploy_data.py
 
 # Full deploy: build SPA + upload data to R2.
 # Code deploys via GitHub push → Cloudflare Pages auto-build.
 deploy: release deploy-data
     @echo "dist/ ready for Pages deploy. Push to GitHub to trigger build."
 
-# ── Data Pipeline ─────────────────────────────────────────────────────
+# ── Data Pipeline (v2) ────────────────────────────────────────────────
 
-# Run full pipeline: pubs → inspire → buildings → heights → horizons → plots → tiles → sunny ratings
-pipeline: merge-pubs download-inspire build-inspire-gpkg build-gpkg measure-heights match-plots compute-horizons generate-tiles precompute-sun
+# Run full v2 pipeline. Auto-downloads OSM extracts + OS Terrain 50.
+pipeline:
+    uv run --project scripts python pipeline/run.py --area {{area}}
 
-# Full UK rollout: assumes the slow upstream pipeline (build-gpkg, measure-
-# heights, build-inspire-gpkg, generate-tiles for area=uk) has already been
-# run. Runs the FAST steps that depend on the latest source data and
-# produces a deployable dist/ for the whole UK in one command.
-#
-# Usage:
-#   just uk
-#
-# After it finishes:
-#   git add public/data/pubs.json data/slug_lock.json data/lastmod_state.json
-#   git commit -m "Refresh UK pub data"
-#   git push    # Cloudflare auto-deploys
-uk:
-    uv run --project scripts python scripts/merge_pubs.py --area uk
-    uv run --project scripts python scripts/match_plots.py --area uk
-    pnpm tsx scripts/precompute_sun.ts
-    just release
+# Recompute terrain horizons with extended 3km range (OS Terrain 50).
+# No LiDAR re-download needed — runs in ~50s for 38k pubs.
+horizon:
+    uv run --project scripts python pipeline/stages/horizon.py --area {{area}}
+
+# ── Legacy v1 Scripts (archived, not used by v2) ─────────────────────
 
 # Extract pubs from OSM
 merge-pubs:

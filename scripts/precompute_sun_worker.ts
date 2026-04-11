@@ -236,7 +236,7 @@ async function computeSunMetrics(pub: Pub): Promise<SunMetrics | null> {
       continue;
     }
 
-    const shadowQuads = computeShadows(buildings, sun, pub.elev ?? 0);
+    const shadowQuads = computeShadows(buildings, sun);
     if (shadowQuads.length === 0) {
       samples.push({ date, fraction: 1 });
       continue;

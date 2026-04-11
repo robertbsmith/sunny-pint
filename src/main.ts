@@ -16,7 +16,7 @@ import { parseHours } from "./hours";
 import { initIcons } from "./icons";
 import { initLocation } from "./location";
 import { initPubList, renderList, sortByDistance } from "./publist";
-import { computeShadows, isTerrainOccluded } from "./shadow";
+import { computeShadows, isTerrainOccluded, terrainShadowEdge } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
 import { type LocationSource, loadLocation, saveLocation, type ZoomStep } from "./storage";
@@ -162,11 +162,15 @@ function updateScene(): void {
     altitude: (pos.altitude * 180) / Math.PI,
   };
 
-  // Terrain occlusion: if a hill blocks the sun, no shadows at all.
+  // Terrain shadow: compute edge distance (null = no terrain, negative = fully shaded).
+  state.terrainShadowEdgeM = terrainShadowEdge(pub, sun);
+  state.terrainShadowAzimuth = sun.azimuth;
+
+  // If terrain fully occludes the sun, skip building shadows.
   if (isTerrainOccluded(pub, sun)) {
     state.shadowPolys = [];
   } else {
-    state.shadowPolys = computeShadows(state.buildings, sun, pub.elev ?? 0);
+    state.shadowPolys = computeShadows(state.buildings, sun);
   }
 
   const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;

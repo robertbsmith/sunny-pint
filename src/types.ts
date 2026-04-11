@@ -23,6 +23,7 @@ export interface Pub {
   clng?: number;
   elev?: number;
   horizon?: string;
+  horizon_dist?: string;
   outdoor?: [number, number][][];
   outdoor_area_m2?: number;
   beer_garden?: string;
@@ -84,6 +85,8 @@ export interface AppState {
   buildings: Building[];
   pubBuildingIndex: number;
   shadowPolys: ShadowPoly[];
+  terrainShadowEdgeM: number | null;
+  terrainShadowAzimuth: number;
   timeMins: number; // minutes from midnight
   date: Date;
   playing: boolean;

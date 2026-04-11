@@ -195,17 +195,22 @@ def _sample_building_heights(
 # ── Horizon computation ──────────────────────────────────────────────────
 
 
-def _compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float):
-    """Vectorised horizon profile. Returns (elev, horizon_bytes) or (None, None)."""
+def _compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float,
+                     terrain50=None):
+    """Vectorised horizon profile with optional long-range OS Terrain 50.
+
+    Returns (elev, horizon_bytes, horizon_dist_bytes) or (None, None, None).
+    """
     inv = ~transform
     col0, row0 = inv * (cx, cy)
     row0, col0 = int(round(row0)), int(round(col0))
     if row0 < 0 or row0 >= dtm.shape[0] or col0 < 0 or col0 >= dtm.shape[1]:
-        return None, None
+        return None, None, None
     pub_elev = float(dtm[row0, col0])
     if pub_elev <= 0:
-        return None, None
+        return None, None, None
 
+    # Phase 1: 1m DTM (0-500m)
     sx = cx + _dx_all
     sy = cy + _dy_all
     a, b, c, d, e, f = transform.a, transform.b, transform.c, transform.d, transform.e, transform.f
@@ -223,12 +228,36 @@ def _compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float):
     terrain_elev = np.where(valid, dtm[rows_safe, cols_safe], 0.0)
     elev_diff = np.maximum(terrain_elev - pub_elev, 0.0)
     angles = np.where(valid, np.degrees(np.arctan2(elev_diff, _distances[np.newaxis, :])), 0.0)
+
     max_angles = angles.max(axis=1)
+    max_indices = angles.argmax(axis=1)
+    ridge_distances = _distances[max_indices].astype(float)
+
+    # Phase 2: OS Terrain 50 (500-3000m)
+    if terrain50 is not None and terrain50.available:
+        T50_START, T50_END, T50_STEP = 550, 3000, 50
+        t50_dists = np.arange(T50_START, T50_END + 1, T50_STEP)
+        az_rad = _azimuths_rad[:, np.newaxis]
+        t50_east = (cx + np.sin(az_rad) * t50_dists[np.newaxis, :]).ravel()
+        t50_north = (cy + np.cos(az_rad) * t50_dists[np.newaxis, :]).ravel()
+
+        t50_elevs = terrain50.elevation_array(t50_east, t50_north).reshape(N_AZIMUTHS, len(t50_dists))
+        t50_diff = np.maximum(np.where(np.isnan(t50_elevs), 0.0, t50_elevs) - pub_elev, 0.0)
+        t50_angles = np.degrees(np.arctan2(t50_diff, t50_dists[np.newaxis, :]))
+
+        t50_max = t50_angles.max(axis=1)
+        t50_max_idx = t50_angles.argmax(axis=1)
+        t50_ridge_dist = t50_dists[t50_max_idx].astype(float)
+
+        use_t50 = t50_max > max_angles
+        max_angles = np.where(use_t50, t50_max, max_angles)
+        ridge_distances = np.where(use_t50, t50_ridge_dist, ridge_distances)
 
     if max_angles.max() < MIN_HORIZON_DEG:
-        return pub_elev, None
+        return pub_elev, None, None
     horizon_bytes = bytes(min(255, int(a * 10)) for a in max_angles)
-    return pub_elev, horizon_bytes
+    horizon_dist_bytes = bytes(min(255, int(d / 12)) for d in ridge_distances)
+    return pub_elev, horizon_bytes, horizon_dist_bytes
 
 
 # ── Bundle discovery ─────────────────────────────────────────────────────
@@ -421,12 +450,16 @@ def _process_bundle(
         result: dict = {"index": pub_idx}
         cx, cy = to_osgb.transform(pub["lng"], pub["lat"])
 
-        # Ground elevation + horizon from DTM.
-        pub_elev, horizon_bytes = _compute_horizon(dtm_arr, dtm_transform, cx, cy)
+        # Ground elevation + horizon from DTM (+ OS Terrain 50 for long range).
+        pub_elev, horizon_bytes, horizon_dist_bytes = _compute_horizon(
+            dtm_arr, dtm_transform, cx, cy, terrain50=_terrain50
+        )
         if pub_elev is not None:
             result["elev"] = round(pub_elev, 1)
         if horizon_bytes is not None:
             result["horizon"] = base64.b64encode(horizon_bytes).decode("ascii")
+        if horizon_dist_bytes is not None:
+            result["horizon_dist"] = base64.b64encode(horizon_dist_bytes).decode("ascii")
 
         # INSPIRE parcel matching + outdoor area.
         if parcel_tree is not None and all_parcels is not None:
@@ -614,6 +647,17 @@ def _load_parcels(pubs_osgb: list[tuple[float, float]]) -> tuple:
 def run(area) -> dict:
     """Run the ENRICH stage. Returns stats dict."""
     from areas import in_bbox
+    from pipeline.utils.terrain50 import Terrain50, download_terrain50
+
+    # Ensure OS Terrain 50 is available for long-range horizon rays.
+    download_terrain50()
+    global _terrain50
+    _terrain50 = Terrain50()
+    if _terrain50.available:
+        print("  OS Terrain 50 loaded for long-range horizons")
+    else:
+        print("  WARNING: OS Terrain 50 not available — horizons limited to 500m")
+        _terrain50 = None
 
     pubs_file = PUBS_PATH if PUBS_PATH.exists() else PUBS_PATH_V1
     if not pubs_file.exists():
@@ -630,7 +674,7 @@ def run(area) -> dict:
         for pub in all_pubs:
             oid = pub.get("id") or pub.get("osm_id")
             if oid and oid in enriched_by_id:
-                for k in ("elev", "horizon", "outdoor", "outdoor_area_m2", "local_authority", "_enrich_hash"):
+                for k in ("elev", "horizon", "horizon_dist", "outdoor", "outdoor_area_m2", "local_authority", "_enrich_hash"):
                     if k in enriched_by_id[oid]:
                         pub[k] = enriched_by_id[oid][k]
                 merged_count += 1
@@ -670,41 +714,35 @@ def run(area) -> dict:
         ENRICHED_PATH.write_text(json.dumps(all_pubs, indent=2))
         return {"pubs_enriched": 0, "pubs_skipped": skipped}
 
-    # Load parcels — but only scan GPKGs that are relevant to the pubs
-    # needing work. Split by rough geography to keep R-tree bboxes tight
-    # (a combined Scotland+Wales bbox spans most of England → 24M scans).
-    SCOTLAND_LAT_THRESHOLD = 55.3  # rough border
-    pubs_scotland = [(i, p) for i, p in pubs_to_process if p["lat"] > SCOTLAND_LAT_THRESHOLD]
-    pubs_south = [(i, p) for i, p in pubs_to_process if p["lat"] <= SCOTLAND_LAT_THRESHOLD]
-
+    # Load parcels from both INSPIRE (England+Wales) and Scotland GPKGs.
+    # Use all pubs for bbox filtering so border-region pubs aren't missed.
+    all_osgb = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_to_process]
     all_parcels_list: list = []
     all_las_list: list[str | None] = []
 
-    if pubs_south and INSPIRE_GPKG.exists():
-        osgb_south = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_south]
-        print(f"  Loading INSPIRE parcels for {len(pubs_south)} England/Wales pubs...")
+    if all_osgb and INSPIRE_GPKG.exists():
+        print(f"  Loading INSPIRE parcels (England+Wales)...")
+        pub_tree = STRtree([Point(x, y) for x, y in all_osgb])
         p, l, s = _load_parcels_from_gpkg(
-            INSPIRE_GPKG,
-            STRtree([Point(x, y) for x, y in osgb_south]),
-            min(x for x, y in osgb_south) - 50, max(x for x, y in osgb_south) + 50,
-            min(y for x, y in osgb_south) - 50, max(y for x, y in osgb_south) + 50,
+            INSPIRE_GPKG, pub_tree,
+            min(x for x, y in all_osgb) - 50, max(x for x, y in all_osgb) + 50,
+            min(y for x, y in all_osgb) - 50, max(y for x, y in all_osgb) + 50,
         )
         all_parcels_list.extend(p)
         all_las_list.extend(l)
-        print(f"    {len(p):,} INSPIRE parcels kept")
+        print(f"    {len(p):,} INSPIRE parcels kept (from {s:,} scanned)")
 
-    if pubs_scotland and SCOTLAND_GPKG.exists():
-        osgb_scot = [to_osgb.transform(p["lng"], p["lat"]) for _, p in pubs_scotland]
-        print(f"  Loading Scotland parcels for {len(pubs_scotland)} Scottish pubs...")
+    if all_osgb and SCOTLAND_GPKG.exists():
+        print(f"  Loading Scotland parcels...")
+        pub_tree = STRtree([Point(x, y) for x, y in all_osgb])
         p, l, s = _load_parcels_from_gpkg(
-            SCOTLAND_GPKG,
-            STRtree([Point(x, y) for x, y in osgb_scot]),
-            min(x for x, y in osgb_scot) - 50, max(x for x, y in osgb_scot) + 50,
-            min(y for x, y in osgb_scot) - 50, max(y for x, y in osgb_scot) + 50,
+            SCOTLAND_GPKG, pub_tree,
+            min(x for x, y in all_osgb) - 50, max(x for x, y in all_osgb) + 50,
+            min(y for x, y in all_osgb) - 50, max(y for x, y in all_osgb) + 50,
         )
         all_parcels_list.extend(p)
         all_las_list.extend(l)
-        print(f"    {len(p):,} Scotland parcels kept")
+        print(f"    {len(p):,} Scotland parcels kept (from {s:,} scanned)")
 
     parcel_tree = STRtree(all_parcels_list) if all_parcels_list else None
     all_parcels = all_parcels_list if all_parcels_list else None
@@ -818,7 +856,7 @@ def run(area) -> dict:
             # Apply pub enrichments.
             for pr in r["pub_results"]:
                 gi = pr["index"]
-                for k in ("elev", "horizon", "outdoor", "outdoor_area_m2", "local_authority"):
+                for k in ("elev", "horizon", "horizon_dist", "outdoor", "outdoor_area_m2", "local_authority"):
                     if k in pr:
                         all_pubs[gi][k] = pr[k]
 
@@ -873,13 +911,17 @@ def run(area) -> dict:
 
             result: dict = {"index": gi}
 
-            # Horizon + elevation from DTM.
+            # Horizon + elevation from DTM (+ OS Terrain 50 for long range).
             if dtm_arr is not None:
-                pub_elev, horizon_bytes = _compute_horizon(dtm_arr, tfm, cx, cy)
+                pub_elev, horizon_bytes, horizon_dist_bytes = _compute_horizon(
+                    dtm_arr, tfm, cx, cy, terrain50=_terrain50
+                )
                 if pub_elev is not None:
                     result["elev"] = round(pub_elev, 1)
                 if horizon_bytes is not None:
                     result["horizon"] = base64.b64encode(horizon_bytes).decode("ascii")
+                if horizon_dist_bytes is not None:
+                    result["horizon_dist"] = base64.b64encode(horizon_dist_bytes).decode("ascii")
 
             # Building heights from nDSM.
             if ndsm is not None:
@@ -926,17 +968,73 @@ def run(area) -> dict:
                             conn.execute("UPDATE buildings SET ground_elev = ? WHERE fid = ?", (round(ground, 1), fid))
                     stats["buildings_heighted"] += len(tile_buildings)
 
-            # INSPIRE parcel matching (same as Phase 1).
+            # INSPIRE parcel matching + outdoor area (same as Phase 1).
             if parcel_tree is not None and all_parcels is not None:
                 pt = Point(cx, cy)
                 candidates = parcel_tree.query(pt)
+                parcel = None
+                parcel_la = None
                 for idx in candidates:
                     if all_parcels[idx].contains(pt):
-                        result["local_authority"] = all_parcel_las[idx] if all_parcel_las else None
+                        parcel = all_parcels[idx]
+                        parcel_la = all_parcel_las[idx] if all_parcel_las else None
                         break
 
+                if parcel is not None:
+                    result["local_authority"] = parcel_la
+
+                    # Compute outdoor area: parcel - nearby buildings.
+                    conn2 = sqlite3.connect(f"file:{gpkg_path}?mode=ro", uri=True, timeout=60.0)
+                    conn2.execute("PRAGMA busy_timeout=60000")
+                    try:
+                        pbox = parcel.bounds
+                        buf = 8
+                        plng1, plat1 = to_wgs.transform(pbox[0] - buf, pbox[1] - buf)
+                        plng2, plat2 = to_wgs.transform(pbox[2] + buf, pbox[3] + buf)
+                        try:
+                            brows = conn2.execute(
+                                "SELECT b.geom FROM buildings b "
+                                "JOIN rtree_buildings_geom r ON b.fid = r.id "
+                                "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+                                (min(plng1, plng2), max(plng1, plng2), min(plat1, plat2), max(plat1, plat2)),
+                            ).fetchall()
+                        except sqlite3.OperationalError:
+                            brows = []
+                    finally:
+                        conn2.close()
+
+                    nearby_buildings = []
+                    for (blob,) in brows:
+                        try:
+                            hl = _gpkg_header_len(blob)
+                            geom = wkb.loads(blob[hl:])
+                            if geom.is_empty or not geom.is_valid:
+                                continue
+                            osgb_coords = [to_osgb.transform(x, y) for x, y in geom.exterior.coords]
+                            bpoly = Polygon(osgb_coords)
+                            if bpoly.is_valid and bpoly.intersects(parcel):
+                                nearby_buildings.append(bpoly)
+                        except Exception:
+                            continue
+
+                    if nearby_buildings:
+                        buildings_union = unary_union(nearby_buildings)
+                        outdoor = parcel.difference(buildings_union)
+                        if not outdoor.is_empty:
+                            if outdoor.geom_type == "MultiPolygon":
+                                outdoor = max(outdoor.geoms, key=lambda g: g.area)
+                            rings = []
+                            ext = outdoor.exterior.coords
+                            rings.append([[round(lat, 6), round(lng, 6)] for lng, lat in
+                                         [to_wgs.transform(x, y) for x, y in ext]])
+                            for hole in outdoor.interiors:
+                                rings.append([[round(lat, 6), round(lng, 6)] for lng, lat in
+                                             [to_wgs.transform(x, y) for x, y in hole.coords]])
+                            result["outdoor"] = rings
+                            result["outdoor_area_m2"] = round(outdoor.area, 1)
+
             # Apply enrichments.
-            for k in ("elev", "horizon", "local_authority"):
+            for k in ("elev", "horizon", "horizon_dist", "local_authority", "outdoor", "outdoor_area_m2"):
                 if k in result:
                     all_pubs[gi][k] = result[k]
 

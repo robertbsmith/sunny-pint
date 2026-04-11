@@ -324,6 +324,44 @@ function drawShadows(
   offCtx.clearRect(0, 0, W, H);
   offCtx.fillStyle = COLORS.shadowFill;
 
+  // Terrain shadow: a half-plane from the ridge direction, positioned at
+  // the computed shadow edge distance from the pub.
+  const edgeM = state.terrainShadowEdgeM;
+  if (edgeM !== null && edgeM < 300) {
+    const az = state.terrainShadowAzimuth;
+    const azRad = (az * Math.PI) / 180;
+
+    // Shadow edge is perpendicular to the sun azimuth, at edgeM metres
+    // from the pub in the anti-sun direction (toward the ridge).
+    // Positive edgeM = shadow edge is between pub and ridge.
+    // Negative edgeM = shadow extends past pub (full shade).
+    const edgePx = edgeM / mpp;
+
+    // Direction from pub toward the sun (where light comes from).
+    // Shadow fills the side AWAY from the sun (toward the ridge).
+    const sunDx = Math.sin(azRad);
+    const sunDy = -Math.cos(azRad);
+
+    // Edge line centre point (offset from porthole centre toward the ridge).
+    const edgeCx = cx - sunDx * edgePx;
+    const edgeCy = cy + sunDy * edgePx;
+
+    // Perpendicular direction for the edge line.
+    const perpDx = -sunDy;
+    const perpDy = -sunDx;
+    const bigR = Math.max(W, H);
+
+    // Draw filled region from edge line extending away from sun.
+    offCtx.beginPath();
+    offCtx.moveTo(edgeCx + perpDx * bigR, edgeCy + perpDy * bigR);
+    offCtx.lineTo(edgeCx - perpDx * bigR, edgeCy - perpDy * bigR);
+    offCtx.lineTo(edgeCx - perpDx * bigR - sunDx * bigR, edgeCy - perpDy * bigR + sunDy * bigR);
+    offCtx.lineTo(edgeCx + perpDx * bigR - sunDx * bigR, edgeCy + perpDy * bigR + sunDy * bigR);
+    offCtx.closePath();
+    offCtx.fill();
+  }
+
+  // Building shadows.
   for (const poly of state.shadowPolys) {
     offCtx.beginPath();
     for (let i = 0; i < poly.length; i++) {

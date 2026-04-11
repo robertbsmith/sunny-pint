@@ -11,6 +11,8 @@ Applies to: `src/**`
 
 ## Architecture
 - All shadow computation is client-side (geometric projection)
+- Building shadows use actual roof height only (no elevation difference)
+- Terrain shadows rendered as half-plane from horizon_dist ridge distances
 - Building data loaded from buildings.pmtiles on R2 via range requests
 - No backend at runtime — everything is static
 - State is simple module-level variables, no framework
@@ -18,8 +20,8 @@ Applies to: `src/**`
 ## Module Structure
 - `main.ts` — entry point, wires everything together
 - `state.ts` — app state, pub selection, time
-- `circle.ts` — porthole canvas renderer (tiles, buildings, shadows, bezel, sign)
-- `shadow.ts` — geometric shadow projection from buildings
+- `circle.ts` — porthole canvas renderer (tiles, buildings, shadows, terrain shadows, bezel, sign)
+- `shadow.ts` — geometric shadow projection + terrain shadow edge (horizon_dist)
 - `sunarc.ts` — sun arc time picker canvas widget
 - `sunbadge.ts` — sunny rating badge display
 - `buildings.ts` — vector tile loader, spatial filtering, building types

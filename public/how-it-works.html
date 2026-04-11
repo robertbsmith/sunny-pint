@@ -142,6 +142,7 @@
       <tr><th>Source</th><th>Provides</th><th>Coverage</th><th>Licence</th></tr>
       <tr><td>OpenStreetMap</td><td>Pub locations, building footprints, opening hours</td><td>UK-wide, community maintained</td><td>ODbL</td></tr>
       <tr><td>Environment Agency LiDAR</td><td>Surface + terrain elevation at 1m resolution</td><td>~75% of England</td><td>OGL v3</td></tr>
+      <tr><td>OS Terrain 50</td><td>Terrain elevation at 50m resolution (long-range horizons)</td><td>All of Great Britain</td><td>OGL v3</td></tr>
       <tr><td>HM Land Registry INSPIRE</td><td>Cadastral parcel boundaries (property plots)</td><td>All registered freehold in England &amp; Wales</td><td>OGL v3</td></tr>
       <tr><td>Open-Meteo</td><td>Real-time cloud cover</td><td>Global, hourly updates</td><td>CC BY 4.0</td></tr>
       <tr><td>SunCalc</td><td>Solar position (azimuth, altitude) for any time/place</td><td>Global</td><td>BSD-2</td></tr>
@@ -373,57 +374,26 @@
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="terrain">Terrain Awareness</h2>
 
-    <h3>Elevation-adjusted building heights</h3>
+    <h3>Terrain shadow rendering</h3>
 
-    <p>A building on a hill is effectively taller from the perspective of a pub in a valley below. The shadow engine adjusts each building's height by the ground elevation difference between the building and the pub:</p>
+    <p>In hilly areas, the terrain itself blocks sunlight for part of the day. The pipeline pre-computes a terrain horizon profile for each pub: 36 rays (every 10&deg; of azimuth) cast outward to 3 km, recording the maximum terrain elevation angle and the distance to the ridge crest in each direction.</p>
+
+    <p>Two elevation data sources provide complementary detail:</p>
+    <ul>
+      <li><strong>0&ndash;500 m:</strong> Environment Agency LiDAR at 1 m resolution &mdash; captures nearby walls, embankments, and steep cuts</li>
+      <li><strong>500&ndash;3,000 m:</strong> Ordnance Survey Terrain 50 at 50 m resolution &mdash; captures distant ridgelines and valley sides</li>
+    </ul>
+    <p>The higher angle from either source wins for each azimuth, with the corresponding ridge distance stored alongside.</p>
+
+    <p>At runtime, the browser uses the ridge distance to compute where the terrain shadow edge falls:</p>
 
     <div class="formula">
-      effective_height = building_height + (building_elevation &minus; pub_elevation)
+      shadow_edge = D &times; (1 &minus; tan(&theta;) / tan(&alpha;))
     </div>
 
-    <div class="diagram">
-      <svg viewBox="0 0 580 200" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
-        <!-- Terrain slope -->
-        <path d="M40,160 Q140,156 230,135 Q320,112 410,95 Q460,88 520,82" fill="#F0FDF4" stroke="#22C55E" stroke-width="2.5"/>
+    <p>where D is the ridge distance, &theta; is the horizon angle, and &alpha; is the sun's current altitude. This shadow edge is rendered as a half-plane sweeping across the porthole, creating a smooth transition from terrain shade to direct sunlight as the sun rises past the ridge.</p>
 
-        <!-- Pub (bottom of hill) -->
-        <rect x="80" y="142" width="36" height="16" fill="#D97706" stroke="#B45309" stroke-width="1" rx="2"/>
-        <text x="98" y="138" text-anchor="middle" font-size="9" fill="#D97706" font-weight="700">Pub</text>
-
-        <!-- Building (top of hill) -->
-        <rect x="400" y="55" width="36" height="38" fill="#94A3B8" stroke="#64748B" stroke-width="1" rx="1"/>
-        <text x="418" y="48" text-anchor="middle" font-size="9" fill="#64748B" font-weight="600">Building</text>
-
-        <!-- Actual height label -->
-        <line x1="445" y1="55" x2="445" y2="93" stroke="#3B82F6" stroke-width="2"/>
-        <line x1="440" y1="55" x2="450" y2="55" stroke="#3B82F6" stroke-width="1.5"/>
-        <line x1="440" y1="93" x2="450" y2="93" stroke="#3B82F6" stroke-width="1.5"/>
-        <text x="455" y="78" font-size="9" fill="#3B82F6" font-weight="700">h</text>
-
-        <!-- Pub elevation line (horizontal) -->
-        <line x1="80" y1="158" x2="440" y2="158" stroke="#EF4444" stroke-width="1" stroke-dasharray="4,3"/>
-
-        <!-- Elevation difference -->
-        <line x1="460" y1="93" x2="460" y2="158" stroke="#EF4444" stroke-width="2"/>
-        <line x1="455" y1="93" x2="465" y2="93" stroke="#EF4444" stroke-width="1.5"/>
-        <line x1="455" y1="158" x2="465" y2="158" stroke="#EF4444" stroke-width="1.5"/>
-        <text x="475" y="130" font-size="9" fill="#EF4444" font-weight="700">&Delta;elev</text>
-
-        <!-- Effective height -->
-        <line x1="380" y1="55" x2="380" y2="158" stroke="#D97706" stroke-width="2.5" stroke-dasharray="6,3"/>
-        <line x1="374" y1="55" x2="386" y2="55" stroke="#D97706" stroke-width="1.5"/>
-        <line x1="374" y1="158" x2="386" y2="158" stroke="#D97706" stroke-width="1.5"/>
-        <text x="365" y="110" text-anchor="end" font-size="10" fill="#D97706" font-weight="800">effective h</text>
-
-        <!-- Labels for pub elevation -->
-        <text x="250" y="172" text-anchor="middle" font-size="8" fill="#EF4444">pub ground level</text>
-      </svg>
-      <p class="fig-caption">Figure 5. Elevation-adjusted building height. A building uphill from the pub has a greater effective height (h + &Delta;elev), casting a proportionally longer shadow.</p>
-    </div>
-
-    <h3>Terrain horizon occlusion</h3>
-
-    <p>In hilly areas, the terrain itself can block sunlight even without any building present. For each pub, the pipeline casts 36 rays (every 10&deg; of azimuth) outward to 500 m and records the maximum terrain elevation angle in each direction. At runtime, the browser compares the sun's current altitude against this pre-computed horizon profile.</p>
+    <p>Building shadows use only the building's actual roof height &mdash; ground elevation differences are not added. On slopes, a building's shadow falls on the terrain behind it, not 300 m downhill. Terrain occlusion handles the large-scale blocking from valley sides.</p>
 
     <div class="diagram">
       <!-- Fig 6 geometry (all positions computed):
@@ -468,9 +438,9 @@
       <p class="fig-caption">Figure 6. Terrain horizon occlusion. The dashed amber line is the horizon sightline from the pub, tangent to the hilltop. The blocked sun (red) sits below this line; its sightline intersects the hillside. The visible sun (green) sits above it, clearing the terrain.</p>
     </div>
 
-    <p>If the sun's altitude is below the terrain horizon angle at its current azimuth, the pub is in terrain shade and no building shadows are computed. The horizon profile is stored as a compact base64-encoded byte array (48 characters per pub). Pubs in flat areas have no profile at all, as their maximum horizon angle is below 1&deg;.</p>
+    <p>If the sun's altitude is below the terrain horizon angle at its current azimuth, the pub is fully in terrain shade. When the sun is just above the horizon angle, the terrain shadow edge sits close to the pub and sweeps outward as the sun climbs. The horizon profile and ridge distances are stored as compact base64-encoded byte arrays (48 + 48 characters per pub). Pubs in flat areas have no profile at all, as their maximum horizon angle is below 1&deg;.</p>
 
-    <div class="placeholder">Terrain occlusion examples from hilly UK cities (Bath, Sheffield, Edinburgh) will be added once the LiDAR pipeline completes for those areas.</div>
+    <div class="placeholder">Screenshots showing terrain shadows at real UK valley pubs (Hebden Bridge, Bath, Sheffield) will be added with generated porthole renders from the dataset.</div>
 
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="porthole">The Porthole</h2>
@@ -481,7 +451,7 @@
     <div class="layers">
       <div class="layer"><span class="layer-num">1</span><span class="layer-label">Basemap</span><span class="layer-desc">3&times;3 grid of Mapbox Streets raster tiles at zoom 18 (~0.6 m/px)</span></div>
       <div class="layer"><span class="layer-num">2</span><span class="layer-label">Night overlay</span><span class="layer-desc">Semi-transparent dark fill, opacity derived from sun altitude for smooth twilight</span></div>
-      <div class="layer"><span class="layer-num">3</span><span class="layer-label">Shadows</span><span class="layer-desc">Geometric quads composited via offscreen canvas</span></div>
+      <div class="layer"><span class="layer-num">3</span><span class="layer-label">Shadows</span><span class="layer-desc">Terrain shadow half-plane + building shadow quads, composited via offscreen canvas</span></div>
       <div class="layer"><span class="layer-num">4</span><span class="layer-label">Buildings</span><span class="layer-desc">Filled polygons from vector tiles; pub building highlighted</span></div>
       <div class="layer"><span class="layer-num">5</span><span class="layer-label">Outdoor area</span><span class="layer-desc">Dashed green outline with <code>evenodd</code> holes</span></div>
       <div class="layer"><span class="layer-num">6</span><span class="layer-label">Pub marker</span><span class="layer-desc">Location pin at the pub's coordinates</span></div>

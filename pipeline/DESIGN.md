@@ -129,26 +129,35 @@ un-enriched pub.
 
 ### Stage 4: PACKAGE
 Input: pubs_enriched.json, buildings.gpkg
-Output: public/data/pubs.json, public/data/buildings.pmtiles
+Output: pubs.json, pubs-index.json, detail/*.json, buildings.pmtiles
 
-1. Export buildings near pubs to GeoJSON (streaming, as in v1 generate_tiles).
-2. Run tippecanoe → buildings.pmtiles.
-3. Assemble pubs.json from pubs_enriched.json (strip internal fields,
-   add slug, town, country — the locality derivation currently in match_plots).
-
-Change detection: if pubs_enriched.json and buildings.gpkg haven't
-changed since last package, skip. Check via file mtime + size.
+1. Derive town/country from OSM addr tags + local authority fallback.
+2. Generate stable slugs (locked via data/slug_lock.json).
+3. Export buildings near pubs to GeoJSON → tippecanoe → buildings.pmtiles.
+4. Write full pubs.json (local pipeline use + precompute_sun input).
+5. Write slim pubs-index.json (browser startup, ~1.6 MB gzip).
+6. Write detail chunks (0.1° geographic grid, per-pub heavy fields).
 
 ### Stage 5: SCORE
 Input: public/data/pubs.json, public/data/buildings.pmtiles
-Output: public/data/pubs.json (with sun field added)
+Output: public/data/pubs.json (with sun field), regenerated index + detail chunks
 
 Stays as TypeScript (precompute_sun.ts) for shadow.ts source-of-truth.
-Child process parallelism (12 workers) as already implemented.
+Child process parallelism (12 workers). After scoring, regenerates
+pubs-index.json and detail chunks so they include sun data.
 
-New: skip pubs where pub.sun exists AND pub.outdoor hasn't changed
-since the last scoring run (tracked via outdoor polygon hash in the
-manifest). On a typical incremental run, this skips 99% of pubs.
+### Independent: HORIZON
+Input: pubs_enriched.json, OS Terrain 50
+Output: pubs_enriched.json (horizon + horizon_dist fields updated)
+
+Recomputes horizon profiles without re-running heights or parcels.
+Uses OS Terrain 50 (50m DTM, 155 MB for all GB, auto-downloaded)
+for long-range rays (500-3000m), merged with existing 1m DTM horizons
+(0-500m). Takes max angle per azimuth from both sources. Also stores
+ridge distance (uint8 at 12m resolution) for terrain shadow edge
+rendering in the porthole.
+
+Run independently: `uv run python pipeline/stages/horizon.py --area uk`
 
 ## Orchestrator
 
@@ -182,11 +191,14 @@ pipeline/
     extract.py        Stage 1: OSM → pubs + buildings
     index.py          Stage 2: INSPIRE → parcels
     enrich.py         Stage 3: LiDAR + parcels → all enrichments
-    package.py        Stage 4: tiles + pubs.json assembly
-    score.py          Stage 5: sun scoring (shells out to tsx)
+    package.py        Stage 4: town/country/slug + tiles + index/chunks
+    score.py          Stage 5: sun scoring + regenerate splits
+    horizon.py        Independent: horizon recompute with OS Terrain 50
   utils/
     __init__.py
     bundles.py        Shared Defra bundle download/decode
+    terrain50.py      OS Terrain 50 loader (50m DTM, all GB)
+    download.py       Auto-download OSM extracts + OS Terrain 50
     gpkg.py           GeoPackage helpers
     grid.py           OS grid label encoding/decoding
     progress.py       Progress tracking + JSON writer
@@ -232,9 +244,39 @@ Pipeline v2 reads/writes the same data files as v1:
 - public/data/pubs.json (final output with all fields)
 - public/data/buildings.pmtiles
 
-v1 and v2 coexist. v2 ENRICH reads pubs_merged.json and writes
-pubs_enriched.json. v1's match_plots still needed for slug generation
-and split file output until PACKAGE stage is fully implemented.
+v2 is now the primary pipeline. v1 scripts remain in scripts/ for
+reference but are not called by the orchestrator (except precompute_sun.ts
+which SCORE shells out to, and generate_tiles.py which PACKAGE calls).
+
+## Terrain shadow rendering
+
+### Problem
+Building shadow projection assumes a flat plane. In valleys, buildings
+on hillsides appeared as 40-50m towers because elevation difference was
+added to their height. In reality, their shadows fall on the slope.
+
+### Solution
+1. Building shadows use actual roof height only (no elevation inflation).
+2. Terrain occlusion handled by horizon profile + ridge distance.
+3. Porthole renders a terrain shadow half-plane that sweeps across as
+   the sun rises/sets past the terrain horizon.
+
+### Data
+- `horizon`: 36 uint8 values (angle × 10, max 25.5°) — existing
+- `horizon_dist`: 36 uint8 values (distance ÷ 12, max 3060m) — new
+- Close range (0-500m): 1m Defra DTM via bundle downloads
+- Long range (500-3000m): OS Terrain 50 (50m grid, all GB, 155 MB)
+- Merged per azimuth: whichever source has the higher angle wins
+
+### Shadow edge formula
+```
+edge_distance = D × (1 - tan(θ) / tan(α))
+```
+Where D = ridge distance, θ = horizon angle, α = sun altitude.
+Negative = pub fully in terrain shadow. Infinity = no terrain.
+
+Interpolation: compute edge from both adjacent azimuths independently,
+then lerp the edge positions (not the raw distances).
 
 ## Estimated times (actual, measured)
 
@@ -242,10 +284,9 @@ and split file output until PACKAGE stage is fully implemented.
 |----------|------|
 | Full UK first run (v1) | ~12h (9h heights + 3h horizons) |
 | Full UK enrich (v2, England done) | ~2h (Scotland+Wales only) |
-| Scotland+Wales enrich only | ~2h (4,736 pubs via WCS/COG) |
-| generate_tiles | ~30 min |
+| Horizon recompute (OS Terrain 50) | ~50s (38k pubs, no LiDAR download) |
+| PACKAGE (assemble outputs) | ~10s |
 | precompute_sun (12 workers) | ~5 min |
+| R2 deploy (31k files, boto3) | ~7 min at 75/s |
 | OG card pre-render (8 workers) | ~18 min |
-| OG upload to R2 (boto3) | ~6 min |
-| Detail chunk upload (boto3) | ~30s |
 | Nothing changed | ~7s (manifest skip) |

@@ -12,6 +12,8 @@ export const state: AppState = {
   buildings: [],
   pubBuildingIndex: -1,
   shadowPolys: [],
+  terrainShadowEdgeM: null as number | null,
+  terrainShadowAzimuth: 0,
   timeMins: 720, // noon
   date: new Date(),
   playing: false,

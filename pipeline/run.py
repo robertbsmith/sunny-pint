@@ -120,6 +120,11 @@ def main():
     print(f"  Force: {args.force}")
     print()
 
+    # Auto-download data sources if needed.
+    if not args.dry_run:
+        from pipeline.utils.download import ensure_data_sources
+        ensure_data_sources(args.area)
+
     if args.dry_run:
         for stage in stages:
             inputs = hash_inputs(get_stage_inputs(stage))

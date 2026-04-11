@@ -14,14 +14,28 @@ import { M_PER_DEG_LAT, SHADOW_CAP_M } from "./config";
 import { mPerDegLng, toRad } from "./geo";
 import type { Building, Pub, ShadowPoly, SunPosition } from "./types";
 
+/** Decode a base64 uint8 array. */
+function decodeBase64(b64: string): Float32Array {
+  const binary = atob(b64);
+  const arr = new Float32Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    arr[i] = binary.charCodeAt(i);
+  }
+  return arr;
+}
+
 /** Decode a base64 terrain horizon profile into elevation angles (degrees). */
 function decodeHorizon(b64: string): Float32Array {
-  const binary = atob(b64);
-  const angles = new Float32Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    angles[i] = binary.charCodeAt(i) * 0.1; // uint8 × 0.1°
-  }
-  return angles;
+  const raw = decodeBase64(b64);
+  for (let i = 0; i < raw.length; i++) raw[i] = raw[i]! * 0.1; // uint8 × 0.1°
+  return raw;
+}
+
+/** Decode a base64 horizon distance profile into distances (metres). */
+function decodeHorizonDist(b64: string): Float32Array {
+  const raw = decodeBase64(b64);
+  for (let i = 0; i < raw.length; i++) raw[i] = raw[i]! * 12; // uint8 × 12m
+  return raw;
 }
 
 /**
@@ -45,17 +59,64 @@ export function isTerrainOccluded(pub: Pub, sun: SunPosition): boolean {
 }
 
 /**
+ * Compute terrain shadow edge distance from the pub in metres.
+ *
+ * Returns the distance from the pub to the terrain shadow edge,
+ * measured in the direction away from the sun. Negative means
+ * the pub is fully in terrain shadow. null means no terrain shadow.
+ *
+ * Uses the validated formula: edge = D × (1 - tan(θ) / tan(α))
+ * where D = ridge distance, θ = horizon angle, α = sun altitude.
+ *
+ * Interpolates shadow edge position (not raw distances) between
+ * adjacent azimuths for smoother results.
+ */
+export function terrainShadowEdge(pub: Pub, sun: SunPosition): number | null {
+  if (!pub.horizon || !pub.horizon_dist) return null;
+
+  const angles = decodeHorizon(pub.horizon);
+  const dists = decodeHorizonDist(pub.horizon_dist);
+  if (angles.length === 0 || dists.length === 0) return null;
+
+  const step = 360 / angles.length;
+  const sunAz = ((sun.azimuth % 360) + 360) % 360;
+  const idx = sunAz / step;
+  const i0 = Math.floor(idx) % angles.length;
+  const i1 = (i0 + 1) % angles.length;
+  const frac = idx - Math.floor(idx);
+
+  const tanAlt = Math.tan(toRad(sun.altitude));
+  if (tanAlt <= 0) return null;
+
+  // Compute shadow edge from each adjacent azimuth independently,
+  // then interpolate the edge positions (not the raw distances).
+  const computeEdge = (angle: number, dist: number): number => {
+    if (angle < 0.1 || dist < 1) return Infinity; // no terrain
+    const tanTheta = Math.tan(toRad(angle));
+    return dist * (1 - tanTheta / tanAlt);
+  };
+
+  const edge0 = computeEdge(angles[i0] ?? 0, dists[i0] ?? 0);
+  const edge1 = computeEdge(angles[i1] ?? 0, dists[i1] ?? 0);
+
+  // Lerp edge positions (handles Infinity correctly: if one side has
+  // no terrain, the result smoothly transitions).
+  if (!Number.isFinite(edge0) && !Number.isFinite(edge1)) return null;
+  if (!Number.isFinite(edge0)) return edge1;
+  if (!Number.isFinite(edge1)) return edge0;
+
+  return edge0 * (1 - frac) + edge1 * frac;
+}
+
+/**
  * Compute shadow polygons cast by all given buildings at the sun position.
  *
  * Each building wall segment produces one shadow quadrilateral; the
  * projected roof footprint and the original footprint are also added so the
  * building's own area is darkened along with its cast shadow.
  *
- * @param pubElev Ground elevation of the pub in metres above sea level. Used
- *                to adjust each building's effective height by the elevation
- *                difference (uphill buildings cast longer shadows).
  */
-export function computeShadows(buildings: Building[], sun: SunPosition, pubElev = 0): ShadowPoly[] {
+export function computeShadows(buildings: Building[], sun: SunPosition): ShadowPoly[] {
   if (sun.altitude <= 0 || buildings.length === 0) return [];
 
   const azRad = toRad(sun.azimuth);
@@ -66,16 +127,15 @@ export function computeShadows(buildings: Building[], sun: SunPosition, pubElev 
 
   const quads: ShadowPoly[] = [];
 
-  for (const { coords, height, elev } of buildings) {
+  for (const { coords, height } of buildings) {
     if (height <= 0 || coords.length < 3) continue;
 
-    // If a building has no ground elevation data (elev=0), assume it sits
-    // at the same elevation as the pub — they're nearby so this is a safe
-    // default. Without this, buildings without elev data produce negative
-    // effectiveHeight and cast no shadows.
-    const buildingElev = elev > 0 ? elev : pubElev;
-    const effectiveHeight = height + (buildingElev - pubElev);
-    if (effectiveHeight <= 0) continue;
+    // Use the building's actual roof height. Elevation differences between
+    // the building and pub are NOT added — shadows from uphill buildings
+    // fall on the intervening slope, not on a flat plane at pub level.
+    // Terrain occlusion from valley sides is handled by the terrain shadow
+    // (horizon profile + ridge distance) instead.
+    const effectiveHeight = height;
 
     const shadowLen = Math.min(effectiveHeight / tanAlt, SHADOW_CAP_M);
     const dlat = (-shadowLen * Math.cos(azRad)) / M_PER_DEG_LAT;

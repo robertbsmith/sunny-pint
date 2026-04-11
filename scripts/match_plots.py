@@ -469,6 +469,23 @@ def main():
     pubs = json.loads(PUBS_IN.read_text())
     print(f"  {len(pubs)} pubs loaded")
 
+    # Merge enrichment fields from pubs_enriched.json (horizon, elev, etc.)
+    # that were computed by v2 enrich or compute_horizons/measure_heights.
+    ENRICHED_PATH = DATA / "pubs_enriched.json"
+    ENRICH_FIELDS = {"horizon", "horizon_dist", "elev", "outdoor", "local_authority", "outdoor_area_m2"}
+    if ENRICHED_PATH.exists():
+        enriched = json.loads(ENRICHED_PATH.read_text())
+        enriched_by_id = {p["id"]: p for p in enriched if "id" in p}
+        merged_count = 0
+        for pub in pubs:
+            ep = enriched_by_id.get(pub.get("id"))
+            if ep:
+                for field in ENRICH_FIELDS:
+                    if field in ep and ep[field] and field not in pub:
+                        pub[field] = ep[field]
+                        merged_count += 1
+        print(f"  Merged {merged_count} enrichment fields from pubs_enriched.json ({len(enriched_by_id)} enriched pubs)")
+
     # Filter to the requested area BEFORE computing the parcel-load bbox.
     # Otherwise, when pubs_merged.json is the full UK dataset (~33k pubs),
     # the bbox would span the whole country and the GeoPackage R-tree query
@@ -620,7 +637,7 @@ def main():
     }
     # Heavy fields that go in detail chunks (loaded on pub selection).
     DETAIL_FIELDS = {
-        "outdoor", "elev", "horizon", "clat", "clng",
+        "outdoor", "elev", "horizon", "horizon_dist", "clat", "clng",
         "real_ale", "food", "wheelchair", "dog", "wifi",
         "phone", "website", "brand", "brewery",
         "local_authority", "addr_postcode", "addr_street", "addr_housenumber",

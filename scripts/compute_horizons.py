@@ -66,29 +66,34 @@ _dx_all = np.outer(np.sin(_azimuths_rad), _distances)  # (36, 50)
 _dy_all = np.outer(np.cos(_azimuths_rad), _distances)  # (36, 50)
 
 
-def compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float):
+def compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float,
+                    terrain50=None):
     """Compute horizon profile from a DTM array (vectorised).
 
-    Returns (pub_elev, horizon_bytes) or (None, None).
-    horizon_bytes is a bytes object of N_AZIMUTHS uint8 values (angle * 10).
+    Uses the 1m DTM for 0-500m (close-range detail) and optionally
+    OS Terrain 50 for 500-3000m (distant ridges). Takes the max angle
+    from both sources per azimuth.
+
+    Returns (pub_elev, horizon_bytes, horizon_dist_bytes) or (None, None, None).
+    horizon_bytes: N_AZIMUTHS uint8 values (angle × 10, max 25.5°).
+    horizon_dist_bytes: N_AZIMUTHS uint8 values (distance ÷ 12, max 3060m).
     """
-    # Get pub ground elevation.
+    # Get pub ground elevation from 1m DTM.
     inv = ~transform
     col0, row0 = inv * (cx, cy)
     row0, col0 = int(round(row0)), int(round(col0))
     if row0 < 0 or row0 >= dtm.shape[0] or col0 < 0 or col0 >= dtm.shape[1]:
-        return None, None
+        return None, None, None
 
     pub_elev = float(dtm[row0, col0])
     if pub_elev <= 0:
-        return None, None
+        return None, None, None
 
-    # Compute all sample positions in OSGB metres.
+    # ── Phase 1: 1m DTM (0-500m, 10m steps) ─────────────────────────
+
     sx = cx + _dx_all  # (36, 50)
     sy = cy + _dy_all  # (36, 50)
 
-    # Convert to pixel coordinates (vectorised affine inverse).
-    # inv * (sx, sy) → (col, row)
     a, b, c, d, e, f = transform.a, transform.b, transform.c, transform.d, transform.e, transform.f
     det = a * e - b * d
     cols = (e * (sx - c) - b * (sy - f)) / det
@@ -96,34 +101,65 @@ def compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float):
     cols = np.round(cols).astype(np.int32)
     rows = np.round(rows).astype(np.int32)
 
-    # Mask out-of-bounds samples.
     h, w = dtm.shape
     valid = (rows >= 0) & (rows < h) & (cols >= 0) & (cols < w)
-
-    # Clamp indices for safe indexing (masked values won't be used).
     rows_safe = np.clip(rows, 0, h - 1)
     cols_safe = np.clip(cols, 0, w - 1)
 
     terrain_elev = dtm[rows_safe, cols_safe]  # (36, 50)
     terrain_elev = np.where(valid, terrain_elev, 0.0)
 
-    elev_diff = terrain_elev - pub_elev  # (36, 50)
-    # Only positive diffs (terrain above pub) contribute.
-    elev_diff = np.maximum(elev_diff, 0.0)
-
-    # Angle = atan2(elev_diff, distance) in degrees.
-    angles = np.degrees(np.arctan2(elev_diff, _distances[np.newaxis, :]))  # (36, 50)
-    # Zero out invalid samples.
-    angles = np.where(valid, angles, 0.0)
+    elev_diff = np.maximum(terrain_elev - pub_elev, 0.0)
+    angles = np.where(valid,
+                      np.degrees(np.arctan2(elev_diff, _distances[np.newaxis, :])),
+                      0.0)
 
     max_angles = angles.max(axis=1)  # (36,)
+    max_indices = angles.argmax(axis=1)  # (36,)
+    ridge_distances = _distances[max_indices].astype(float)  # (36,)
+
+    # ── Phase 2: OS Terrain 50 (500-3000m, 50m steps) ────────────────
+
+    if terrain50 is not None and terrain50.available:
+        T50_START = 550   # start just past 1m DTM range
+        T50_END = 3000
+        T50_STEP = 50
+        t50_distances = np.arange(T50_START, T50_END + 1, T50_STEP)
+        n_t50 = len(t50_distances)
+
+        # Build sample points for all azimuths
+        az_rad = _azimuths_rad[:, np.newaxis]  # (36, 1)
+        t50_dx = np.sin(az_rad) * t50_distances[np.newaxis, :]  # (36, n_t50)
+        t50_dy = np.cos(az_rad) * t50_distances[np.newaxis, :]
+
+        t50_east = (cx + t50_dx).ravel()
+        t50_north = (cy + t50_dy).ravel()
+
+        t50_elevs = terrain50.elevation_array(t50_east, t50_north).reshape(N_AZIMUTHS, n_t50)
+
+        t50_diff = np.where(np.isnan(t50_elevs), 0.0, t50_elevs) - pub_elev
+        t50_diff = np.maximum(t50_diff, 0.0)
+        t50_angles = np.degrees(np.arctan2(t50_diff, t50_distances[np.newaxis, :]))
+
+        t50_max = t50_angles.max(axis=1)  # (36,)
+        t50_max_idx = t50_angles.argmax(axis=1)
+        t50_ridge_dist = t50_distances[t50_max_idx].astype(float)
+
+        # Merge: take whichever source has the higher angle per azimuth
+        use_t50 = t50_max > max_angles
+        max_angles = np.where(use_t50, t50_max, max_angles)
+        ridge_distances = np.where(use_t50, t50_ridge_dist, ridge_distances)
+
+    # ── Encode ────────────────────────────────────────────────────────
 
     if max_angles.max() < MIN_HORIZON_DEG:
-        return pub_elev, None
+        return pub_elev, None, None
 
-    # Quantize to uint8 at 0.1deg resolution (max 25.5deg).
+    # Angles: uint8 at 0.1° resolution (max 25.5°).
     horizon_bytes = bytes(min(255, int(a * 10)) for a in max_angles)
-    return pub_elev, horizon_bytes
+    # Distances: uint8 at 12m resolution (max 3060m).
+    horizon_dist_bytes = bytes(min(255, int(d / 12)) for d in ridge_distances)
+    return pub_elev, horizon_bytes, horizon_dist_bytes
 
 
 # ── Bundle discovery ──────────────────────────────────────────────────────
@@ -234,16 +270,31 @@ def process_bundle_horizons(
         dtm_ds.close()
         dtm_mem.close()
 
+    # Lazy-load OS Terrain 50 for long-range horizon rays.
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline"))
+        from pipeline.utils.terrain50 import Terrain50
+        t50 = Terrain50()
+        if not t50.available:
+            t50 = None
+    except Exception:
+        t50 = None
+
     results = []
     for idx in pub_indices:
         pub = pubs[idx]
         cx, cy = to_osgb.transform(pub["lng"], pub["lat"])
-        pub_elev, horizon_bytes = compute_horizon(dtm, transform, cx, cy)
-        entry = {"index": idx, "elev": None, "horizon_b64": None}
+        pub_elev, horizon_bytes, horizon_dist_bytes = compute_horizon(
+            dtm, transform, cx, cy, terrain50=t50
+        )
+        entry = {"index": idx, "elev": None, "horizon_b64": None, "horizon_dist_b64": None}
         if pub_elev is not None:
             entry["elev"] = round(pub_elev, 1)
         if horizon_bytes is not None:
             entry["horizon_b64"] = base64.b64encode(horizon_bytes).decode("ascii")
+        if horizon_dist_bytes is not None:
+            entry["horizon_dist_b64"] = base64.b64encode(horizon_dist_bytes).decode("ascii")
         results.append(entry)
 
     return results
@@ -333,6 +384,8 @@ def main():
                 pubs[gi]["elev"] = r["elev"]
             if r["horizon_b64"] is not None:
                 pubs[gi]["horizon"] = r["horizon_b64"]
+            if r.get("horizon_dist_b64") is not None:
+                pubs[gi]["horizon_dist"] = r["horizon_dist_b64"]
         tmp = PUBS_PATH.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(pubs, indent=2))
         tmp.replace(PUBS_PATH)
