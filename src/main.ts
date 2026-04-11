@@ -495,6 +495,13 @@ function dismissSeoContent(): void {
 }
 
 async function init(): Promise<void> {
+  // Explore pages are pure HTML — skip SPA initialization entirely.
+  if (document.querySelector(".seo-intro--explore")) {
+    applyTheme(getStoredTheme());
+    initIcons();
+    return;
+  }
+
   try {
     // Apply theme.
     applyTheme(getStoredTheme());
