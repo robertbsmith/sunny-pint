@@ -108,8 +108,62 @@ def assign_slugs(pubs: list[dict]) -> int:
 # ── Output assembly ──────────────────────────────────────────────────────
 
 
+def _dedup_pubs(pubs: list[dict]) -> list[dict]:
+    """Remove duplicate pubs from border overlap and OSM node+way duplication.
+
+    Two dedup rules:
+    1. Same OSM ID: keep first occurrence (border overlap between .pbf extracts)
+    2. Same name + same coords (within ~10m): prefer the entry with a polygon
+       (way/relation over node, since it has the building outline)
+    """
+    # Pass 1: deduplicate by exact ID.
+    seen_ids: set[str] = set()
+    deduped: list[dict] = []
+    id_dupes = 0
+    for pub in pubs:
+        pid = pub.get("id", "")
+        if pid in seen_ids:
+            id_dupes += 1
+            continue
+        seen_ids.add(pid)
+        deduped.append(pub)
+
+    # Pass 2: deduplicate by name + rounded coords (node+way for same pub).
+    # Group by (name, lat_rounded, lng_rounded). If multiple, keep the one
+    # with a polygon (building outline), or the first if none have one.
+    from collections import defaultdict
+    groups: dict[str, list[int]] = defaultdict(list)
+    for i, pub in enumerate(deduped):
+        key = f"{pub.get('name', '')}|{round(pub['lat'], 4)}|{round(pub['lng'], 4)}"
+        groups[key].append(i)
+
+    keep: set[int] = set()
+    coord_dupes = 0
+    for indices in groups.values():
+        if len(indices) == 1:
+            keep.add(indices[0])
+            continue
+        # Prefer the entry with a polygon (way > node).
+        best = indices[0]
+        for idx in indices:
+            if deduped[idx].get("polygon"):
+                best = idx
+                break
+        keep.add(best)
+        coord_dupes += len(indices) - 1
+
+    result = [deduped[i] for i in sorted(keep)]
+    if id_dupes or coord_dupes:
+        print(f"  Deduplication: removed {id_dupes} ID dupes + {coord_dupes} coord dupes "
+              f"({len(pubs)} → {len(result)})")
+    return result
+
+
 def assemble_outputs(pubs: list[dict]) -> dict:
     """Derive localities, assign slugs, write pubs.json + index + detail chunks."""
+    # Deduplicate before processing.
+    pubs = _dedup_pubs(pubs)
+
     # Derive town/country for every pub.
     for pub in pubs:
         if not pub.get("town"):

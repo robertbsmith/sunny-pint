@@ -321,88 +321,63 @@ def load_pub_points() -> list[ShapelyPoint]:
 def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
     """Export buildings near pubs to a single GeoJSON file.
 
-    Uses height-dependent radius: short buildings are excluded if they're too
-    far away to cast a shadow into the porthole at low sun angles.
-
-    Streams buildings from SQLite via cursor (never materialises the full
-    result set) and writes GeoJSON incrementally to disk, so memory stays
-    O(batch_size) instead of O(all_features). Safe at UK scale (~27M rows).
+    Uses per-pub R-tree queries instead of a full table scan. For each pub,
+    queries buildings within MAX_RADIUS_M, applies height-dependent filtering,
+    and streams matching buildings to GeoJSON. Deduplicates by fid so buildings
+    near multiple pubs are only written once.
 
     Returns feature count.
     """
     import time as _time
 
+    with open(PUBS_PATH) as f:
+        pubs_data = json.load(f)
+    if area.bbox is not None:
+        pubs_data = [p for p in pubs_data if in_bbox(p["lat"], p["lng"], area.bbox)]
+
     pub_points = load_pub_points()
     pub_tree = STRtree(pub_points)
 
     conn = sqlite3.connect(str(GPKG_PATH))
-
-    # Always use R-tree. For UK-wide (no area.bbox), derive bbox from pubs.
-    if area.bbox is not None:
-        s, w_, n_, e_ = area.bbox
-    else:
-        with open(PUBS_PATH) as f:
-            pubs_data = json.load(f)
-        lats = [p["lat"] for p in pubs_data]
-        lngs = [p["lng"] for p in pubs_data]
-        s, n_ = min(lats), max(lats)
-        w_, e_ = min(lngs), max(lngs)
-
     buf_deg = MAX_RADIUS_M / 111320.0
-    try:
-        cursor = conn.execute(
-            "SELECT b.fid, b.geom, b.osm_id, b.building, b.name, b.height, b.levels, b.lidar_height, b.ground_elev "
-            "FROM buildings b "
-            "JOIN rtree_buildings_geom r ON b.fid = r.id "
-            "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
-            (w_ - buf_deg, e_ + buf_deg, s - buf_deg, n_ + buf_deg),
-        )
-    except sqlite3.OperationalError:
-        # No R-tree — fall back to full scan (shouldn't happen on our gpkg).
-        cursor = conn.execute(
-            "SELECT fid, geom, osm_id, building, name, height, levels, lidar_height, ground_elev "
-            "FROM buildings"
-        )
 
-    included = 0
-    skipped = 0
-    skipped_by_height = 0
-    scanned = 0
+    included_fids: set[int] = set()
     t0 = _time.time()
-    BATCH = 5000
 
     with open(output_path, "w") as out:
         out.write('{"type":"FeatureCollection","features":[\n')
         first = True
 
-        while True:
-            batch = cursor.fetchmany(BATCH)
-            if not batch:
-                break
+        for pi, pub in enumerate(pubs_data):
+            lat, lng = pub["lat"], pub["lng"]
 
-            for fid, blob, osm_id, building_type, name, osm_height, levels, lidar_height, ground_elev in batch:
-                scanned += 1
+            try:
+                rows = conn.execute(
+                    "SELECT b.fid, b.geom, b.height, b.levels, b.lidar_height, b.ground_elev "
+                    "FROM buildings b "
+                    "JOIN rtree_buildings_geom r ON b.fid = r.id "
+                    "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
+                    (lng - buf_deg, lng + buf_deg, lat - buf_deg, lat + buf_deg),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                continue
+
+            for fid, blob, osm_height, levels, lidar_height, ground_elev in rows:
+                if fid in included_fids:
+                    continue
                 try:
                     hl = gpkg_header_len(blob)
                     geom = wkb.loads(blob[hl:])
                     if geom.is_empty or not geom.is_valid:
                         continue
 
-                    centroid = geom.centroid
-                    if not in_bbox(centroid.y, centroid.x, area.bbox):
-                        continue
-
-                    # Resolve height first so we can compute shadow reach.
                     h = resolve_height(osm_height, levels, lidar_height)
                     reach = shadow_reach_m(h)
                     reach_deg = reach / 111320.0
 
-                    # Check if any pub is within this building's shadow reach.
+                    centroid = geom.centroid
                     nearby_idxs = pub_tree.query(centroid.buffer(reach_deg))
                     if len(nearby_idxs) == 0:
-                        skipped += 1
-                        if reach < MAX_RADIUS_M:
-                            skipped_by_height += 1
                         continue
 
                     coords = [list(geom.exterior.coords)]
@@ -421,18 +396,17 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
                         out.write(",\n")
                     json.dump(feature, out)
                     first = False
-                    included += 1
+                    included_fids.add(fid)
                 except Exception:
                     continue
 
-            # Progress every ~50k rows.
-            if scanned % 50000 < BATCH:
+            if (pi + 1) % 1000 == 0:
                 elapsed = _time.time() - t0
-                rate = scanned / elapsed if elapsed > 0 else 0
+                rate = (pi + 1) / elapsed if elapsed > 0 else 0
+                eta = (len(pubs_data) - pi - 1) / rate if rate else 0
                 print(
-                    f"  scanned {scanned:,}  included {included:,}  "
-                    f"skipped {skipped:,} ({skipped_by_height:,} by height)  "
-                    f"{rate:,.0f} rows/s",
+                    f"  [{pi + 1}/{len(pubs_data)} pubs] {len(included_fids):,} buildings  "
+                    f"{rate:.0f} pubs/s  ETA {eta:.0f}s",
                     flush=True,
                 )
 
@@ -440,10 +414,8 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
     conn.close()
     elapsed = _time.time() - t0
-    print(f"  {included:,} buildings near pubs, {skipped:,} filtered out ({skipped_by_height:,} by height)")
-    print(f"  Scanned {scanned:,} rows in {elapsed:.1f}s ({scanned/elapsed:,.0f} rows/s)")
-
-    return included
+    print(f"  {len(included_fids):,} buildings near {len(pubs_data)} pubs in {elapsed:.1f}s")
+    return len(included_fids)
 
 
 def main(area=None):
