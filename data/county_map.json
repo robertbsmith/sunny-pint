@@ -1,0 +1,1398 @@
+{
+  "ABN": {
+    "county": "Aberdeen City",
+    "country": "Scotland"
+  },
+  "ANG": {
+    "county": "Angus",
+    "country": "Scotland"
+  },
+  "ARG": {
+    "county": "Argyll and Bute",
+    "country": "Scotland"
+  },
+  "AYR": {
+    "county": "Ayrshire",
+    "country": "Scotland"
+  },
+  "Adur District Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Amber Valley Borough Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Arun District Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Ashfield District Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Ashford Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "BER": {
+    "county": "Scottish Borders",
+    "country": "Scotland"
+  },
+  "BNF": {
+    "county": "Banffshire",
+    "country": "Scotland"
+  },
+  "BUT": {
+    "county": "Bute",
+    "country": "Scotland"
+  },
+  "Babergh District Council": {
+    "county": "Suffolk",
+    "country": "England"
+  },
+  "Barnsley Metropolitan Borough Council": {
+    "county": "South Yorkshire",
+    "country": "England"
+  },
+  "Basildon Borough Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Basingstoke and Deane Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Bassetlaw District Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Bath and North East Somerset Council": {
+    "county": "Somerset",
+    "country": "England"
+  },
+  "Bedford Borough Council": {
+    "county": "Bedfordshire",
+    "country": "England"
+  },
+  "Birmingham City Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Blaby District Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Blackburn with Darwen Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Blackpool Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Blaenau Gwent County Borough Council": {
+    "county": "Blaenau Gwent",
+    "country": "Wales"
+  },
+  "Bolsover District Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Bolton Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Borough Council of Kings Lynn and West Norfolk": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "Boston Borough Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "Bournemouth Christchurch and Poole Council": {
+    "county": "Dorset",
+    "country": "England"
+  },
+  "Bracknell Forest Council": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "Bradford Metropolitan District Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "Braintree District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Breckland District Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "Brentwood Borough Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Bridgend County Borough Council": {
+    "county": "Bridgend",
+    "country": "Wales"
+  },
+  "Brighton and Hove City Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Bristol City Council": {
+    "county": "Bristol",
+    "country": "England"
+  },
+  "Broadland District Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "Bromsgrove District Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  },
+  "Broxbourne Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "Broxtowe Borough Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Buckinghamshire Council": {
+    "county": "Buckinghamshire",
+    "country": "England"
+  },
+  "Burnley Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Bury Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "CLK": {
+    "county": "Clackmannanshire",
+    "country": "Scotland"
+  },
+  "CTH": {
+    "county": "Caithness",
+    "country": "Scotland"
+  },
+  "Caerphilly County Borough Council": {
+    "county": "Caerphilly",
+    "country": "Wales"
+  },
+  "Calderdale Metropolitan Borough Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "Cambridge City Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "Cannock Chase District Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Canterbury City Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Cardiff Council": {
+    "county": "Cardiff",
+    "country": "Wales"
+  },
+  "Carmarthenshire County Council": {
+    "county": "Carmarthenshire",
+    "country": "Wales"
+  },
+  "Castle Point Borough Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Central Bedfordshire Council": {
+    "county": "Bedfordshire",
+    "country": "England"
+  },
+  "Ceredigion County Council": {
+    "county": "Ceredigion",
+    "country": "Wales"
+  },
+  "Charnwood Borough Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Chelmsford City Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Cheltenham Borough Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Cherwell District Council": {
+    "county": "Oxfordshire",
+    "country": "England"
+  },
+  "Cheshire East Council": {
+    "county": "Cheshire",
+    "country": "England"
+  },
+  "Cheshire West and Chester Council": {
+    "county": "Cheshire",
+    "country": "England"
+  },
+  "Chesterfield Borough Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Chichester District Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Chorley Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "City of Bradford Metropolitan District Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "City of Lincoln Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "City of London Corporation": {
+    "county": "London",
+    "country": "England"
+  },
+  "City of Westminster": {
+    "county": "London",
+    "country": "England"
+  },
+  "City of Wolverhampton Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "City of York Council": {
+    "county": "North Yorkshire",
+    "country": "England"
+  },
+  "Colchester Borough Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Conwy County Borough Council": {
+    "county": "Conwy",
+    "country": "Wales"
+  },
+  "Cornwall Council": {
+    "county": "Cornwall",
+    "country": "England"
+  },
+  "Cotswold District Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Council of the Isles of Scilly": {
+    "county": "Cornwall",
+    "country": "England"
+  },
+  "Coventry City Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Crawley Borough Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Cumberland Council": {
+    "county": "Cumberland",
+    "country": "England"
+  },
+  "DMB": {
+    "county": "Dunbartonshire",
+    "country": "Scotland"
+  },
+  "DMF": {
+    "county": "Dumfries and Galloway",
+    "country": "Scotland"
+  },
+  "Dacorum Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "Darlington Borough Council": {
+    "county": "County Durham",
+    "country": "England"
+  },
+  "Dartford Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Denbighshire County Council": {
+    "county": "Denbighshire",
+    "country": "Wales"
+  },
+  "Derby City Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Derbyshire Dales District Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Doncaster Metropolitan Borough Council": {
+    "county": "South Yorkshire",
+    "country": "England"
+  },
+  "Dorset Council": {
+    "county": "Dorset",
+    "country": "England"
+  },
+  "Dover District Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Dudley Metropolitan Borough Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Durham County Council": {
+    "county": "County Durham",
+    "country": "England"
+  },
+  "ELN": {
+    "county": "East Lothian",
+    "country": "Scotland"
+  },
+  "East Cambridgeshire District Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "East Devon District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "East Hampshire District Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "East Hertfordshire District Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "East Lindsey District Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "East Riding of Yorkshire Council": {
+    "county": "East Riding of Yorkshire",
+    "country": "England"
+  },
+  "East Staffordshire Borough Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "East Suffolk Council": {
+    "county": "Suffolk",
+    "country": "England"
+  },
+  "Eastbourne Borough Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Eastleigh Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Elmbridge Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Epping Forest District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Epsom and Ewell Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Erewash Borough Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Exeter City Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "FFE": {
+    "county": "Fife",
+    "country": "Scotland"
+  },
+  "Fareham Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Fenland District Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "Flintshire County Council": {
+    "county": "Flintshire",
+    "country": "Wales"
+  },
+  "Folkestone and Hythe District Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Forest of Dean District Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Fylde Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "GLA": {
+    "county": "Glasgow",
+    "country": "Scotland"
+  },
+  "Gateshead Metropolitan Borough Council": {
+    "county": "Tyne and Wear",
+    "country": "England"
+  },
+  "Gedling Borough Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Gloucester City Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Gosport Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Gravesham Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Great Yarmouth Borough Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "Guildford Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Gwynedd Council": {
+    "county": "Gwynedd",
+    "country": "Wales"
+  },
+  "Halton Borough Council": {
+    "county": "Cheshire",
+    "country": "England"
+  },
+  "Harborough District Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Harlow District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Hart District Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Hartlepool Borough Council": {
+    "county": "County Durham",
+    "country": "England"
+  },
+  "Hastings Borough Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Havant Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Herefordshire Council": {
+    "county": "Herefordshire",
+    "country": "England"
+  },
+  "Hertsmere Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "High Peak Borough Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "Hinckley and Bosworth Borough Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Horsham District Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Hull City Council": {
+    "county": "East Riding of Yorkshire",
+    "country": "England"
+  },
+  "Huntingdonshire District Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "Hyndburn Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "INV": {
+    "county": "Inverness-shire",
+    "country": "Scotland"
+  },
+  "Ipswich Borough Council": {
+    "county": "Suffolk",
+    "country": "England"
+  },
+  "Isle of Anglesey County Council": {
+    "county": "Anglesey",
+    "country": "Wales"
+  },
+  "Isle of Wight Council": {
+    "county": "Isle of Wight",
+    "country": "England"
+  },
+  "KNC": {
+    "county": "Kincardineshire",
+    "country": "Scotland"
+  },
+  "KNR": {
+    "county": "Kinross-shire",
+    "country": "Scotland"
+  },
+  "Kirklees Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "Knowsley Metropolitan Borough Council": {
+    "county": "Merseyside",
+    "country": "England"
+  },
+  "LAN": {
+    "county": "Lanarkshire",
+    "country": "Scotland"
+  },
+  "Lancaster City Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Leeds City Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "Leicester City Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Lewes District Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Lichfield District Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Liverpool City Council": {
+    "county": "Merseyside",
+    "country": "England"
+  },
+  "London Borough of Barking and Dagenham": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Barnet": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Bexley": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Brent": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Bromley": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Camden": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Croydon": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Ealing": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Enfield": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Hackney": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Hammersmith and Fulham": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Haringey": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Harrow": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Havering": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Hillingdon": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Hounslow": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Islington": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Lambeth": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Lewisham": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Merton": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Newham": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Redbridge": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Richmond upon Thames": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Southwark": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Sutton": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Tower Hamlets": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Waltham Forest": {
+    "county": "London",
+    "country": "England"
+  },
+  "London Borough of Wandsworth": {
+    "county": "London",
+    "country": "England"
+  },
+  "Luton Borough Council": {
+    "county": "Bedfordshire",
+    "country": "England"
+  },
+  "MID": {
+    "county": "Midlothian",
+    "country": "Scotland"
+  },
+  "MOR": {
+    "county": "Moray",
+    "country": "Scotland"
+  },
+  "Maidstone Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Maldon District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Malvern Hills District Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  },
+  "Manchester City Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Mansfield District Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Medway Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Melton Borough Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Merthyr Tydfil County Borough Council": {
+    "county": "Merthyr Tydfil",
+    "country": "Wales"
+  },
+  "Mid Devon District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "Mid Suffolk District Council": {
+    "county": "Suffolk",
+    "country": "England"
+  },
+  "Mid Sussex District Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Middlesbrough Borough Council": {
+    "county": "North Yorkshire",
+    "country": "England"
+  },
+  "Milton Keynes Council": {
+    "county": "Buckinghamshire",
+    "country": "England"
+  },
+  "Mole Valley District Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Monmouthshire County Council": {
+    "county": "Monmouthshire",
+    "country": "Wales"
+  },
+  "Neath Port Talbot County Borough Council": {
+    "county": "Neath Port Talbot",
+    "country": "Wales"
+  },
+  "New Forest District Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Newark and Sherwood District Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Newcastle City Council": {
+    "county": "Tyne and Wear",
+    "country": "England"
+  },
+  "Newcastle-under-Lyme Borough Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Newport City Council": {
+    "county": "Newport",
+    "country": "Wales"
+  },
+  "North Devon District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "North East Derbyshire District Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "North East Lincolnshire Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "North Hertfordshire District Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "North Kesteven District Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "North Lincolnshire Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "North Norfolk District Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "North Northamptonshire Council": {
+    "county": "Northamptonshire",
+    "country": "England"
+  },
+  "North Somerset Council": {
+    "county": "Somerset",
+    "country": "England"
+  },
+  "North Tyneside Council": {
+    "county": "Tyne and Wear",
+    "country": "England"
+  },
+  "North Warwickshire Borough Council": {
+    "county": "Warwickshire",
+    "country": "England"
+  },
+  "North West Leicestershire District Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Northumberland County Council": {
+    "county": "Northumberland",
+    "country": "England"
+  },
+  "Norwich City Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "Nottingham City Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Nuneaton and Bedworth Borough Council": {
+    "county": "Warwickshire",
+    "country": "England"
+  },
+  "OAZ": {
+    "county": "Orkney",
+    "country": "Scotland"
+  },
+  "Oadby and Wigston Borough Council": {
+    "county": "Leicestershire",
+    "country": "England"
+  },
+  "Oldham Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Oxford City Council": {
+    "county": "Oxfordshire",
+    "country": "England"
+  },
+  "PBL": {
+    "county": "Peeblesshire",
+    "country": "Scotland"
+  },
+  "PTH": {
+    "county": "Perthshire",
+    "country": "Scotland"
+  },
+  "Pembrokeshire County Council": {
+    "county": "Pembrokeshire",
+    "country": "Wales"
+  },
+  "Pendle Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Peterborough City Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "Plymouth City Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "Portsmouth City Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Powys County Council": {
+    "county": "Powys",
+    "country": "Wales"
+  },
+  "Preston City Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "REN": {
+    "county": "Renfrewshire",
+    "country": "Scotland"
+  },
+  "ROS": {
+    "county": "Ross and Cromarty",
+    "country": "Scotland"
+  },
+  "ROX": {
+    "county": "Roxburghshire",
+    "country": "Scotland"
+  },
+  "Reading Borough Council": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "Redcar and Cleveland Borough Council": {
+    "county": "North Yorkshire",
+    "country": "England"
+  },
+  "Redditch Borough Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  },
+  "Reigate and Banstead Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Rhondda Cynon Taf County Borough Council": {
+    "county": "Rhondda Cynon Taf",
+    "country": "Wales"
+  },
+  "Ribble Valley Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Rochdale Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Rochford District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Rossendale Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Rother District Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Rotherham Metropolitan Borough Council": {
+    "county": "South Yorkshire",
+    "country": "England"
+  },
+  "Royal Borough of Greenwich": {
+    "county": "London",
+    "country": "England"
+  },
+  "Royal Borough of Kensington and Chelsea": {
+    "county": "London",
+    "country": "England"
+  },
+  "Royal Borough of Kingston upon Thames": {
+    "county": "London",
+    "country": "England"
+  },
+  "Royal Borough of Windsor and Maidenhead": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "Rugby Borough Council": {
+    "county": "Warwickshire",
+    "country": "England"
+  },
+  "Runnymede Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Rushcliffe Borough Council": {
+    "county": "Nottinghamshire",
+    "country": "England"
+  },
+  "Rushmoor Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Rutland County Council District Council": {
+    "county": "Rutland",
+    "country": "England"
+  },
+  "SEL": {
+    "county": "Selkirkshire",
+    "country": "Scotland"
+  },
+  "STG": {
+    "county": "Stirlingshire",
+    "country": "Scotland"
+  },
+  "STH": {
+    "county": "Sutherland",
+    "country": "Scotland"
+  },
+  "Salford City Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Sandwell Metropolitan Borough Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Sefton Metropolitan Borough Council": {
+    "county": "Merseyside",
+    "country": "England"
+  },
+  "Sevenoaks District Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Sheffield City Council": {
+    "county": "South Yorkshire",
+    "country": "England"
+  },
+  "Shropshire Council": {
+    "county": "Shropshire",
+    "country": "England"
+  },
+  "Slough Borough Council": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "Solihull Metropolitan Borough Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Somerset Council": {
+    "county": "Somerset",
+    "country": "England"
+  },
+  "South Cambridgeshire District Council": {
+    "county": "Cambridgeshire",
+    "country": "England"
+  },
+  "South Derbyshire District Council": {
+    "county": "Derbyshire",
+    "country": "England"
+  },
+  "South Gloucestershire Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "South Hams District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "South Holland District Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "South Kesteven District Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "South Norfolk Council": {
+    "county": "Norfolk",
+    "country": "England"
+  },
+  "South Oxfordshire District Council": {
+    "county": "Oxfordshire",
+    "country": "England"
+  },
+  "South Ribble Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "South Staffordshire Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "South Tyneside Council": {
+    "county": "Tyne and Wear",
+    "country": "England"
+  },
+  "Southampton City Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Southend-on-Sea Borough Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Spelthorne Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "St Albans City and District Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "St Helens Council": {
+    "county": "Merseyside",
+    "country": "England"
+  },
+  "Stafford Borough Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Staffordshire Moorlands District Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Stevenage Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "Stockport Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Stockton-on-Tees Borough Council": {
+    "county": "County Durham",
+    "country": "England"
+  },
+  "Stoke-on-Trent City Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Stratford-on-Avon District Council": {
+    "county": "Warwickshire",
+    "country": "England"
+  },
+  "Stroud District Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Sunderland City Council": {
+    "county": "Tyne and Wear",
+    "country": "England"
+  },
+  "Surrey Heath Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Swale Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Swansea Council": {
+    "county": "Swansea",
+    "country": "Wales"
+  },
+  "Swindon Borough Council": {
+    "county": "Wiltshire",
+    "country": "England"
+  },
+  "Tameside Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Tamworth Borough Council": {
+    "county": "Staffordshire",
+    "country": "England"
+  },
+  "Tandridge District Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Teignbridge District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "Telford and Wrekin Council": {
+    "county": "Shropshire",
+    "country": "England"
+  },
+  "Tendring District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Test Valley Borough Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Tewkesbury Borough Council": {
+    "county": "Gloucestershire",
+    "country": "England"
+  },
+  "Thanet District Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "The North Yorkshire Council": {
+    "county": "North Yorkshire",
+    "country": "England"
+  },
+  "Three Rivers District Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "Thurrock Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Tonbridge and Malling Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Torbay Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "Torfaen County Borough Council": {
+    "county": "Torfaen",
+    "country": "Wales"
+  },
+  "Torridge District Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "Trafford Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Tunbridge Wells Borough Council": {
+    "county": "Kent",
+    "country": "England"
+  },
+  "Uttlesford District Council": {
+    "county": "Essex",
+    "country": "England"
+  },
+  "Vale of Glamorgan Council": {
+    "county": "Glamorgan",
+    "country": "Wales"
+  },
+  "Vale of White Horse District Council": {
+    "county": "Oxfordshire",
+    "country": "England"
+  },
+  "WLN": {
+    "county": "West Lothian",
+    "country": "Scotland"
+  },
+  "Wakefield Metropolitan District Council": {
+    "county": "West Yorkshire",
+    "country": "England"
+  },
+  "Walsall Metropolitan Borough Council": {
+    "county": "West Midlands",
+    "country": "England"
+  },
+  "Warrington Borough Council": {
+    "county": "Cheshire",
+    "country": "England"
+  },
+  "Warwick District Council": {
+    "county": "Warwickshire",
+    "country": "England"
+  },
+  "Watford Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "Waverley Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Wealden District Council": {
+    "county": "East Sussex",
+    "country": "England"
+  },
+  "Welwyn Hatfield Borough Council": {
+    "county": "Hertfordshire",
+    "country": "England"
+  },
+  "West Berkshire Council": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "West Devon Borough Council": {
+    "county": "Devon",
+    "country": "England"
+  },
+  "West Lancashire Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "West Lindsey District Council": {
+    "county": "Lincolnshire",
+    "country": "England"
+  },
+  "West Northamptonshire Council": {
+    "county": "Northamptonshire",
+    "country": "England"
+  },
+  "West Oxfordshire District Council": {
+    "county": "Oxfordshire",
+    "country": "England"
+  },
+  "West Suffolk Council": {
+    "county": "Suffolk",
+    "country": "England"
+  },
+  "Westmorland and Furness Council": {
+    "county": "Westmorland",
+    "country": "England"
+  },
+  "Wigan Metropolitan Borough Council": {
+    "county": "Greater Manchester",
+    "country": "England"
+  },
+  "Wiltshire Council": {
+    "county": "Wiltshire",
+    "country": "England"
+  },
+  "Winchester City Council": {
+    "county": "Hampshire",
+    "country": "England"
+  },
+  "Wirral Borough Council": {
+    "county": "Merseyside",
+    "country": "England"
+  },
+  "Woking Borough Council": {
+    "county": "Surrey",
+    "country": "England"
+  },
+  "Wokingham Borough Council": {
+    "county": "Berkshire",
+    "country": "England"
+  },
+  "Worcester City Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  },
+  "Worthing Borough Council": {
+    "county": "West Sussex",
+    "country": "England"
+  },
+  "Wrexham County Borough Council": {
+    "county": "Wrexham",
+    "country": "Wales"
+  },
+  "Wychavon District Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  },
+  "Wyre Borough Council": {
+    "county": "Lancashire",
+    "country": "England"
+  },
+  "Wyre Forest District Council": {
+    "county": "Worcestershire",
+    "country": "England"
+  }
+}
