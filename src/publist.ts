@@ -32,7 +32,7 @@ function loadSortMode(): SortMode {
 let sortMode: SortMode = loadSortMode();
 
 /** Maximum distance in metres, or 0 for "any". Filters which pubs render. */
-let maxDistance = 0;
+let maxDistance = 1000;
 
 /** Initialise the pub list. Pass a callback fired when a pub is clicked. */
 export function initPubList(selectCallback: (pub: Pub) => void): void {
@@ -81,10 +81,21 @@ export function initPubList(selectCallback: (pub: Pub) => void): void {
 /** Apply the current sort mode to state.pubs in place. */
 function applySort(): void {
   if (sortMode === "sun") {
-    // Sun rating descending. Pubs without a rating sink to the bottom.
-    state.pubs.sort((a, b) => (b.sun?.score ?? -1) - (a.sun?.score ?? -1));
+    // Sun rating descending, with distance as secondary sort so nearby pubs
+    // bubble up when the user has a location set.
+    state.pubs.sort((a, b) => {
+      const scoreDiff = (b.sun?.score ?? -1) - (a.sun?.score ?? -1);
+      if (scoreDiff !== 0) return scoreDiff;
+      const da = a.distance ?? Number.MAX_SAFE_INTEGER;
+      const db = b.distance ?? Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
   } else {
-    state.pubs.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+    state.pubs.sort((a, b) => {
+      const da = a.distance ?? Number.MAX_SAFE_INTEGER;
+      const db = b.distance ?? Number.MAX_SAFE_INTEGER;
+      return da - db;
+    });
   }
 }
 
