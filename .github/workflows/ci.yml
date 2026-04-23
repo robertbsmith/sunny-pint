@@ -1,0 +1,48 @@
+name: CI
+
+# Catch TypeScript + Biome regressions before they reach main.
+# Deliberately not running the full pipeline here — that needs huge LiDAR
+# data files and ~1 hour of compute, neither fit for CI. This gate is
+# about frontend + Functions + scripts code correctness only.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel older in-flight runs for the same branch on a new push so the
+# queue doesn't back up during rapid iteration.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # Uses the `packageManager` field in package.json to pin the version.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (src + scripts + functions)
+        run: pnpm typecheck
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Build (Vite)
+        # A passing typecheck doesn't prove the site actually builds —
+        # bundler config or plugin issues can still fail the production
+        # build. Runs after typecheck so failures point at the cheapest
+        # diagnosis first.
+        run: pnpm build

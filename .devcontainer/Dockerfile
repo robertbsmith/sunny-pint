@@ -9,7 +9,7 @@ ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
 # System tools + Python + GDAL/GIS deps + tippecanoe build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Dev tools
-    fzf jq less vim nano procps tree zsh curl wget ca-certificates \
+    fzf jq less vim nano procps tree zsh curl wget ca-certificates ripgrep \
     # Python (for build scripts)
     python3 python3-pip python3-venv pipx \
     # GIS native deps (for rasterio, fiona, shapely)
@@ -23,8 +23,10 @@ RUN git clone --depth 1 https://github.com/felt/tippecanoe.git /tmp/tippecanoe &
     cd /tmp/tippecanoe && make -j$(nproc) && cp tippecanoe tile-join tippecanoe-decode tippecanoe-enumerate tippecanoe-json-tool /usr/local/bin/ && \
     rm -rf /tmp/tippecanoe
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm. Pin to a specific version so the container rebuild doesn't
+# silently pick up a newer major and break reproducibility; package.json's
+# `packageManager` field also pins this at the project level.
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 
 # Install uv (Python package manager)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh

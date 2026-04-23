@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["src"]
+  "include": ["src", "scripts", "functions"]
 }

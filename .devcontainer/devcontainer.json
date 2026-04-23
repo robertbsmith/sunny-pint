@@ -23,10 +23,14 @@
       }
     }
   },
-  "forwardPorts": [5173, 8976],
+  "forwardPorts": [5173, 8788, 8976],
   "portsAttributes": {
     "5173": {
-      "label": "SunPub Dev",
+      "label": "SunPub Dev (Vite)",
+      "onAutoForward": "notify"
+    },
+    "8788": {
+      "label": "Cloudflare Pages Dev (Wrangler)",
       "onAutoForward": "notify"
     },
     "8976": {
