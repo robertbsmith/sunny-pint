@@ -12,16 +12,17 @@ The entire app runs client-side. All data is pre-computed by the pipeline and se
 
 **Limitation**: Ignores terrain occlusion. A hill between a building and the garden could block a shadow. Acceptable for most of the UK which is relatively flat around pubs.
 
-## Building Data: Pre-exploded Vector Tiles
+## Building Data: PMTiles on R2
 
-**Decision**: Serve building data as individual z14 `.pbf` vector tile files, not PMTiles or a monolithic JSON.
+**Decision**: Serve building data as a single `buildings.pmtiles` archive on Cloudflare R2, accessed via HTTP range requests from the frontend's `pmtiles` library.
 
-**Why**: We went through three iterations:
-1. **Single JSON** — worked for Norwich (16MB), doesn't scale to UK (GB+)
-2. **PMTiles** — great format but requires HTTP byte range requests. Cloudflare Pages strips `Content-Length` headers when compressing responses, breaking PMTiles completely.
-3. **Individual .pbf tiles** — same data as PMTiles but pre-exploded. Each file is a regular static file, no range requests needed. Works on any CDN.
+**Why**: We went through four iterations:
+1. **Single JSON** — worked for Norwich (16 MB), doesn't scale to UK (GB+).
+2. **PMTiles on Cloudflare Pages** — great format but Pages' gzip rewriter stripped `Content-Length`, breaking range requests.
+3. **Individual .pbf tiles on Cloudflare Pages** — worked but meant 47k individual files in the deploy, near Pages' 20k-file limit.
+4. **PMTiles on R2** (current) — range requests work correctly on R2. Single 400+ MB archive vs 47k files. The frontend library (`pmtiles` npm) fetches only the bytes for needed tiles.
 
-Each pub's 300m radius spans at most 4 z14 tiles. The frontend fetches 1-4 small files per pub selection (~10-100KB each), with browser caching.
+Each pub's 300m radius spans at most 4 z14 tiles. The frontend `pmtiles` instance range-requests 1-4 tile entries per pub selection (~10-100 KB each), with browser + Cloudflare edge caching on the R2 response.
 
 ## Height-Dependent Building Filter
 

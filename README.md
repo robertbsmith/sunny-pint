@@ -46,6 +46,12 @@ just pipeline area=uk          # Full UK (slow)
 
 ### Pipeline steps
 
+> **Note**: the table below describes the v1 per-script pipeline. Production
+> now uses the v2 consolidated pipeline in `pipeline/stages/*.py`
+> (EXTRACT → INDEX → ENRICH → PACKAGE → SCORE), orchestrated by
+> `pipeline/run.py`. The v1 scripts under `scripts/` are kept for
+> reference but aren't used by `just pipeline`.
+
 | Step | Script | Input | Output |
 |------|--------|-------|--------|
 | 1. Merge pubs | `scripts/merge_pubs.py` | OSM .pbf | `data/pubs_merged.json` |
@@ -91,13 +97,14 @@ just pipeline area=uk          # Full UK (slow)
 
 ## Architecture
 
-**Static site** — no backend at runtime. All data is pre-computed and served as static JSON and individual .pbf vector tile files. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position. Per-pub and OG image pages are rendered on-demand by Cloudflare Pages Functions.
+**Static site** — no backend at runtime. All data is pre-computed and served from Cloudflare R2: a slim `pubs-index.json` for the browser pub list, per-pub detail chunks grouped by geographic grid cell, and a `buildings.pmtiles` archive for building footprints. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position. Per-pub and OG image pages are rendered on-demand by Cloudflare Pages Functions.
 
 Key technical decisions:
 - **Geometric shadow projection** over raster ray-tracing — mathematically precise vector edges, fast enough for real-time animation
 - **DSM minus DTM** for building heights — avoids expensive ground-level estimation
 - **Offscreen canvas compositing** — prevents shadow opacity stacking at polygon overlaps
-- **Individual .pbf tiles** over PMTiles — Cloudflare Pages breaks PMTiles range requests
+- **PMTiles on R2** — single building-tile archive with HTTP range requests (range requests work on R2 where they didn't on Cloudflare Pages' response rewriter)
+- **Split pub data** — slim index loaded at startup, heavy fields (outdoor polygons, horizon arrays) in geographic detail chunks loaded on selection
 
 ## License
 
