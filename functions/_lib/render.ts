@@ -330,6 +330,10 @@ function osmToSchemaOpeningHours(osm: string | undefined): string[] | undefined 
   return rules.length > 0 ? rules : undefined;
 }
 
+function isRealTag(v: string | undefined): v is string {
+  return !!v && v !== "yes" && v !== "no";
+}
+
 function barOrPubJsonLd(pub: Pub, town: string): object {
   const streetAddress =
     [pub.addr_housenumber, pub.addr_street].filter(Boolean).join(" ") || undefined;
@@ -358,8 +362,11 @@ function barOrPubJsonLd(pub: Pub, town: string): object {
   };
   if (pub.phone) schema.telephone = pub.phone;
   if (pub.slug) schema.image = `https://data.sunny-pint.co.uk/og/${pub.slug}.jpg`;
-  if (pub.brand) schema.brand = { "@type": "Brand", name: pub.brand };
-  else if (pub.brewery) schema.brand = { "@type": "Brand", name: pub.brewery };
+  // OSM uses "yes" / "no" as sentinel boolean values on the brand and
+  // brewery tags — "yes" means "branded but name not recorded", not an
+  // actual brand named "yes". Skip those.
+  const brandName = isRealTag(pub.brand) ? pub.brand : isRealTag(pub.brewery) ? pub.brewery : null;
+  if (brandName) schema.brand = { "@type": "Brand", name: brandName };
   const hours = osmToSchemaOpeningHours(pub.opening_hours);
   if (hours) schema.openingHours = hours;
   return schema;
