@@ -292,7 +292,7 @@ export function renderPortholeSvg(
 
   // Compute shadows from the same shadow.ts the live app uses.
   const sunUp = sun.altitude > 0 && !isTerrainOccluded(pub, sun);
-  const shadowQuads: ShadowPoly[] = sunUp ? computeShadows(buildings, sun, pub.elev ?? 0) : [];
+  const shadowQuads: ShadowPoly[] = sunUp ? computeShadows(buildings, sun) : [];
 
   // ── Bezel layer ────────────────────────────────────────────────────
   const bezelGradId = "ph-bezel-grad";

@@ -57,10 +57,16 @@ const LASTMOD_STATE = join(ROOT, "data", "lastmod_state.json");
 
 const SITE_URL = "https://sunny-pint.co.uk";
 
-// Only emit a landing page for a town with at least this many qualifying pubs.
-// Below this we'd be shipping thin content that the March 2026 Google update
-// specifically targets for de-indexing.
-const MIN_PUBS_PER_CITY = 8;
+// Only emit a landing page for a town with at least this many qualifying
+// pubs. Below this we'd be shipping thin content that the March 2026
+// Google update specifically targets for de-indexing.
+//
+// Originally 8 (very conservative). Lowered to 3 once the Sunny Rating
+// proved to be genuinely unique per-pub content — a 3-pub city page with
+// individual sun scores is not templated spam. Unlocks ~800 additional
+// town landing pages (599 → ~1,400 towns). Revisit if Google's
+// "Crawled - currently not indexed" count spikes.
+const MIN_PUBS_PER_CITY = 3;
 // Theme pages: skip entirely below this; emit but `noindex` between this
 // and MIN_THEME_INDEX; emit normally above.
 const MIN_THEME_PAGES = 4;
@@ -185,8 +191,9 @@ function englishPubBucket(slug: string): "am" | "nz" {
 }
 
 function maxLastmod(entries: SitemapEntry[]): string {
-  if (entries.length === 0) return new Date().toISOString().slice(0, 10);
-  return entries.reduce((m, e) => (e.lastmod > m ? e.lastmod : m), entries[0].lastmod);
+  const first = entries[0];
+  if (!first) return new Date().toISOString().slice(0, 10);
+  return entries.reduce((m, e) => (e.lastmod > m ? e.lastmod : m), first.lastmod);
 }
 
 // ── Theme page noindex injection ─────────────────────────────────────────
@@ -406,8 +413,16 @@ async function main(): Promise<void> {
 
   const COUNTY_MAP_PATH = join(ROOT, "data", "county_map.json");
   const ONS_COUNTIES_PATH = join(ROOT, "data", "ons_counties.geojson");
+  // Counties with <8 pubs aren't even emitted. Between 8 and MIN_COUNTY_INDEX
+  // they emit with noindex (nav-only from /explore/{country}/). At or above
+  // MIN_COUNTY_INDEX they're full SEO landing pages with sitemap entry.
+  //
+  // Originally 20. Lowered to 10 alongside the MIN_PUBS_PER_CITY relaxation
+  // because the Sunny Rating makes a 10-pub county page genuinely unique
+  // content rather than a templated stub. Large benefit for Scottish/Welsh
+  // counties which have fewer pubs per county.
   const MIN_COUNTY_PUBS = 8;
-  const MIN_COUNTY_INDEX = 20;
+  const MIN_COUNTY_INDEX = 10;
 
   if (existsSync(COUNTY_MAP_PATH) && existsSync(ONS_COUNTIES_PATH)) {
     console.log("\n  Generating explore pages...");
@@ -424,10 +439,9 @@ async function main(): Promise<void> {
     // Group all qualifying pubs by county.
     const pubsByCounty = new Map<string, { country: string; pubs: Pub[] }>();
     for (const pub of allQualifying) {
-      const la = (pub as Record<string, unknown>).local_authority as string | undefined;
+      const la = pub.local_authority;
       const mapping = la ? countyMap[la] : undefined;
-      const county =
-        ((pub as Record<string, unknown>).county as string | undefined) || mapping?.county;
+      const county = pub.county || mapping?.county;
       const country = pub.country || mapping?.country || "England";
       if (!county) continue;
       const entry = pubsByCounty.get(county) || { country, pubs: [] };
@@ -466,10 +480,11 @@ async function main(): Promise<void> {
         })
         .sort((a, b) => b.pubCount - a.pubCount);
 
+      // All county pubs sorted by rating. Renderer shows top 15 visibly
+      // and hides the rest in a collapsible "see all" block.
       const topPubs = [...countyPubs]
         .filter((p) => p.sun != null)
-        .sort((a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0))
-        .slice(0, 15);
+        .sort((a, b) => (b.sun?.score ?? 0) - (a.sun?.score ?? 0));
 
       allCountyStats.push({
         name: countyName,

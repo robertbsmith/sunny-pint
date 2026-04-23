@@ -58,7 +58,7 @@
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="architecture">Architecture</h2>
 
-    <p>The system consists of two parts: an offline data pipeline that processes open geospatial data into compact vector tiles, and a client-side renderer that computes and displays shadows in real time. The entire application is served as static files from a CDN&mdash;there is no application server, database, or API at runtime.</p>
+    <p>The system consists of two parts: an offline data pipeline that processes open geospatial data into compact vector tiles, and a client-side renderer that computes and displays shadows in real time. The main application is served as static files from a CDN with no application server or database at runtime. A couple of Cloudflare Pages Functions handle per-pub SEO pages and the contact form, but the shadow engine and all interactive behaviour run entirely in your browser.</p>
 
     <p>This architecture means zero ongoing server costs, global edge caching, instant page loads, and full offline support via a service worker. The computational cost of shadow projection is borne by the user's device, which modern phones handle comfortably.</p>
 
@@ -110,7 +110,7 @@
         <!-- Outputs -->
         <rect x="490" y="38" width="170" height="36" rx="6" fill="#D97706"/>
         <text x="575" y="54" text-anchor="middle" font-weight="700" fill="white">pubs.json</text>
-        <text x="575" y="66" text-anchor="middle" font-size="8" fill="#FEF3C7">33k pubs, ~1 MB gzipped</text>
+        <text x="575" y="66" text-anchor="middle" font-size="8" fill="#FEF3C7">38k pubs, ~3 MB gzipped</text>
         <line x1="260" y1="56" x2="490" y2="54" stroke="#D97706" stroke-width="1.2" marker-end="url(#arr-a)"/>
 
         <rect x="490" y="84" width="170" height="36" rx="6" fill="#D97706"/>
@@ -495,7 +495,7 @@
     <!-- ════════════════════════════════════════════════════════════════ -->
     <h2 id="static">Static Web Application</h2>
 
-    <p>Sunny Pint is a Progressive Web App served entirely as static files. There is no application server, no database, and no API to maintain. The entire runtime is JavaScript executing in the browser.</p>
+    <p>Sunny Pint is a Progressive Web App served primarily as static files. The shadow engine, map rendering, and all user-facing interactions run as JavaScript in the browser — there is no backend computation. A small number of Cloudflare Pages Functions handle SEO-sensitive edge cases: the <code>/pub/&lt;slug&gt;/</code> pages are rendered on demand so crawlers get fully-populated HTML, and the contact form is relayed to a separate email-only Worker via a Service Binding. Neither reads user identity.</p>
 
     <p>This design provides several advantages:</p>
     <ul>

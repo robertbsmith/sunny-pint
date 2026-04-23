@@ -20,6 +20,8 @@
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 // @ts-expect-error — WASM import handled by wrangler's asset bundler
 import resvgWasm from "@resvg/resvg-wasm/index_bg.wasm";
+import { PMTiles } from "pmtiles";
+import { BUILDING_TILE_ZOOM } from "../../../src/config";
 
 let wasmInitialized = false;
 let cachedFonts: Uint8Array[] | null = null;
@@ -91,21 +93,40 @@ async function loadPubDetail(pub: Pub): Promise<void> {
   }
 }
 
-// ── Tile fetcher backed by env.ASSETS ───────────────────────────────────
+// ── PMTiles-backed tile fetcher ─────────────────────────────────────────
 //
-// Building tiles live as static assets at /data/tiles/<x>-<y>.pbf. The
-// Function fetches them via env.ASSETS.fetch (which doesn't count toward
-// the Worker request quota — it's a free static asset read).
+// Buildings live in a single PMTiles archive on R2 at
+// data.sunny-pint.co.uk/data/buildings.pmtiles. We use the pmtiles library's
+// HTTP range-request source to fetch only the bytes we need per tile.
+//
+// The old `.pbf`-per-tile path predates the PMTiles migration and was
+// effectively dead — individual tiles haven't been deployed since the
+// switch. Left-over .pbf URLs on this code path always 404'd, so the
+// Function rendered OG images without building shadows. Pre-rendered
+// OG JPGs masked the issue in production; this path only fires for brand
+// new pubs the pipeline hasn't rendered yet.
 
-function makeTileFetcher(env: Env, origin: string): TileFetcher {
+let pmtilesInstance: PMTiles | null = null;
+function getPMTiles(): PMTiles {
+  if (!pmtilesInstance) {
+    pmtilesInstance = new PMTiles(`${R2_DATA_URL}/buildings.pmtiles`);
+  }
+  return pmtilesInstance;
+}
+
+function makeTileFetcher(_env: Env, _origin: string): TileFetcher {
   return async (key: string) => {
-    // Try local assets first (dev), then R2 (production).
-    let res = await env.ASSETS.fetch(`${origin}/data/tiles/${key}.pbf`);
-    if (!res.ok) {
-      res = await fetch(`${R2_DATA_URL}/tiles/${key}.pbf`);
+    // key is "<tx>-<ty>" at BUILDING_TILE_ZOOM — parse and query the archive.
+    const [txStr, tyStr] = key.split("-");
+    if (!txStr || !tyStr) return null;
+    const tx = Number.parseInt(txStr, 10);
+    const ty = Number.parseInt(tyStr, 10);
+    try {
+      const tile = await getPMTiles().getZxy(BUILDING_TILE_ZOOM, tx, ty);
+      return tile?.data ?? null;
+    } catch {
+      return null;
     }
-    if (!res.ok) return null;
-    return await res.arrayBuffer();
   };
 }
 
@@ -121,7 +142,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   // ?utm_source=… etc don't fragment the cache). Force GET so HEAD probes
   // reuse the same cache entry as GETs.
   const cacheKey = new Request(`${url.origin}${url.pathname}`, { method: "GET" });
-  const cache = caches.default;
+  // `caches.default` is a Cloudflare Workers extension not present in the
+  // standard DOM CacheStorage type. The cast is a pure type-level shim —
+  // runtime works correctly on the Workers platform.
+  const cache = (caches as unknown as { default: Cache }).default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
@@ -176,7 +200,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
     },
   });
   const pngData = resvg.render();
-  const pngBuffer = pngData.asPng();
+  // `asPng()` returns Uint8Array which Workers accepts as a Response body,
+  // but the DOM BodyInit type narrows to ArrayBuffer / Blob / etc. Cast to
+  // BufferSource to satisfy TS without changing runtime behaviour.
+  const pngBuffer = pngData.asPng() as unknown as BufferSource;
 
   const response = new Response(pngBuffer, {
     headers: {

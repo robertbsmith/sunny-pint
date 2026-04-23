@@ -97,14 +97,19 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
       try {
         const resp = await pm.getZxy(BUILDING_TILE_ZOOM, tx, ty);
         if (!resp?.data) {
+          // This specific tile doesn't exist in the archive — cache the
+          // negative result for this tile only, don't blanket-disable
+          // PMTiles. Other tiles in the same archive can still succeed.
           tileCache.set(key, []);
           return [];
         }
         data = resp.data;
       } catch {
-        // PMTiles archive unavailable (404 or network error).
-        // Mark as unavailable so we don't retry every tile.
-        pmtilesInstance = false;
+        // Transient error for this specific tile (range request failed,
+        // network blip, decode error). Cache empty for this tile and
+        // continue — previously this globally disabled PMTiles for the
+        // rest of the session, so a single flaky range request killed
+        // all building shadows. Other tiles stay eligible.
         tileCache.set(key, []);
         return [];
       }

@@ -8,8 +8,7 @@ import {
   DEFAULT_LNG,
   DEFAULT_LOCATION_NAME,
   googleMapsUrl,
-  NOMINATIM_URL,
-  USER_AGENT,
+  PHOTON_URL,
 } from "./config";
 import { initContact, openContact } from "./contact";
 import { parseHours } from "./hours";
@@ -30,6 +29,7 @@ import {
   readURL,
   setBasePath,
   setLocationQuery,
+  syncDocumentHead,
   withSuppressedWrites,
   writeURL,
   writeURLDebounced,
@@ -205,6 +205,16 @@ async function onPubSelected(pub: Pub): Promise<void> {
   // for this pub. updateScene() then runs the debounced writer for any
   // subsequent time scrubbing on top.
   writeURL();
+  // Keep document.title + canonical in sync during SPA navigation so
+  // browser tabs, share sheets, and any bot that evaluates JS see the
+  // correct per-pub title instead of the static homepage title.
+  if (pub.slug) {
+    const titleScore = pub.sun ? ` — Sunny Rating ${pub.sun.score}/100` : "";
+    syncDocumentHead({
+      title: `${pub.name}${titleScore} — Sunny Pint`,
+      canonicalPath: `/pub/${pub.slug}/`,
+    });
+  }
   // Load detail data (outdoor polygon, elev, horizon) + building tiles
   // in parallel. Detail typically arrives first (~80 KB chunk from CDN)
   // while building tiles stream from PMTiles range requests.
@@ -296,10 +306,22 @@ function updatePubInfo(pub: Pub): void {
   const links: string[] = [];
   if (pub.phone) links.push(`<a href="tel:${escapeHtml(pub.phone)}">${escapeHtml(pub.phone)}</a>`);
   if (pub.website) {
-    const domain = pub.website.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    links.push(
-      `<a href="${escapeHtml(pub.website)}" target="_blank" rel="noopener">${escapeHtml(domain)}</a>`,
-    );
+    // OSM's website tag can be anything the editor typed. Common shapes:
+    //   "https://example.com/" → use as-is
+    //   "www.example.com"      → prepend https://
+    //   "example.com"          → prepend https://
+    // We also drop anything that's not http(s) so a rogue "javascript:..."
+    // or "file://..." never becomes a clickable link.
+    const raw = pub.website.trim();
+    let href: string | null = null;
+    if (/^https?:\/\//i.test(raw)) href = raw;
+    else if (/^(?!.*:)([\w-]+\.)+[a-z]{2,}/i.test(raw)) href = `https://${raw}`;
+    if (href) {
+      const domain = href.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+      links.push(
+        `<a href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(domain)}</a>`,
+      );
+    }
   }
   links.push(
     `<a href="${googleMapsUrl(pub.name, pub.lat, pub.lng)}" target="_blank" rel="noopener">Directions</a>`,
@@ -454,16 +476,18 @@ async function defaultHomeHydration(labelEl: HTMLElement | null): Promise<void> 
       let locationLabel = "Your location";
       try {
         const resp = await fetch(
-          `${NOMINATIM_URL}/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=16`,
-          { headers: { "User-Agent": USER_AGENT } },
+          `${PHOTON_URL}/reverse?lat=${latitude}&lon=${longitude}&lang=en&limit=1`,
         );
-        const data = (await resp.json()) as { address?: Record<string, string> };
-        const addr = data.address ?? {};
-        const local =
-          addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet || addr.city_district;
-        const main = addr.city || addr.town || addr.village || addr.municipality;
+        const data = (await resp.json()) as {
+          features?: { properties: Record<string, string> }[];
+        };
+        const p = data.features?.[0]?.properties ?? {};
+        // Photon has flat locality fields (no neighbourhood/suburb distinction).
+        // Prefer city/town/district; fall back to name if nothing else matches.
+        const local = p.district;
+        const main = p.city || p.name;
         locationLabel =
-          local && main && local !== main ? `${local}, ${main}` : local || main || "Your location";
+          local && main && local !== main ? `${local}, ${main}` : main || local || "Your location";
       } catch {
         // Reverse-geocode failed — keep the generic label.
       }
@@ -567,6 +591,19 @@ async function init(): Promise<void> {
     await loadPubs();
     console.log(`Loaded ${state.pubs.length} pubs`);
 
+    // Google sitelinks SearchAction hits the homepage with ?q=... matching
+    // the urlTemplate we advertise in structured data. Seed the search
+    // input with the query and fire the input handler so the list filters
+    // straight away — otherwise the advertised search template is a
+    // phantom and clicking a sitelinks search result does nothing.
+    if (urlState.searchQuery) {
+      const searchEl = document.getElementById("pub-search") as HTMLInputElement | null;
+      if (searchEl) {
+        searchEl.value = urlState.searchQuery;
+        searchEl.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+
     // Location picker (GPS + search). Both paths route through here, and
     // both represent an explicit user choice — so persist the location to
     // localStorage so the next visit hydrates from it instead of defaulting
@@ -600,7 +637,16 @@ async function init(): Promise<void> {
             state.selectedPubId = pub.id;
             void onPubSelected(pub);
           });
+          // onPubSelected already syncs the document head for the new pub.
         }
+      } else if (route.kind === "home") {
+        // Popped back to the homepage — reset title + canonical so the
+        // tab label doesn't stay pinned to the previously-selected pub.
+        state.selectedPubId = null;
+        syncDocumentHead({
+          title: "Sunny Pint — Find sunny beer gardens at UK pubs",
+          canonicalPath: "/",
+        });
       }
       updateScene();
     });

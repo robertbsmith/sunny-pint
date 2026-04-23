@@ -63,8 +63,12 @@ export const SATELLITE_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/satel
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 
-/** Nominatim search & reverse geocoding API. */
-export const NOMINATIM_URL = "https://nominatim.openstreetmap.org";
+/** Photon (Komoot-hosted) search & reverse geocoding API.
+ *  Chosen over Nominatim because Nominatim's usage policy explicitly bans
+ *  client-side autocomplete — Photon is purpose-built for typeahead,
+ *  uses the same OSM data, and needs no API key.
+ *  Docs: https://photon.komoot.io/  |  https://github.com/komoot/photon */
+export const PHOTON_URL = "https://photon.komoot.io";
 
 /** Google Maps search URL template (for directions). */
 export function googleMapsUrl(name: string, lat: number, lng: number): string {
@@ -93,8 +97,14 @@ export const PUB_LIST_MAX = 100;
 /** Sun arc animation playback rate (minutes per real-time second). */
 export const PLAY_SPEED = 120;
 
-/** Search input debounce delay (ms). */
+/** Search input debounce delay (ms). Photon is designed for typeahead
+ *  so we can go back to snappier latency than Nominatim allowed. */
 export const SEARCH_DEBOUNCE_MS = 300;
+
+/** Minimum characters before we issue a geocoding request.
+ *  Below 3 chars results are noisy (single-letter matches across GB).
+ *  Keeping a floor avoids spamming Photon with non-actionable queries. */
+export const MIN_SEARCH_CHARS = 3;
 
 /** GPS request timeout (ms). */
 export const GPS_TIMEOUT_MS = 8000;

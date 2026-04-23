@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     `Sunny rating: ${pub.sun?.score ?? "n/a"}  best window: ${pub.sun?.best_window ?? "n/a"}`,
   );
 
-  const buildings = loadBuildingsForPub(pub);
+  const buildings = await loadBuildingsForPub(pub);
   console.log(`Loaded ${buildings.length} buildings`);
 
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);

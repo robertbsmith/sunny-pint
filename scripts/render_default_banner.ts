@@ -49,7 +49,7 @@ async function main(): Promise<void> {
 
   console.log(`Porthole pub: ${pub.name}, ${pub.town} (geometry only — name not shown)`);
 
-  const buildings = loadBuildingsForPub(pub);
+  const buildings = await loadBuildingsForPub(pub);
   console.log(`Buildings: ${buildings.length}`);
 
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);

@@ -36,6 +36,10 @@ export interface URLState {
   route: Route;
   time?: number;
   date?: Date;
+  /** Search query from `?q=`. Matches the SearchAction template declared
+   *  in the homepage structured data so Google's sitelinks search box
+   *  actually works when users type into it. */
+  searchQuery?: string;
 }
 
 // ── Read ─────────────────────────────────────────────────────────────
@@ -72,6 +76,12 @@ export function readURL(): URLState {
       if (!Number.isNaN(date.getTime())) result.date = date;
     }
   }
+
+  // Google sitelinks SearchAction hits us with ?q=... — main.ts's init
+  // pushes this into the pub search input so the template advertised in
+  // the homepage structured data actually works.
+  const q = params.get("q");
+  if (q) result.searchQuery = q.trim();
 
   return result;
 }

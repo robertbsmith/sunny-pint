@@ -81,7 +81,7 @@ async function handleSubmit(e: Event): Promise<void> {
   const message = (document.getElementById("cf-message") as HTMLTextAreaElement).value.trim();
   const name = (document.getElementById("cf-name") as HTMLInputElement).value.trim();
   const email = (document.getElementById("cf-email") as HTMLInputElement).value.trim();
-  const type = (document.getElementById("cf-type") as HTMLSelectElement).value;
+  const type = (document.getElementById("cf-type") as unknown as HTMLSelectElement).value;
   const website = (document.getElementById("cf-website") as HTMLInputElement).value;
   const pub = overlayEl?.dataset.pub;
 

@@ -1,25 +1,65 @@
 /**
- * Location picker — modal overlay with GPS + Nominatim search.
+ * Location picker — modal overlay with GPS + Photon search.
  *
  * The header shows a single tappable location button. Clicking it opens an
  * overlay with a "Use my location" button and a search input. Both update
  * the active location via the `onLocationChange` callback.
+ *
+ * Uses Photon (Komoot-hosted) rather than Nominatim because Nominatim's
+ * usage policy bans client-side autocomplete.
  */
 
 import {
   GPS_MAX_AGE_MS,
   GPS_TIMEOUT_MS,
-  NOMINATIM_URL,
+  MIN_SEARCH_CHARS,
+  PHOTON_URL,
   SEARCH_DEBOUNCE_MS,
-  USER_AGENT,
 } from "./config";
 import { setLocationQuery } from "./url";
 
-interface NominatimResult {
-  lat: string;
-  lon: string;
-  display_name: string;
-  address?: Record<string, string>;
+/** Photon GeoJSON Feature — flat subset of the fields we care about. */
+interface PhotonFeature {
+  geometry: { type: "Point"; coordinates: [number, number] }; // [lon, lat]
+  properties: {
+    name?: string;
+    housenumber?: string;
+    street?: string;
+    postcode?: string;
+    city?: string;
+    district?: string;
+    state?: string;
+    country?: string;
+    countrycode?: string;
+    osm_key?: string;
+    osm_value?: string;
+  };
+}
+
+interface PhotonResponse {
+  type: "FeatureCollection";
+  features: PhotonFeature[];
+}
+
+/** Compose a human-readable label from a Photon feature. Prefers the most
+ *  specific identifier first (housenumber+street, then name, then city)
+ *  and dedupes repeated locality fields. */
+function formatLabel(f: PhotonFeature, maxParts = 3): string {
+  const p = f.properties;
+  const parts: string[] = [];
+  const push = (s: string | undefined) => {
+    if (s && !parts.includes(s)) parts.push(s);
+  };
+
+  if (p.housenumber && p.street) push(`${p.housenumber} ${p.street}`);
+  else if (p.street) push(p.street);
+  else if (p.name) push(p.name);
+
+  push(p.city);
+  push(p.district);
+  push(p.state);
+
+  return parts.slice(0, maxParts).join(", ") || "Unknown location";
 }
 
 let onLocationChange: ((lat: number, lng: number) => void) | null = null;
@@ -67,7 +107,7 @@ export function initLocation(callback: (lat: number, lng: number) => void): void
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = window.setTimeout(() => {
         const q = searchInput.value.trim();
-        if (q.length >= 2) search(q, resultsList, close);
+        if (q.length >= MIN_SEARCH_CHARS) search(q, resultsList, close);
         else if (resultsList) resultsList.innerHTML = "";
       }, SEARCH_DEBOUNCE_MS);
     });
@@ -108,26 +148,17 @@ function requestGPS(): void {
 }
 
 /**
- * Reverse-geocode a coordinate to a friendly place name.
- *
- * Prefers more-specific names: suburb/neighbourhood/quarter first, then
- * village/town/city. Combines them with a comma when both exist so users
- * see "Eaton, Norwich" rather than just "Norwich".
+ * Reverse-geocode a coordinate to a friendly place name via Photon.
+ * Returns "Eaton, Norwich" style — the most specific locality we know.
  */
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
-    const url = `${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`;
-    const resp = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-    const data = (await resp.json()) as { address?: Record<string, string> };
-    const addr = data.address;
-    if (!addr) return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
-
-    const local =
-      addr.neighbourhood || addr.suburb || addr.quarter || addr.hamlet || addr.city_district;
-    const main = addr.city || addr.town || addr.village || addr.municipality;
-
-    if (local && main && local !== main) return `${local}, ${main}`;
-    return local || main || `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    const url = `${PHOTON_URL}/reverse?lat=${lat}&lon=${lng}&lang=en&limit=1`;
+    const resp = await fetch(url);
+    const data = (await resp.json()) as PhotonResponse;
+    const first = data.features[0];
+    if (!first) return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    return formatLabel(first, 2);
   } catch {
     return `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
   }
@@ -142,23 +173,23 @@ async function search(
   try {
     const params = new URLSearchParams({
       q: query,
-      format: "json",
-      countrycodes: "gb",
       limit: "5",
-      addressdetails: "1",
+      lang: "en",
+      // countrycode in Photon is an ISO 3166 alpha-2 code (lowercase).
+      // Restricts to GB so users don't get US/Canadian places with the
+      // same name as a UK one.
+      countrycode: "gb",
     });
-    const resp = await fetch(`${NOMINATIM_URL}/search?${params}`, {
-      headers: { "User-Agent": USER_AGENT },
-    });
-    const results = (await resp.json()) as NominatimResult[];
-    showResults(results, resultsList, close);
+    const resp = await fetch(`${PHOTON_URL}/api/?${params}`);
+    const data = (await resp.json()) as PhotonResponse;
+    showResults(data.features, resultsList, close);
   } catch {
     resultsList.innerHTML = "";
   }
 }
 
 function showResults(
-  results: NominatimResult[],
+  results: PhotonFeature[],
   resultsList: HTMLUListElement,
   close: () => void,
 ): void {
@@ -174,11 +205,11 @@ function showResults(
 
   for (const r of results) {
     const li = document.createElement("li");
-    li.textContent = r.display_name.split(",").slice(0, 3).join(", ");
+    li.textContent = formatLabel(r, 3);
     li.addEventListener("click", () => {
-      const lat = parseFloat(r.lat);
-      const lng = parseFloat(r.lon);
-      const shortName = r.display_name.split(",").slice(0, 2).join(", ");
+      // Photon returns geometry as [lon, lat] — note the ordering.
+      const [lng, lat] = r.geometry.coordinates;
+      const shortName = formatLabel(r, 2);
       const label = document.getElementById("location-label");
       if (label) label.textContent = shortName;
       setLocationQuery(shortName);

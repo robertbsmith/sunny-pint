@@ -76,11 +76,16 @@ async function renderPub(pub: Pub, outputDir: string): Promise<boolean> {
 
 // ── Main ────────────────────────────────────────────────────────────────
 
-const [batchFile, outputDir] = process.argv.slice(2);
-if (!batchFile || !outputDir) {
+const [rawBatchFile, rawOutputDir] = process.argv.slice(2);
+if (!rawBatchFile || !rawOutputDir) {
   console.error("Usage: pnpm tsx scripts/render_og_worker.ts <batch.json> <output_dir>");
   process.exit(1);
 }
+// Aliased after the narrow above so TS sees these as `string`, not
+// `string | undefined`. process.exit returns never but tsc doesn't always
+// propagate the narrowing through the destructure at call sites.
+const batchFile: string = rawBatchFile;
+const outputDir: string = rawOutputDir;
 
 mkdirSync(outputDir, { recursive: true });
 

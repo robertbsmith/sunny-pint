@@ -29,7 +29,7 @@
     <p>We use <a href="https://www.cloudflare.com/web-analytics/">Cloudflare Web Analytics</a> to see how many people visit the site. It counts page views without using cookies or collecting personal data. We can see aggregates (e.g. "200 people visited today") but cannot identify individual visitors.</p>
 
     <h2>Location</h2>
-    <p>If you tap the location button, your browser asks for permission before sharing your GPS coordinates. These are used entirely within your browser to sort pubs by distance and to look up your place name via <a href="https://nominatim.openstreetmap.org/">Nominatim</a> (OpenStreetMap's geocoding service). Your coordinates are never sent to Sunny Pint servers because there are none.</p>
+    <p>If you tap the location button, your browser asks for permission before sharing your GPS coordinates. These are used entirely within your browser to sort pubs by distance and to look up your place name via <a href="https://photon.komoot.io/">Photon</a> (an open-source geocoder built on OpenStreetMap data). Your coordinates are only sent to Photon for place-name lookup and never stored by Sunny Pint.</p>
 
     <h2>External services</h2>
     <p>Your browser makes requests to these third-party services as part of normal use:</p>
@@ -40,7 +40,8 @@
       <tbody>
         <tr><td><a href="https://www.mapbox.com/">Mapbox</a></td><td>Map &amp; satellite tiles</td><td>Map coordinates only</td></tr>
         <tr><td><a href="https://open-meteo.com/">Open-Meteo</a></td><td>Cloud cover</td><td>Pub's coordinates</td></tr>
-        <tr><td><a href="https://nominatim.openstreetmap.org/">Nominatim</a></td><td>Place names</td><td>Coordinates or search text</td></tr>
+        <tr><td><a href="https://photon.komoot.io/">Photon</a></td><td>Place names / geocoding</td><td>Coordinates or search text</td></tr>
+        <tr><td><a href="https://www.cloudflare.com/web-analytics/">Cloudflare Web Analytics</a></td><td>Privacy-first page analytics (no cookies)</td><td>Page URL, browser type, referrer</td></tr>
       </tbody>
     </table>
     <p>These services receive standard HTTP request data (your IP address, browser type) as part of any web request. None of them receive your identity or any personal information from Sunny Pint.</p>

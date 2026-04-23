@@ -44,6 +44,9 @@ export interface Pub {
   town?: string;
   county?: string;
   country?: string;
+  /** ONS/cadastral local authority code, used by generate_pages.ts to resolve
+   *  county + country fallbacks when OSM tags are missing. */
+  local_authority?: string;
   outdoor_area_m2?: number;
   opening_hours?: string;
   brand?: string;
@@ -423,11 +426,20 @@ export function renderCityPage(template: string, ctx: CityContext): string {
     `${pubs.length} pub gardens in ${town} ranked by Sunny Rating (average ${avgScore}/100). ` +
     `Find the sunniest beer gardens, the best evening sun spots, and pick the best seat for your pint.`;
 
+  // All pubs in the same town share a county (it's a town property), so
+  // grabbing it from pubs[0] is safe — used for the breadcrumb chain.
+  const county = pubs[0]?.county;
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
     { name: country, path: `/explore/${slugify(country)}/` },
-    { name: town, path: `/${slug}/` },
   ];
+  if (county) {
+    breadcrumbs.push({
+      name: county,
+      path: `/explore/${slugify(country)}/${slugify(county)}/`,
+    });
+  }
+  breadcrumbs.push({ name: town, path: `/${slug}/` });
 
   // Sort the visible list by Sunny Rating descending so the best gardens
   // appear first. Stable secondary sort by name for deterministic diffs.
@@ -504,12 +516,24 @@ export function renderPubPage(template: string, ctx: PubContext): string {
 
   const townSlug = slugify(town);
   const countrySlug = slugify(country);
+  // Insert the county into the breadcrumb chain when we have it — densifies
+  // the internal link graph so Google follows pub → county → country pages.
+  // `pub.county` is present on virtually every UK pub (93% coverage). When
+  // missing we fall back to the shorter chain.
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
     { name: country, path: `/explore/${countrySlug}/` },
+  ];
+  if (pub.county) {
+    breadcrumbs.push({
+      name: pub.county,
+      path: `/explore/${countrySlug}/${slugify(pub.county)}/`,
+    });
+  }
+  breadcrumbs.push(
     { name: town, path: `/${townSlug}/` },
     { name: pub.name, path: `/pub/${slug}/` },
-  ];
+  );
 
   // Intro paragraph — Sunny Rating is the headline. Best window + brand are
   // secondary facts on the same line.
@@ -688,12 +712,21 @@ export function renderThemePage(template: string, ctx: ThemeContext): string {
     `${matched.length} pub gardens in ${town} matching "${theme.name.toLowerCase()}". ` +
     `Pick the best beer garden for your pint.`;
 
+  const county = pubs[0]?.county;
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
     { name: country, path: `/explore/${slugify(country)}/` },
+  ];
+  if (county) {
+    breadcrumbs.push({
+      name: county,
+      path: `/explore/${slugify(country)}/${slugify(county)}/`,
+    });
+  }
+  breadcrumbs.push(
     { name: town, path: `/${slug}/` },
     { name: theme.name, path: `/${slug}/${theme.slug}/` },
-  ];
+  );
 
   const listItems = shown
     .map(
@@ -904,8 +937,8 @@ export function renderCountryPage(
     { name: countryName, path: `/explore/${countrySlug}/` },
   ];
 
-  const countyList = [...counties]
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const sortedCounties = [...counties].sort((a, b) => a.name.localeCompare(b.name));
+  const countyList = sortedCounties
     .map(
       (c) =>
         `    <li><a href="/explore/${countrySlug}/${c.slug}/">${htmlEscape(c.name)}</a> — ` +
@@ -913,15 +946,44 @@ export function renderCountryPage(
     )
     .join("\n");
 
+  // Derived insight for the intro — one line beyond the raw count to lift
+  // the page above templated-stat territory. Picks the county with the
+  // highest average sun score.
+  const sunniest = sortedCounties
+    .filter((c) => c.avgScore !== null)
+    .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0))[0];
+  const sunniestSentence = sunniest
+    ? ` The sunniest county is <a href="/explore/${countrySlug}/${sunniest.slug}/">${htmlEscape(sunniest.name)}</a> with an average Sunny Rating of <strong>${Math.round(sunniest.avgScore ?? 0)}/100</strong>.`
+    : "";
+
   const seoIntro =
     `<section id="seo-intro" class="seo-intro seo-intro--landing seo-intro--explore">\n` +
     `  ${breadcrumbHtml(breadcrumbs)}\n` +
     `  <h1>Sunny beer gardens in ${htmlEscape(countryName)}</h1>\n` +
-    `  <p>${totalPubs.toLocaleString()} pubs across ${counties.length} counties.</p>\n` +
+    `  <p>${totalPubs.toLocaleString()} pubs across ${counties.length} counties.${sunniestSentence}</p>\n` +
     `  <div class="explore-map-wrap">${mapSvg}</div>\n` +
     `  <h2>Counties</h2>\n` +
     `  <ul class="explore-county-list">\n${countyList}\n  </ul>\n` +
     `</section>`;
+
+  // ItemList JSON-LD for the counties so Google can parse the county
+  // directory as an entity list rather than boilerplate links.
+  const countiesItemList = JSON.stringify(
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `Counties in ${countryName}`,
+      numberOfItems: sortedCounties.length,
+      itemListElement: sortedCounties.map((c, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: c.name,
+        url: `${SITE_URL}/explore/${countrySlug}/${c.slug}/`,
+      })),
+    },
+    null,
+    2,
+  );
 
   return applyTemplate(template, {
     title,
@@ -932,7 +994,7 @@ export function renderCountryPage(
     spAreaLat: countryName === "Scotland" ? 56.5 : countryName === "Wales" ? 52.3 : 52.5,
     spAreaLng: countryName === "Scotland" ? -4.0 : countryName === "Wales" ? -3.5 : -1.5,
     spPub: "",
-    jsonLd: [breadcrumbListJsonLd(breadcrumbs)],
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs), countiesItemList],
     seoIntro,
   });
 }
@@ -960,29 +1022,69 @@ export function renderCountyPage(template: string, county: ExploreCountyStats): 
     })
     .join("\n");
 
-  const topPubList = county.topPubs
-    .slice(0, 15)
-    .map(
-      (p) =>
-        `    <li><a href="/pub/${htmlEscape(p.slug ?? "")}/">${htmlEscape(p.name)}</a>` +
-        `${p.sun ? ` — ${p.sun.score}/100` : ""}` +
-        `${p.town ? ` <small>(${htmlEscape(p.town)})</small>` : ""}</li>`,
-    )
-    .join("\n");
+  const renderPubLi = (p: Pub) =>
+    `    <li><a href="/pub/${htmlEscape(p.slug ?? "")}/">${htmlEscape(p.name)}</a>` +
+    `${p.sun ? ` — ${p.sun.score}/100` : ""}` +
+    `${p.town ? ` <small>(${htmlEscape(p.town)})</small>` : ""}</li>`;
+
+  const topVisible = county.topPubs.slice(0, 15);
+  const topPubList = topVisible.map(renderPubLi).join("\n");
+  const remaining = county.topPubs.slice(15);
+  const remainingList = remaining.map(renderPubLi).join("\n");
+
+  // Narrative insight — sunniest town in the county. Ranks real content
+  // above the "N pubs across M towns" stat line, which on its own looks
+  // templated to Google's scaled-content classifier.
+  const sunniestTown = [...county.towns]
+    .filter((t) => t.avgScore !== null && t.pubCount >= 3)
+    .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0))[0];
+  const sunniestSentence = sunniestTown
+    ? ` The sunniest town is <strong>${htmlEscape(sunniestTown.name)}</strong> with an average Sunny Rating of <strong>${Math.round(sunniestTown.avgScore ?? 0)}/100</strong>.`
+    : "";
 
   const seoIntro =
     `<section id="seo-intro" class="seo-intro seo-intro--landing seo-intro--explore">\n` +
     `  ${breadcrumbHtml(breadcrumbs)}\n` +
     `  <h1>Sunny beer gardens in ${htmlEscape(county.name)}</h1>\n` +
     `  <p>${county.pubCount} pubs across ${county.towns.length} towns in ${htmlEscape(county.name)}` +
-    `${county.avgScore !== null ? `, average Sunny Rating ${Math.round(county.avgScore)}/100` : ""}.</p>\n` +
+    `${county.avgScore !== null ? `, average Sunny Rating ${Math.round(county.avgScore)}/100` : ""}.${sunniestSentence}</p>\n` +
     `  <h2>Towns</h2>\n` +
     `  <ul class="explore-town-list">\n${townList}\n  </ul>\n` +
     (county.topPubs.length > 0
       ? `  <h2>Sunniest pubs in ${htmlEscape(county.name)}</h2>\n` +
-        `  <ul class="explore-pub-list">\n${topPubList}\n  </ul>\n`
+        `  <ul class="explore-pub-list">\n${topPubList}\n  </ul>\n` +
+        (remaining.length > 0
+          ? `  <details class="seo-pub-list-wrap">\n` +
+            `    <summary>See all ${county.topPubs.length} pubs in ${htmlEscape(county.name)}</summary>\n` +
+            `    <ul class="seo-pub-list">\n${remainingList}\n    </ul>\n` +
+            `  </details>\n`
+          : "")
       : "") +
     `</section>`;
+
+  // ItemList JSON-LD for the pub list so Google can parse the county's
+  // sunniest-pubs directory as a structured entity list.
+  const countyItemList =
+    county.topPubs.length > 0
+      ? [
+          JSON.stringify(
+            {
+              "@context": "https://schema.org",
+              "@type": "ItemList",
+              name: `Sunniest pubs in ${county.name}`,
+              numberOfItems: county.topPubs.length,
+              itemListElement: county.topPubs.map((p, i) => ({
+                "@type": "ListItem",
+                position: i + 1,
+                name: p.name,
+                url: `${SITE_URL}/pub/${p.slug}/`,
+              })),
+            },
+            null,
+            2,
+          ),
+        ]
+      : [];
 
   return applyTemplate(template, {
     title,
@@ -993,7 +1095,7 @@ export function renderCountyPage(template: string, county: ExploreCountyStats): 
     spAreaLat: 0,
     spAreaLng: 0,
     spPub: "",
-    jsonLd: [breadcrumbListJsonLd(breadcrumbs)],
+    jsonLd: [breadcrumbListJsonLd(breadcrumbs), ...countyItemList],
     seoIntro,
   });
 }

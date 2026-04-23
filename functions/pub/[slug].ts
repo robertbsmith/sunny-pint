@@ -100,7 +100,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   // Force GET on the cache key so a HEAD probe reuses the GET entry and
   // vice-versa — Cache API keys are method-sensitive by default.
   const cacheKey = new Request(`${url.origin}${url.pathname}?_v=${sha}`, { method: "GET" });
-  const cache = caches.default;
+  // `caches.default` is a Cloudflare Workers extension not present in the
+  // standard DOM CacheStorage type. The cast is a pure type-level shim —
+  // runtime works correctly on the Workers platform.
+  const cache = (caches as unknown as { default: Cache }).default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 

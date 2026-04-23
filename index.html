@@ -36,10 +36,14 @@
     <link rel="icon" sizes="any" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon-192-v2.png" />
 
-    <!-- Preload pubs.json so the fetch starts in parallel with the main JS
-         download instead of waiting until main.ts:init() runs. Saves ~200ms
-         off the time-to-first-pub-render on a cold load. -->
-    <link rel="preload" href="/data/pubs.json" as="fetch" type="application/json" crossorigin />
+    <!-- Preload pubs-index.json from R2 so the fetch starts in parallel
+         with the main JS download instead of waiting until main.ts:init()
+         runs. Saves ~200ms off the time-to-first-pub-render on a cold
+         load. Must match the URL in src/main.ts — /data/pubs.json is
+         stripped from dist/ by `just release` so preloading the same-
+         origin path would 404. -->
+    <link rel="preload" href="https://data.sunny-pint.co.uk/data/pubs-index.json" as="fetch" type="application/json" crossorigin />
+    <link rel="preconnect" href="https://data.sunny-pint.co.uk" crossorigin />
 
     <!-- Preconnect to Mapbox so the porthole's first tile fetch
          skips the DNS + TLS handshake. -->
