@@ -44,6 +44,23 @@ const DATA_BASE_URL = (() => {
   return meta?.getAttribute("content") || "/data";
 })();
 
+/** Minutes-from-midnight in UK wall-clock time for the given moment.
+ *  Every pub on the site is in the UK, so "now" for the sun simulation
+ *  and the Now button must mean Europe/London regardless of where the
+ *  user's browser thinks it is. `Intl.DateTimeFormat.formatToParts` is
+ *  the standard way to do this without pulling in a timezone library. */
+function ukTimeMins(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return h * 60 + m;
+}
+
 async function loadPubs(): Promise<void> {
   const resp = await fetch(`${DATA_BASE_URL}/pubs-index.json`);
   const pubs: Pub[] = await resp.json();
@@ -562,12 +579,15 @@ async function init(): Promise<void> {
     // it was either user-shared or scrubbed previously, so preserve it on
     // subsequent writes. Otherwise leave the URL clean until the user
     // actually moves the slider.
-    const now = new Date();
+    //
+    // "Now" means UK now — every pub on the site is in the UK, so a user
+    // in another timezone still wants the initial view to show the sun
+    // as it currently is in the UK, not their local wall-clock hour.
     if (urlState.time != null) {
       state.timeMins = urlState.time;
       markTimeUserDriven();
     } else {
-      state.timeMins = now.getHours() * 60 + now.getMinutes();
+      state.timeMins = ukTimeMins(new Date());
     }
     if (urlState.date) state.date = urlState.date;
 
@@ -728,8 +748,7 @@ async function init(): Promise<void> {
     // Now button — reset time to current. Also clear the user-driven flag
     // so writeURL stops emitting ?t= and the URL goes back to clean.
     document.getElementById("btn-now")!.addEventListener("click", () => {
-      const now = new Date();
-      state.timeMins = now.getHours() * 60 + now.getMinutes();
+      state.timeMins = ukTimeMins(new Date());
       state.date = new Date();
       clearTimeUserDriven();
       updateScene();

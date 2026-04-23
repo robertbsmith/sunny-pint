@@ -121,11 +121,14 @@ def run(area) -> dict:
     if result.returncode != 0:
         raise RuntimeError(f"precompute_sun.ts failed: {result.returncode}")
 
-    # Strip internal _outdoor_hash from the public file.
+    # Re-read pubs.json after the scorer ran. _outdoor_hash is deliberately
+    # kept in this file — it's an internal field but pubs.json is the
+    # intermediate full file (pubs-index.json is the slim public one, and
+    # it already strips _outdoor_hash via INDEX_FIELDS). Keeping the hash
+    # lets PACKAGE carry it forward on the next run so SCORE's skip-
+    # unchanged-pubs check actually takes effect — otherwise every
+    # package+score cycle pointlessly re-scores ~28k unchanged pubs.
     pubs = json.loads(PUBS_JSON.read_text())
-    for pub in pubs:
-        pub.pop("_outdoor_hash", None)
-    PUBS_JSON.write_text(json.dumps(pubs))
 
     scored = sum(1 for p in pubs if p.get("sun"))
     print(f"  {scored}/{len(pubs)} pubs now have sun scores")

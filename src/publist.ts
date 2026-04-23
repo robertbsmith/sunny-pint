@@ -153,6 +153,10 @@ export function renderList(): void {
     const li = document.createElement("li");
     li.setAttribute("role", "option");
     li.setAttribute("aria-selected", pub.id === state.selectedPubId ? "true" : "false");
+    // Stamp the pub id on the DOM node so updateSelection() can match
+    // rows back to their pub deterministically even when duplicate names
+    // exist (there are hundreds of "Red Lion"s in the UK).
+    li.dataset.pubId = pub.id;
 
     const dist = pub.distance != null ? formatDistance(pub.distance) : "";
     const mapsUrl = googleMapsUrl(pub.name, pub.lat, pub.lng);
@@ -196,9 +200,12 @@ export function renderList(): void {
 function updateSelection(): void {
   for (const li of listEl.children) {
     const el = li as HTMLElement;
-    const name = el.querySelector(".pub-name")?.textContent ?? "";
-    const pub = state.pubs.find((p) => p.name === name);
-    el.setAttribute("aria-selected", pub?.id === state.selectedPubId ? "true" : "false");
+    // Match by stable pub id (written as data-pub-id on render). Using the
+    // visible name would select the wrong row when two pubs share a name.
+    el.setAttribute(
+      "aria-selected",
+      el.dataset.pubId === state.selectedPubId ? "true" : "false",
+    );
   }
   const selected = listEl.querySelector('[aria-selected="true"]');
   selected?.scrollIntoView({ block: "nearest" });
