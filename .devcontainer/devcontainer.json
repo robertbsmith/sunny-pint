@@ -23,11 +23,15 @@
       }
     }
   },
-  "forwardPorts": [5173],
+  "forwardPorts": [5173, 8976],
   "portsAttributes": {
     "5173": {
       "label": "SunPub Dev",
       "onAutoForward": "notify"
+    },
+    "8976": {
+      "label": "Wrangler OAuth",
+      "onAutoForward": "silent"
     }
   },
   "remoteUser": "root"

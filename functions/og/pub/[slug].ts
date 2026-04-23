@@ -108,12 +108,16 @@ function makeTileFetcher(env: Env, origin: string): TileFetcher {
 
 // ── Route handler ────────────────────────────────────────────────────────
 
-export const onRequestGet: PagesFunction<Env> = async (ctx) => {
+export const onRequest: PagesFunction<Env> = async (ctx) => {
+  if (ctx.request.method !== "GET" && ctx.request.method !== "HEAD") {
+    return new Response("Method not allowed", { status: 405 });
+  }
   const url = new URL(ctx.request.url);
 
   // Edge cache lookup, normalised by path only (strip query params so
-  // ?utm_source=… etc don't fragment the cache).
-  const cacheKey = new Request(`${url.origin}${url.pathname}`, ctx.request);
+  // ?utm_source=… etc don't fragment the cache). Force GET so HEAD probes
+  // reuse the same cache entry as GETs.
+  const cacheKey = new Request(`${url.origin}${url.pathname}`, { method: "GET" });
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;

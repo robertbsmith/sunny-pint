@@ -82,7 +82,13 @@ async function loadAssets(
 
 // ── Route handler ────────────────────────────────────────────────────────
 
-export const onRequestGet: PagesFunction<Env> = async (ctx) => {
+// Handle GET and HEAD — some crawlers (and link checkers) probe with HEAD
+// first, and if we only export onRequestGet those fall through to the static
+// 404.html which tells Google the URL doesn't exist.
+export const onRequest: PagesFunction<Env> = async (ctx) => {
+  if (ctx.request.method !== "GET" && ctx.request.method !== "HEAD") {
+    return new Response("Method not allowed", { status: 405 });
+  }
   const url = new URL(ctx.request.url);
 
   // Cache lookup using a normalised key (strip query params so cache hits
@@ -91,7 +97,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   // serve 7-day-old HTML still pointing at the previous CSS hash, which
   // means the layout fixes from a deploy don't reach returning users.
   const sha = ctx.env.CF_PAGES_COMMIT_SHA ?? "dev";
-  const cacheKey = new Request(`${url.origin}${url.pathname}?_v=${sha}`, ctx.request);
+  // Force GET on the cache key so a HEAD probe reuses the GET entry and
+  // vice-versa — Cache API keys are method-sensitive by default.
+  const cacheKey = new Request(`${url.origin}${url.pathname}?_v=${sha}`, { method: "GET" });
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;

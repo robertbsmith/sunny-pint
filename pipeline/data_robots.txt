@@ -1,0 +1,12 @@
+# This domain (data.sunny-pint.co.uk) only serves raw data files for the
+# Sunny Pint web app at https://sunny-pint.co.uk. There is no user-facing
+# content here worth crawling — the sitemap at sunny-pint.co.uk/sitemap.xml
+# covers all indexable pages.
+#
+# Disallowing /data/ saves crawl budget for the main site and avoids Google
+# indexing raw JSON as thin content.
+
+User-agent: *
+Disallow: /
+
+Sitemap: https://sunny-pint.co.uk/sitemap.xml

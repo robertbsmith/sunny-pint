@@ -11,7 +11,13 @@
  *
  * Outputs:
  *   dist/<town-slug>/index.html       One per qualifying town
- *   dist/sitemap.xml                  Homepage + cities + every per-pub URL
+ *   dist/sitemap.xml                  Sitemap index — references the children below
+ *   dist/sitemap-core.xml             Homepage + explore pages
+ *   dist/sitemap-cities.xml           City + theme landing pages
+ *   dist/sitemap-pubs-en-a-m.xml      English pub URLs, slugs a-m
+ *   dist/sitemap-pubs-en-n-z.xml      English pub URLs, slugs n-z
+ *   dist/sitemap-pubs-scotland.xml    Scottish pub URLs
+ *   dist/sitemap-pubs-wales.xml       Welsh pub URLs
  *   dist/404.html                     Lightweight, noindex
  *
  * Per-pub URLs are NOT generated as files — the Pages Function in
@@ -26,8 +32,10 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import { type CountyData, renderCountySvg } from "../functions/_lib/geo_svg";
 import {
+  type ExploreCountryStats,
+  type ExploreCountyStats,
   groupByTown,
   type Pub,
   qualifying,
@@ -39,16 +47,7 @@ import {
   slugify,
   THEMES,
   type ThemeDef,
-  type ExploreCountryStats,
-  type ExploreCountyStats,
 } from "../functions/_lib/render";
-import {
-  renderCountySvg,
-  renderVoronoiSvg,
-  renderCountryOverlay,
-  type CountyData,
-  type VoronoiPoint,
-} from "../functions/_lib/geo_svg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -156,6 +155,40 @@ function renderSitemap(entries: SitemapEntry[]): string {
   );
 }
 
+/** Render a sitemap index pointing at child sitemaps. Each child's lastmod is
+ *  the max lastmod across URLs inside it — Google uses this to decide whether
+ *  to re-fetch the child. */
+function renderSitemapIndex(children: { filename: string; lastmod: string }[]): string {
+  const body = children
+    .map(
+      (c) =>
+        `  <sitemap>\n    <loc>${SITE_URL}/${c.filename}</loc>\n    <lastmod>${c.lastmod}</lastmod>\n  </sitemap>`,
+    )
+    .join("\n");
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    `${body}\n` +
+    `</sitemapindex>\n`
+  );
+}
+
+/** Slug bucket for English pubs: slugs starting 'a'-'m' vs 'n'-'z'.
+ *  Non-alphabetical leading characters (digits, hyphens) fall into 'am'.
+ *  Strips a leading "the-" because ~60% of pub slugs start with it; bucketing
+ *  on the raw first char would put everything in n-z. */
+function englishPubBucket(slug: string): "am" | "nz" {
+  const key = slug.startsWith("the-") ? slug.slice(4) : slug;
+  const first = key.charCodeAt(0);
+  // 'n' = 110 — everything before n (including digits, hyphens, a-m) goes to am.
+  return first < 110 ? "am" : "nz";
+}
+
+function maxLastmod(entries: SitemapEntry[]): string {
+  if (entries.length === 0) return new Date().toISOString().slice(0, 10);
+  return entries.reduce((m, e) => (e.lastmod > m ? e.lastmod : m), entries[0].lastmod);
+}
+
 // ── Theme page noindex injection ─────────────────────────────────────────
 
 /** Inject `<meta name="robots" content="noindex,follow">` into a rendered
@@ -234,7 +267,16 @@ async function main(): Promise<void> {
   // would tell Google to recrawl every URL whether or not anything changed.
   const lastmodState = loadLastmodState();
   const today = new Date().toISOString().slice(0, 10);
-  const sitemapEntries: SitemapEntry[] = [];
+
+  // Sitemap URLs are bucketed by type + geography so each child sitemap stays
+  // under the ~30k-URL processing sweet spot and Google Search Console shows
+  // per-segment indexing stats. See docs/INFRA_AUDIT.md for rationale.
+  const coreEntries: SitemapEntry[] = []; // homepage + explore pages
+  const cityEntries: SitemapEntry[] = []; // city + theme landing pages
+  const pubsEnglandAM: SitemapEntry[] = [];
+  const pubsEnglandNZ: SitemapEntry[] = [];
+  const pubsScotland: SitemapEntry[] = [];
+  const pubsWales: SitemapEntry[] = [];
 
   // Homepage lastmod: bumps when any qualifying pub or city changes,
   // since the homepage's "browse" experience depends on the underlying
@@ -249,7 +291,7 @@ async function main(): Promise<void> {
     )
     .digest("hex")
     .slice(0, 16);
-  sitemapEntries.push({
+  coreEntries.push({
     url: `${SITE_URL}/`,
     lastmod: resolveLastmod(lastmodState, "/", homeHash, today),
   });
@@ -275,7 +317,7 @@ async function main(): Promise<void> {
     const cityHash = hashCity(townPubs);
     const wasNew = lastmodState[cityKey]?.hash !== cityHash;
     if (wasNew) cityChangedCount++;
-    sitemapEntries.push({
+    cityEntries.push({
       url: `${SITE_URL}${cityKey}`,
       lastmod: resolveLastmod(lastmodState, cityKey, cityHash, today),
     });
@@ -309,7 +351,7 @@ async function main(): Promise<void> {
         const themeHash = hashCity(matched);
         const wasThemeNew = lastmodState[themeKey]?.hash !== themeHash;
         if (wasThemeNew) themeChangedCount++;
-        sitemapEntries.push({
+        cityEntries.push({
           url: `${SITE_URL}${themeKey}`,
           lastmod: resolveLastmod(lastmodState, themeKey, themeHash, today),
         });
@@ -334,17 +376,26 @@ async function main(): Promise<void> {
     .map((p) => p.slug)
     .filter((s): s is string => !!s)
     .sort();
+  // Build a slug→pub lookup so the per-pub loop doesn't do a linear find each
+  // iteration (31k × 31k would be ~1B ops, noticeable at build time).
+  const pubBySlug = new Map<string, Pub>();
+  for (const p of allQualifying) if (p.slug) pubBySlug.set(p.slug, p);
   for (const slug of pubSlugList) {
-    const pub = allQualifying.find((p) => p.slug === slug);
+    const pub = pubBySlug.get(slug);
     if (!pub) continue;
     const key = `/pub/${slug}/`;
     const hash = hashPub(pub);
     const wasNew = lastmodState[key]?.hash !== hash;
     if (wasNew) pubChangedCount++;
-    sitemapEntries.push({
+    const entry: SitemapEntry = {
       url: `${SITE_URL}${key}`,
       lastmod: resolveLastmod(lastmodState, key, hash, today),
-    });
+    };
+    const country = pub.country ?? "England";
+    if (country === "Scotland") pubsScotland.push(entry);
+    else if (country === "Wales") pubsWales.push(entry);
+    else if (englishPubBucket(slug) === "am") pubsEnglandAM.push(entry);
+    else pubsEnglandNZ.push(entry);
   }
 
   console.log(
@@ -355,19 +406,16 @@ async function main(): Promise<void> {
 
   const COUNTY_MAP_PATH = join(ROOT, "data", "county_map.json");
   const ONS_COUNTIES_PATH = join(ROOT, "data", "ons_counties.geojson");
-  const ONS_COUNTRIES_PATH = join(ROOT, "data", "ons_countries.geojson");
   const MIN_COUNTY_PUBS = 8;
   const MIN_COUNTY_INDEX = 20;
 
   if (existsSync(COUNTY_MAP_PATH) && existsSync(ONS_COUNTIES_PATH)) {
     console.log("\n  Generating explore pages...");
 
-    const countyMap: Record<string, { county: string; country: string }> =
-      JSON.parse(readFileSync(COUNTY_MAP_PATH, "utf-8"));
+    const countyMap: Record<string, { county: string; country: string }> = JSON.parse(
+      readFileSync(COUNTY_MAP_PATH, "utf-8"),
+    );
     const onsCounties = JSON.parse(readFileSync(ONS_COUNTIES_PATH, "utf-8"));
-    const onsCountries = existsSync(ONS_COUNTRIES_PATH)
-      ? JSON.parse(readFileSync(ONS_COUNTRIES_PATH, "utf-8"))
-      : null;
     const ONS_TO_COUNTY_PATH = join(ROOT, "data", "ons_to_county.json");
     const onsToCounty: Record<string, string> = existsSync(ONS_TO_COUNTY_PATH)
       ? JSON.parse(readFileSync(ONS_TO_COUNTY_PATH, "utf-8"))
@@ -378,8 +426,8 @@ async function main(): Promise<void> {
     for (const pub of allQualifying) {
       const la = (pub as Record<string, unknown>).local_authority as string | undefined;
       const mapping = la ? countyMap[la] : undefined;
-      const county = (pub as Record<string, unknown>).county as string | undefined
-        || mapping?.county;
+      const county =
+        ((pub as Record<string, unknown>).county as string | undefined) || mapping?.county;
       const country = pub.country || mapping?.country || "England";
       if (!county) continue;
       const entry = pubsByCounty.get(county) || { country, pubs: [] };
@@ -391,21 +439,30 @@ async function main(): Promise<void> {
     const allCountyStats: ExploreCountyStats[] = [];
     for (const [countyName, { country, pubs: countyPubs }] of pubsByCounty) {
       const scored = countyPubs.filter((p) => p.sun != null);
-      const avgScore = scored.length > 0
-        ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
-        : null;
+      const avgScore =
+        scored.length > 0
+          ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
+          : null;
 
       // Group by town within county.
       const townGroups = groupByTown(countyPubs);
       const towns = [...townGroups.entries()]
         .map(([town, tPubs]) => {
           const tScored = tPubs.filter((p) => p.sun != null);
-          const tAvg = tScored.length > 0
-            ? Math.round(tScored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / tScored.length)
-            : null;
+          const tAvg =
+            tScored.length > 0
+              ? Math.round(tScored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / tScored.length)
+              : null;
           const lat = tPubs.reduce((s, p) => s + p.lat, 0) / tPubs.length;
           const lng = tPubs.reduce((s, p) => s + p.lng, 0) / tPubs.length;
-          return { name: town, slug: slugify(town), pubCount: tPubs.length, avgScore: tAvg, lat: +lat.toFixed(4), lng: +lng.toFixed(4) };
+          return {
+            name: town,
+            slug: slugify(town),
+            pubCount: tPubs.length,
+            avgScore: tAvg,
+            lat: +lat.toFixed(4),
+            lng: +lng.toFixed(4),
+          };
         })
         .sort((a, b) => b.pubCount - a.pubCount);
 
@@ -428,14 +485,17 @@ async function main(): Promise<void> {
 
     // Country stats.
     const countryNames = ["England", "Scotland", "Wales"];
-    const countryStats: ExploreCountryStats[] = countryNames.map((name) => {
-      const cPubs = allQualifying.filter((p) => p.country === name);
-      const scored = cPubs.filter((p) => p.sun != null);
-      const avgScore = scored.length > 0
-        ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
-        : null;
-      return { name, slug: slugify(name), pubCount: cPubs.length, avgScore };
-    }).filter((c) => c.pubCount > 0);
+    const countryStats: ExploreCountryStats[] = countryNames
+      .map((name) => {
+        const cPubs = allQualifying.filter((p) => p.country === name);
+        const scored = cPubs.filter((p) => p.sun != null);
+        const avgScore =
+          scored.length > 0
+            ? Math.round(scored.reduce((s, p) => s + (p.sun?.score ?? 0), 0) / scored.length)
+            : null;
+        return { name, slug: slugify(name), pubCount: cPubs.length, avgScore };
+      })
+      .filter((c) => c.pubCount > 0);
 
     // Top cities for the overview.
     const topCities = qualifyingTowns
@@ -468,14 +528,21 @@ async function main(): Promise<void> {
     mkdirSync(exploreDir, { recursive: true });
     writeFileSync(
       join(exploreDir, "index.html"),
-      renderExplorePage(template, countryStats, ukMapSvg, topCities, allQualifying.length, allCountyStats),
+      renderExplorePage(
+        template,
+        countryStats,
+        ukMapSvg,
+        topCities,
+        allQualifying.length,
+        allCountyStats,
+      ),
     );
     const exploreKey = "/explore/";
     const exploreHash = createHash("sha256")
       .update(allQualifying.length.toString())
       .digest("hex")
       .slice(0, 16);
-    sitemapEntries.push({
+    coreEntries.push({
       url: `${SITE_URL}${exploreKey}`,
       lastmod: resolveLastmod(lastmodState, exploreKey, exploreHash, today),
     });
@@ -497,11 +564,13 @@ async function main(): Promise<void> {
         renderCountryPage(template, cs.name, cs.slug, countryCounties, countrySvg, cs.pubCount),
       );
       const countryKey = `/explore/${cs.slug}/`;
-      sitemapEntries.push({
+      coreEntries.push({
         url: `${SITE_URL}${countryKey}`,
         lastmod: resolveLastmod(lastmodState, countryKey, cs.pubCount.toString(), today),
       });
-      console.log(`  /explore/${cs.slug}/  (${countryCounties.length} counties, ${cs.pubCount} pubs)`);
+      console.log(
+        `  /explore/${cs.slug}/  (${countryCounties.length} counties, ${cs.pubCount} pubs)`,
+      );
 
       // County pages.
       let countyEmitted = 0;
@@ -520,7 +589,7 @@ async function main(): Promise<void> {
 
         if (county.pubCount >= MIN_COUNTY_INDEX) {
           const countyKey = `/explore/${cs.slug}/${county.slug}/`;
-          sitemapEntries.push({
+          coreEntries.push({
             url: `${SITE_URL}${countyKey}`,
             lastmod: resolveLastmod(lastmodState, countyKey, county.pubCount.toString(), today),
           });
@@ -536,10 +605,31 @@ async function main(): Promise<void> {
 
   saveLastmodState(lastmodState);
 
-  const sitemap = renderSitemap(sitemapEntries);
-  writeFileSync(join(DIST, "sitemap.xml"), sitemap);
+  // Sitemap index + child sitemaps. Empty buckets are omitted from the index
+  // so Google doesn't waste fetches on empty files (Scotland is ~10 URLs today
+  // but will balloon when the outdoor-area data catch-up lands).
+  const children: { filename: string; entries: SitemapEntry[] }[] = [
+    { filename: "sitemap-core.xml", entries: coreEntries },
+    { filename: "sitemap-cities.xml", entries: cityEntries },
+    { filename: "sitemap-pubs-en-a-m.xml", entries: pubsEnglandAM },
+    { filename: "sitemap-pubs-en-n-z.xml", entries: pubsEnglandNZ },
+    { filename: "sitemap-pubs-scotland.xml", entries: pubsScotland },
+    { filename: "sitemap-pubs-wales.xml", entries: pubsWales },
+  ].filter((c) => c.entries.length > 0);
+
+  let totalUrls = 0;
+  for (const c of children) {
+    writeFileSync(join(DIST, c.filename), renderSitemap(c.entries));
+    totalUrls += c.entries.length;
+    console.log(`  /${c.filename} (${c.entries.length} URLs)`);
+  }
+
+  const indexXml = renderSitemapIndex(
+    children.map((c) => ({ filename: c.filename, lastmod: maxLastmod(c.entries) })),
+  );
+  writeFileSync(join(DIST, "sitemap.xml"), indexXml);
   console.log(
-    `\n  /sitemap.xml (${sitemapEntries.length} URLs)`,
+    `  /sitemap.xml (index → ${children.length} child sitemaps, ${totalUrls} URLs total)`,
   );
 
   // 404.
