@@ -900,27 +900,38 @@ html.dark .sunny-badge--sunny {
   display: flex;
   gap: 1rem;
   margin: 1.5rem 0;
-  align-items: flex-start;
+  align-items: stretch;
   max-width: 900px;
+  height: 75vh;
+  min-height: 500px;
+}
+
+.explore-map-col {
+  flex: 1 1 60%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: hidden;
 }
 
 .explore-map-wrap {
-  flex: 1 1 55%;
-  min-width: 0;
+  flex: 0 0 auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
 
 .explore-map {
   width: 100%;
   height: auto;
+  max-height: 60vh;
   cursor: pointer;
 }
 
 .explore-map path:hover {
   filter: brightness(1.1);
-}
-
-.explore-map-wrap {
-  position: relative;
 }
 
 .explore-tooltip {
@@ -1005,6 +1016,161 @@ html.dark .sunny-badge--sunny {
 
 .explore-list-item:hover {
   background: var(--surface-container);
+}
+
+.explore-list-item.selected {
+  background: var(--primary-container);
+}
+
+.explore-list-item.selected .explore-item-name {
+  color: var(--on-primary-container);
+  font-weight: 600;
+}
+
+/* Pub panel below the map (inside map column) */
+.explore-pub-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--outline-variant);
+  display: none;
+  overflow-y: auto;
+}
+
+.explore-pub-panel.visible {
+  display: flex;
+  flex-direction: column;
+}
+
+.explore-pub-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.explore-pub-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.explore-pub-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.explore-pub-link:hover {
+  text-decoration: underline;
+}
+
+.explore-pub-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.explore-pub-sort {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.explore-pub-controls button {
+  background: none;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--on-surface-variant);
+  transition: all 0.15s;
+}
+
+.explore-pub-controls button.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.explore-pub-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.explore-pub-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-container);
+  border-radius: 8px;
+}
+
+.explore-pub-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.explore-pub-name {
+  display: block;
+  font-weight: 600;
+  color: var(--on-surface);
+  text-decoration: none;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explore-pub-name:hover {
+  color: var(--primary);
+}
+
+.explore-pub-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--on-surface-variant);
+}
+
+.explore-pub-label {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.explore-pub-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.explore-pub-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.explore-loading {
+  color: var(--on-surface-variant);
+  font-size: 0.85rem;
 }
 
 .explore-item-name {
@@ -1851,16 +2017,41 @@ html.dark .status-closed {
   }
 }
 
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  text-align: center;
+}
+
+.footer-links {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--on-surface);
+  text-align: center;
+}
+
+.footer-links a {
+  text-decoration: none;
+  color: var(--on-surface);
+  font-weight: 500;
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
+}
+
 .footer-attr {
   font-size: 0.72rem;
   line-height: 1.5;
-  text-align: center;
   color: var(--on-surface-variant);
 }
 
 .footer-attr a {
   text-decoration: none;
-  color: var(--on-surface);
+  color: var(--on-surface-variant);
 }
 
 /* biome-ignore lint/style/noDescendingSpecificity: different element than the higher-specificity selector above */

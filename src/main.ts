@@ -59,8 +59,11 @@ const detailCache = new Map<string, Record<string, Partial<Pub>>>();
 async function loadPubDetail(pub: Pub): Promise<void> {
   if (pub.outdoor !== undefined) return; // already loaded
 
-  const cellLat = Math.floor(pub.lat * 10) / 10;
-  const cellLng = Math.floor(pub.lng * 10) / 10;
+  // toFixed(1) so integer-degree cells serialise as "51.0" / "-3.0" to match
+  // the pipeline's Python filename format. Without it JS drops the trailing
+  // zero ("51", "-3") and every pub in a whole-degree grid cell 404s.
+  const cellLat = (Math.floor(pub.lat * 10) / 10).toFixed(1);
+  const cellLng = (Math.floor(pub.lng * 10) / 10).toFixed(1);
   const cellKey = `${cellLat}_${cellLng}`;
 
   let chunk = detailCache.get(cellKey);
@@ -501,8 +504,6 @@ async function init(): Promise<void> {
     initIcons();
     const main = document.getElementById("main");
     if (main) main.style.display = "none";
-    const footer = document.getElementById("footer");
-    if (footer) footer.style.display = "none";
     const { initExplore } = await import("./explore");
     await initExplore();
     return;

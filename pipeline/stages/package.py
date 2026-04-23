@@ -25,18 +25,25 @@ PUBS_INDEX_OUT = PUBLIC_DATA / "pubs-index.json"
 DETAIL_DIR = PUBLIC_DATA / "detail"
 SLUG_LOCK = DATA_DIR / "slug_lock.json"
 
-# Fields for the slim index (everything the pub list + search needs).
+# Fields for the slim index (everything the pub list + search needs, plus
+# the small string fields schema.org BarOrPub structured data references on
+# every pub page — phone, postal address, website, brand. Including them
+# here avoids a second R2 fetch per Pages Function cold start. Adds roughly
+# 1.6 MB uncompressed to a 9 MB index; edge-cached so bandwidth impact is
+# negligible).
 INDEX_FIELDS = {
     "id", "name", "lat", "lng", "slug", "town", "county", "country",
     "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
+    # Schema.org BarOrPub fields:
+    "phone", "website", "brand", "brewery",
+    "addr_street", "addr_housenumber", "addr_postcode",
 }
 
 # Heavy fields that go in detail chunks (loaded on pub selection).
 DETAIL_FIELDS = {
     "outdoor", "elev", "horizon", "horizon_dist", "clat", "clng",
     "real_ale", "food", "wheelchair", "dog", "wifi",
-    "phone", "website", "brand", "brewery",
-    "local_authority", "addr_postcode", "addr_street", "addr_housenumber",
+    "local_authority",
 }
 
 
@@ -254,7 +261,13 @@ def assemble_outputs(pubs: list[dict]) -> dict:
         idx["lat"] = out["lat"]
         idx["lng"] = out["lng"]
         if out.get("sun"):
-            idx["sun"] = {"score": out["sun"]["score"], "label": out["sun"]["label"]}
+            idx["sun"] = {
+                "score": out["sun"]["score"],
+                "label": out["sun"]["label"],
+                "best_window": out["sun"].get("best_window"),
+                "evening_sun": out["sun"].get("evening_sun"),
+                "all_day_sun": out["sun"].get("all_day_sun"),
+            }
         index_pubs.append(idx)
 
         # Detail chunk entry.

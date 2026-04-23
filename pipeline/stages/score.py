@@ -51,7 +51,13 @@ def _regenerate_splits(pubs: list[dict]) -> None:
         idx["lat"] = pub["lat"]
         idx["lng"] = pub["lng"]
         if pub.get("sun"):
-            idx["sun"] = {"score": pub["sun"]["score"], "label": pub["sun"]["label"]}
+            idx["sun"] = {
+                "score": pub["sun"]["score"],
+                "label": pub["sun"]["label"],
+                "best_window": pub["sun"].get("best_window"),
+                "evening_sun": pub["sun"].get("evening_sun"),
+                "all_day_sun": pub["sun"].get("all_day_sun"),
+            }
         index_pubs.append(idx)
 
         slug = pub.get("slug")

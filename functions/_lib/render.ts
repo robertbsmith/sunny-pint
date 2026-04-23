@@ -42,12 +42,20 @@ export interface Pub {
   clng?: number;
   slug?: string;
   town?: string;
+  county?: string;
   country?: string;
   outdoor_area_m2?: number;
   opening_hours?: string;
   brand?: string;
   brewery?: string;
   website?: string;
+  /** Detail-chunk fields — populated after loadPubDetail() in the Function, or
+   *  always present in the full pubs.json used at build time. Needed for
+   *  schema.org BarOrPub output. */
+  phone?: string;
+  addr_street?: string;
+  addr_housenumber?: string;
+  addr_postcode?: string;
   /** Precomputed Sunny Rating (added by scripts/precompute_sun.ts). */
   sun?: SunMetrics;
 }
@@ -296,22 +304,65 @@ function breadcrumbListJsonLd(items: BreadcrumbItem[]): string {
   );
 }
 
+/** Convert an OSM opening_hours string to schema.org's openingHours array.
+ *  The formats are nearly identical for the common case (e.g.
+ *  "Mo-Sa 11:00-23:00; Su 11:00-22:30"); schema.org wants an array of
+ *  rules rather than a single semicolon-joined string.
+ *
+ *  Complex OSM constructs (PH, date ranges like "Dec 25 off", @ time specs,
+ *  conditional rules) aren't representable as schema.org openingHours text
+ *  and are dropped rather than emitted malformed — Google's rich results
+ *  validator is strict about this.
+ */
+function osmToSchemaOpeningHours(osm: string | undefined): string[] | undefined {
+  if (!osm) return undefined;
+  const rules = osm
+    .split(";")
+    .map((r) => r.trim())
+    .filter(Boolean)
+    // Drop rules containing anything we can't reliably express in schema.org
+    // openingHours text (public holidays, conditional rules, year rules,
+    // event names, off/unknown states, etc.).
+    .filter((r) => /^(Mo|Tu|We|Th|Fr|Sa|Su|PH|24\/7)/.test(r))
+    .filter((r) => !/PH|@|off|closed|unknown|\byear|\||\[|"/.test(r))
+    // 24/7 → seven 24-hour days, expanded because schema.org has no shorthand.
+    .flatMap((r) => (r === "24/7" ? ["Mo-Su 00:00-23:59"] : [r]));
+  return rules.length > 0 ? rules : undefined;
+}
+
 function barOrPubJsonLd(pub: Pub, town: string): object {
-  return {
+  const streetAddress =
+    [pub.addr_housenumber, pub.addr_street].filter(Boolean).join(" ") || undefined;
+
+  const address: Record<string, string | undefined> = {
+    "@type": "PostalAddress",
+    streetAddress,
+    addressLocality: town || undefined,
+    addressRegion: pub.county || undefined,
+    postalCode: pub.addr_postcode || undefined,
+    addressCountry: "GB",
+  };
+  // Strip undefined so JSON.stringify omits them.
+  for (const k of Object.keys(address)) if (address[k] === undefined) delete address[k];
+
+  const schema: Record<string, unknown> = {
     "@type": "BarOrPub",
     name: pub.name,
     url: `${SITE_URL}/pub/${pub.slug}/`,
     geo: {
       "@type": "GeoCoordinates",
-      latitude: pub.clat ?? pub.lat,
-      longitude: pub.clng ?? pub.lng,
+      latitude: +(pub.clat ?? pub.lat).toFixed(6),
+      longitude: +(pub.clng ?? pub.lng).toFixed(6),
     },
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: town,
-      addressCountry: "GB",
-    },
+    address,
   };
+  if (pub.phone) schema.telephone = pub.phone;
+  if (pub.slug) schema.image = `https://data.sunny-pint.co.uk/og/${pub.slug}.jpg`;
+  if (pub.brand) schema.brand = { "@type": "Brand", name: pub.brand };
+  else if (pub.brewery) schema.brand = { "@type": "Brand", name: pub.brewery };
+  const hours = osmToSchemaOpeningHours(pub.opening_hours);
+  if (hours) schema.openingHours = hours;
+  return schema;
 }
 
 function itemListJsonLd(town: string, pubs: Pub[]): string {
@@ -705,7 +756,14 @@ export interface ExploreCountyStats {
   countrySlug: string;
   pubCount: number;
   avgScore: number | null;
-  towns: { name: string; slug: string; pubCount: number; avgScore: number | null; lat?: number; lng?: number }[];
+  towns: {
+    name: string;
+    slug: string;
+    pubCount: number;
+    avgScore: number | null;
+    lat?: number;
+    lng?: number;
+  }[];
   topPubs: Pub[];
 }
 
@@ -740,10 +798,7 @@ export function renderExplorePage(
     .join("\n");
 
   const cityList = topCities
-    .map(
-      (c) =>
-        `    <li><a href="/${c.slug}/">${htmlEscape(c.name)}</a> (${c.pubCount} pubs)</li>`,
-    )
+    .map((c) => `    <li><a href="/${c.slug}/">${htmlEscape(c.name)}</a> (${c.pubCount} pubs)</li>`)
     .join("\n");
 
   const seoIntro =
@@ -753,9 +808,12 @@ export function renderExplorePage(
     `  <p>${totalPubs.toLocaleString()} pub gardens ranked by Sunny Rating — find where the sun shines longest.</p>\n` +
     `  <div class="explore-countries">\n${countryCards}\n  </div>\n` +
     `  <div class="explore-layout">\n` +
-    `    <div class="explore-map-wrap">\n` +
-    `      ${mapSvg}\n` +
-    `      <div class="explore-tooltip" id="map-tooltip"></div>\n` +
+    `    <div class="explore-map-col">\n` +
+    `      <div class="explore-map-wrap">\n` +
+    `        ${mapSvg}\n` +
+    `        <div class="explore-tooltip" id="map-tooltip"></div>\n` +
+    `      </div>\n` +
+    `      <div id="explore-pub-panel" class="explore-pub-panel"></div>\n` +
     `    </div>\n` +
     `    <div class="explore-sidebar">\n` +
     `      <h2>Popular areas</h2>\n` +
@@ -775,8 +833,13 @@ export function renderExplorePage(
     `        tip.textContent=t.textContent;\n` +
     `        tip.style.display="block";\n` +
     `        var r=svg.getBoundingClientRect();\n` +
-    `        tip.style.left=(e.clientX-r.left+12)+"px";\n` +
-    `        tip.style.top=(e.clientY-r.top-28)+"px";\n` +
+    `        var tw=tip.offsetWidth, th=tip.offsetHeight;\n` +
+    `        var x=e.clientX-r.left+12, y=e.clientY-r.top-th-8;\n` +
+    `        if(x+tw>r.width){x=e.clientX-r.left-tw-12;}\n` +
+    `        if(x<0){x=4;}\n` +
+    `        if(y<0){y=e.clientY-r.top+16;}\n` +
+    `        tip.style.left=x+"px";\n` +
+    `        tip.style.top=y+"px";\n` +
     `      });\n` +
     `      svg.addEventListener("mouseleave",function(){tip.style.display="none";});\n` +
     `      svg.querySelectorAll("path").forEach(function(p){\n` +
@@ -868,10 +931,7 @@ export function renderCountryPage(
 }
 
 /** Render a /explore/england/norfolk/ county page. */
-export function renderCountyPage(
-  template: string,
-  county: ExploreCountyStats,
-): string {
+export function renderCountyPage(template: string, county: ExploreCountyStats): string {
   const title = `Sunny beer gardens in ${county.name} — Sunny Pint`;
   const description =
     `${county.pubCount} pub gardens across ${county.towns.length} towns in ${county.name}. ` +
@@ -887,9 +947,8 @@ export function renderCountyPage(
   const townList = [...county.towns]
     .sort((a, b) => (b.avgScore ?? 0) - (a.avgScore ?? 0))
     .map((t) => {
-      const link = t.pubCount >= 8
-        ? `<a href="/${t.slug}/">${htmlEscape(t.name)}</a>`
-        : htmlEscape(t.name);
+      const link =
+        t.pubCount >= 8 ? `<a href="/${t.slug}/">${htmlEscape(t.name)}</a>` : htmlEscape(t.name);
       return `    <li>${link} — ${t.pubCount} pubs${t.avgScore !== null ? `, avg ${Math.round(t.avgScore)}/100` : ""}</li>`;
     })
     .join("\n");

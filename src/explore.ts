@@ -3,7 +3,17 @@
  *
  * County data is embedded in the page as JSON (no fetch needed).
  * Click a county on the map → zoom + show towns in sidebar.
+ * Click a town → inline pub list below the map.
  */
+
+import { parseHours } from "./hours";
+import { smallSunBadgeHtml } from "./sunbadge";
+import type { Pub } from "./types";
+
+const DATA_URL =
+  typeof document !== "undefined" && location.hostname === "localhost"
+    ? "/data"
+    : document.querySelector<HTMLMetaElement>('meta[name="data-url"]')?.content || "/data";
 
 interface CountyInfo {
   name: string;
@@ -26,7 +36,26 @@ interface TownInfo {
 
 let counties: CountyInfo[] = [];
 let selectedCounty: string | null = null;
+let selectedTown: string | null = null;
 let sortMode: "score" | "pubs" | "name" = "score";
+
+// Lazy-loaded pub index for the inline pub panel.
+let allPubs: Pub[] | null = null;
+let pubsLoadPromise: Promise<Pub[]> | null = null;
+let pubSortMode: "sun" | "size" | "name" = "sun";
+let pubFilterOpen = false;
+
+async function loadPubs(): Promise<Pub[]> {
+  if (allPubs) return allPubs;
+  if (pubsLoadPromise) return pubsLoadPromise;
+  pubsLoadPromise = (async () => {
+    const resp = await fetch(`${DATA_URL}/pubs-index.json`);
+    if (!resp.ok) throw new Error(`Failed to load pubs: ${resp.status}`);
+    allPubs = (await resp.json()) as Pub[];
+    return allPubs;
+  })();
+  return pubsLoadPromise;
+}
 
 // Voronoi overlay group ID.
 const VORONOI_GROUP_ID = "explore-voronoi";
@@ -42,7 +71,7 @@ const SVG_H = 600;
 const SVG_W = Math.round((SVG_H * PROJ_W) / PROJ_H) + PAD * 2;
 
 function project(lng: number, lat: number): [number, number] {
-  const x = PAD + ((lng - GB.minLng) * COS_LAT / PROJ_W) * (SVG_W - PAD * 2);
+  const x = PAD + (((lng - GB.minLng) * COS_LAT) / PROJ_W) * (SVG_W - PAD * 2);
   const y = PAD + (1 - (lat - GB.minLat) / PROJ_H) * (SVG_H - PAD * 2);
   return [x, y];
 }
@@ -91,17 +120,25 @@ async function renderCountyOverlay(county: CountyInfo): Promise<void> {
 
     const town = towns[i]!;
     const d =
-      cell.map(([x, y], j) => `${j === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join("") + "Z";
+      cell.map(([x, y], j) => `${j === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join("") +
+      "Z";
 
     const path = document.createElementNS(ns, "path");
     path.setAttribute("d", d);
     path.setAttribute("fill", scoreColor(town.avgScore));
     path.setAttribute("stroke", "#a8a29e");
     path.setAttribute("stroke-width", "0.2");
+    path.setAttribute("cursor", "pointer");
+    path.dataset.townName = town.name;
 
     const title = document.createElementNS(ns, "title");
     title.textContent = `${town.name} — ${town.pubCount} pubs${town.avgScore !== null ? `, avg ${town.avgScore}/100` : ""}`;
     path.appendChild(title);
+
+    path.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectTown(town.name);
+    });
 
     vGroup.appendChild(path);
   }
@@ -135,7 +172,6 @@ async function renderCountyOverlay(county: CountyInfo): Promise<void> {
 
   // Insert after county boundaries so Voronoi renders on top.
   svg.appendChild(vGroup);
-
 }
 
 // ── SVG map interaction ────────────────────────────────────────────────
@@ -153,8 +189,7 @@ function zoomToCounty(countyName: string): void {
 
   for (const path of svg.querySelectorAll("path")) {
     const title = path.querySelector("title")?.textContent || "";
-    if (!title.startsWith(`${countyName} —`) && title !== countyName)
-      continue;
+    if (!title.startsWith(`${countyName} —`) && title !== countyName) continue;
     found = true;
     const bbox = path.getBBox();
     if (bbox.x < minX) minX = bbox.x;
@@ -216,8 +251,7 @@ function sortItems<T extends { avgScore: number | null; name: string }>(
   countFn: (item: T) => number,
 ): T[] {
   const sorted = [...items];
-  if (sortMode === "score")
-    sorted.sort((a, b) => (b.avgScore ?? -1) - (a.avgScore ?? -1));
+  if (sortMode === "score") sorted.sort((a, b) => (b.avgScore ?? -1) - (a.avgScore ?? -1));
   else if (sortMode === "pubs") sorted.sort((a, b) => countFn(b) - countFn(a));
   else sorted.sort((a, b) => a.name.localeCompare(b.name));
   return sorted;
@@ -229,10 +263,7 @@ function scoreBadge(score: number | null): string {
 }
 
 function esc(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function renderSidebar(): void {
@@ -255,9 +286,7 @@ function renderSidebar(): void {
       )
       .join("");
 
-    for (const li of container.querySelectorAll<HTMLElement>(
-      "[data-county]",
-    )) {
+    for (const li of container.querySelectorAll<HTMLElement>("[data-county]")) {
       li.addEventListener("click", () => {
         selectCounty(li.dataset.county!);
       });
@@ -267,7 +296,14 @@ function renderSidebar(): void {
     const county = counties.find((c) => c.name === selectedCounty);
     if (!county) return;
 
-    const sorted = sortItems(county.towns, (t) => t.pubCount);
+    let sorted = sortItems(county.towns, (t) => t.pubCount);
+    // Pin selected town to the top so it's visible after a click.
+    if (selectedTown) {
+      const sel = sorted.find((t) => t.name === selectedTown);
+      if (sel) {
+        sorted = [sel, ...sorted.filter((t) => t.name !== selectedTown)];
+      }
+    }
     heading.innerHTML =
       `<a href="#" id="explore-back">&larr;</a> ` +
       `<strong>${esc(county.name)}</strong> ` +
@@ -276,19 +312,27 @@ function renderSidebar(): void {
 
     container.innerHTML = sorted
       .map((t) => {
-        const nameHtml =
-          t.pubCount >= 8
-            ? `<a href="/${t.slug}/" class="explore-item-name">${esc(t.name)}</a>`
-            : `<span class="explore-item-name">${esc(t.name)}</span>`;
+        const isSelected = t.name === selectedTown;
         return (
-          `<li class="explore-list-item">` +
-          nameHtml +
+          `<li class="explore-list-item${isSelected ? " selected" : ""}" data-town="${esc(t.name)}">` +
+          `<span class="explore-item-name">${esc(t.name)}</span>` +
           `<span class="explore-item-meta">${t.pubCount} pubs</span>` +
           scoreBadge(t.avgScore) +
           `</li>`
         );
       })
       .join("");
+
+    for (const li of container.querySelectorAll<HTMLElement>("[data-town]")) {
+      li.addEventListener("click", () => {
+        selectTown(li.dataset.town!);
+      });
+    }
+
+    // Scroll the selected item into view (top after pinning).
+    if (selectedTown) {
+      container.scrollTop = 0;
+    }
 
     document.getElementById("explore-back")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -297,8 +341,128 @@ function renderSidebar(): void {
   }
 }
 
+// ── Town selection + inline pub panel ─────────────────────────────────
+
+function selectTown(name: string | null): void {
+  selectedTown = name;
+  renderSidebar();
+  renderPubPanel();
+}
+
+async function renderPubPanel(): Promise<void> {
+  const panel = document.getElementById("explore-pub-panel");
+  if (!panel) return;
+
+  if (!selectedTown) {
+    panel.innerHTML = "";
+    panel.classList.remove("visible");
+    return;
+  }
+
+  panel.classList.add("visible");
+  panel.innerHTML = `<h3>${esc(selectedTown)}</h3><p class="explore-loading">Loading pubs...</p>`;
+
+  let pubs: Pub[];
+  try {
+    pubs = await loadPubs();
+  } catch (err) {
+    panel.innerHTML = `<h3>${esc(selectedTown)}</h3><p class="explore-loading">Could not load pubs</p>`;
+    console.error(err);
+    return;
+  }
+
+  const requestedTown = selectedTown;
+  let townPubs = pubs.filter((p) => p.town === requestedTown);
+  const totalCount = townPubs.length;
+
+  if (totalCount === 0) {
+    panel.innerHTML = `<h3>${esc(requestedTown!)}</h3><p class="explore-loading">No pubs found</p>`;
+    return;
+  }
+
+  // Apply open-now filter.
+  if (pubFilterOpen) {
+    townPubs = townPubs.filter((p) => parseHours(p.opening_hours)?.isOpen ?? false);
+  }
+
+  // Apply sort.
+  if (pubSortMode === "sun") {
+    townPubs.sort((a, b) => (b.sun?.score ?? -1) - (a.sun?.score ?? -1));
+  } else if (pubSortMode === "size") {
+    townPubs.sort((a, b) => (b.outdoor_area_m2 ?? -1) - (a.outdoor_area_m2 ?? -1));
+  } else {
+    townPubs.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const items = townPubs
+    .map((p) => {
+      const badge = smallSunBadgeHtml(p);
+      const label = p.sun?.label
+        ? `<span class="explore-pub-label">${esc(p.sun.label)}</span>`
+        : "";
+      const win = p.sun?.best_window
+        ? `<span class="explore-pub-window">Best ${esc(p.sun.best_window)}</span>`
+        : "";
+      const area = p.outdoor_area_m2
+        ? `<span class="explore-pub-area">${Math.round(p.outdoor_area_m2)} m²</span>`
+        : "";
+      const tags: string[] = [];
+      if (p.sun?.all_day_sun) tags.push(`<span class="explore-pub-tag">All day sun</span>`);
+      else if (p.sun?.evening_sun) tags.push(`<span class="explore-pub-tag">Evening sun</span>`);
+      const tagsHtml = tags.length ? `<div class="explore-pub-tags">${tags.join("")}</div>` : "";
+      return (
+        `<li class="explore-pub-item">` +
+        `<div class="explore-pub-info">` +
+        `  <a href="/pub/${esc(p.slug || "")}/" class="explore-pub-name">${esc(p.name)}</a>` +
+        `  <div class="explore-pub-meta">${label}${win}${area}</div>` +
+        `  ${tagsHtml}` +
+        `</div>` +
+        badge +
+        `</li>`
+      );
+    })
+    .join("");
+
+  const townSlug = requestedTown!
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  const viewAll =
+    totalCount >= 8 ? `<a href="/${townSlug}/" class="explore-pub-link">View all →</a>` : "";
+  const showingCount =
+    townPubs.length === totalCount ? `${totalCount}` : `${townPubs.length}/${totalCount}`;
+  panel.innerHTML =
+    `<div class="explore-pub-header">` +
+    `  <h3>${esc(requestedTown!)} <span class="explore-item-meta">${showingCount} pubs</span></h3>` +
+    `  ${viewAll}` +
+    `</div>` +
+    `<div class="explore-pub-controls">` +
+    `  <div class="explore-pub-sort">` +
+    `    <button type="button" data-pub-sort="sun"${pubSortMode === "sun" ? ' class="active"' : ""}>☀ Sunniest</button>` +
+    `    <button type="button" data-pub-sort="size"${pubSortMode === "size" ? ' class="active"' : ""}>Biggest</button>` +
+    `    <button type="button" data-pub-sort="name"${pubSortMode === "name" ? ' class="active"' : ""}>A–Z</button>` +
+    `  </div>` +
+    `  <button type="button" id="explore-pub-open"${pubFilterOpen ? ' class="active"' : ""}>Open now</button>` +
+    `</div>` +
+    `<ul class="explore-pub-list">${items}</ul>`;
+
+  // Wire up controls.
+  for (const btn of panel.querySelectorAll<HTMLElement>("[data-pub-sort]")) {
+    btn.addEventListener("click", () => {
+      pubSortMode = (btn.dataset.pubSort as typeof pubSortMode) || "sun";
+      renderPubPanel();
+    });
+  }
+  document.getElementById("explore-pub-open")?.addEventListener("click", () => {
+    pubFilterOpen = !pubFilterOpen;
+    renderPubPanel();
+  });
+}
+
 function selectCounty(name: string | null): void {
   selectedCounty = name;
+  selectedTown = null;
   clearOverlays();
   if (name) {
     zoomToCounty(name);
@@ -308,6 +472,7 @@ function selectCounty(name: string | null): void {
     zoomToUK();
   }
   renderSidebar();
+  renderPubPanel();
 }
 
 // ── Init ───────────────────────────────────────────────────────────────

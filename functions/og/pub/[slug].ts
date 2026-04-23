@@ -74,8 +74,11 @@ async function loadPubs(): Promise<Map<string, Pub>> {
 /** Fetch heavy per-pub fields (outdoor, elev, horizon) from R2 detail chunk. */
 async function loadPubDetail(pub: Pub): Promise<void> {
   if (pub.outdoor !== undefined) return;
-  const cellLat = Math.floor(pub.lat * 10) / 10;
-  const cellLng = Math.floor(pub.lng * 10) / 10;
+  // toFixed(1) so integer-degree cells serialise as "51.0" / "-3.0" to match
+  // the pipeline's Python filename format. JS would otherwise drop the
+  // trailing zero and miss every detail chunk on a whole-degree boundary.
+  const cellLat = (Math.floor(pub.lat * 10) / 10).toFixed(1);
+  const cellLng = (Math.floor(pub.lng * 10) / 10).toFixed(1);
   try {
     const resp = await fetch(`${R2_DATA_URL}/detail/${cellLat}_${cellLng}.json`);
     if (!resp.ok) return;

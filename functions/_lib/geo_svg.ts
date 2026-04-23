@@ -42,14 +42,8 @@ const SVG_W = Math.round((SVG_H * PROJ_W) / PROJ_H) + PAD * 2;
 
 /** Equirectangular projection to SVG coordinates. */
 function project(lng: number, lat: number): [number, number] {
-  const x =
-    PAD +
-    ((lng - GB_BOUNDS.minLng) * COS_LAT / PROJ_W) *
-      (SVG_W - PAD * 2);
-  const y =
-    PAD +
-    (1 - (lat - GB_BOUNDS.minLat) / PROJ_H) *
-      (SVG_H - PAD * 2);
+  const x = PAD + (((lng - GB_BOUNDS.minLng) * COS_LAT) / PROJ_W) * (SVG_W - PAD * 2);
+  const y = PAD + (1 - (lat - GB_BOUNDS.minLat) / PROJ_H) * (SVG_H - PAD * 2);
   return [x, y];
 }
 
@@ -90,9 +84,7 @@ function ringToPath(ring: number[][]): string {
 function featureToPath(feature: GeoJSONFeature): string {
   const { type, coordinates } = feature.geometry;
   if (type === "Polygon") {
-    return (coordinates as number[][][])
-      .map((ring) => ringToPath(ring))
-      .join("");
+    return (coordinates as number[][][]).map((ring) => ringToPath(ring)).join("");
   }
   if (type === "MultiPolygon") {
     return (coordinates as number[][][][])
@@ -232,10 +224,7 @@ export function renderVoronoiSvg(
       .map((f) => featureToPath(f))
       .filter(Boolean)
       .join(" ");
-    clipDef =
-      `<defs><clipPath id="gb-clip">` +
-      `<path d="${clipPaths}"/>` +
-      `</clipPath></defs>\n`;
+    clipDef = `<defs><clipPath id="gb-clip">` + `<path d="${clipPaths}"/>` + `</clipPath></defs>\n`;
     clipAttr = ' clip-path="url(#gb-clip)"';
   }
 
@@ -278,17 +267,12 @@ export function renderVoronoiSvg(
  * Render country boundaries as thin stroke-only paths (no fill).
  * Used as an overlay on the Voronoi map for navigation reference.
  */
-export function renderCountryOverlay(
-  features: GeoJSONFeature[],
-  filter?: string,
-): string {
+export function renderCountryOverlay(features: GeoJSONFeature[], filter?: string): string {
   return features
     .filter((f) => !filter || f.properties.CTRY23NM === filter)
     .map((f) => {
       const d = featureToPath(f);
-      return d
-        ? `<path d="${d}" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.6"/>`
-        : "";
+      return d ? `<path d="${d}" fill="none" stroke="#fff" stroke-width="1.5" opacity="0.6"/>` : "";
     })
     .filter(Boolean)
     .join("\n");
