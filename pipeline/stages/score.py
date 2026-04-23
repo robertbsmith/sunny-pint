@@ -18,17 +18,11 @@ PUBS_JSON = ROOT / "public" / "data" / "pubs.json"
 PUBS_INDEX_OUT = ROOT / "public" / "data" / "pubs-index.json"
 DETAIL_DIR = ROOT / "public" / "data" / "detail"
 
-# Must match the field sets in package.py.
-INDEX_FIELDS = {
-    "id", "name", "lat", "lng", "slug", "town", "country",
-    "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
-}
-DETAIL_FIELDS = {
-    "outdoor", "elev", "horizon", "horizon_dist", "clat", "clng",
-    "real_ale", "food", "wheelchair", "dog", "wifi",
-    "phone", "website", "brand", "brewery",
-    "local_authority", "addr_postcode", "addr_street", "addr_housenumber",
-}
+# Import rather than re-declare — these two lists drifting is a silent
+# footgun: SCORE regenerates pubs-index.json and detail chunks, and any
+# mismatch with PACKAGE's field sets strips fields PACKAGE added (lost
+# the BarOrPub address/phone/website fields once this way).
+from pipeline.stages.package import INDEX_FIELDS, DETAIL_FIELDS  # noqa: E402
 
 
 def _outdoor_hash(pub: dict) -> str | None:

@@ -184,21 +184,37 @@ def assemble_outputs(pubs: list[dict]) -> dict:
     # Deduplicate before processing.
     pubs = _dedup_pubs(pubs)
 
-    # Carry forward sun scores from existing pubs.json so PACKAGE reruns
-    # don't wipe out scores computed by SCORE. Scores live in pubs.json
-    # (written by precompute_sun) but not in pubs_enriched.json.
+    # Carry forward sun scores + outdoor hashes from existing pubs.json so
+    # PACKAGE reruns don't wipe out work done by SCORE. Both live only in
+    # pubs.json (written by SCORE) not in pubs_enriched.json. Without the
+    # _outdoor_hash carry-forward, SCORE's skip-unchanged-pubs check fails
+    # every run — so every package+score cycle re-scored all 28k pubs
+    # instead of the handful with changed outdoor polygons.
     if PUBS_OUT.exists():
         try:
             existing = json.loads(PUBS_OUT.read_text())
-            sun_by_slug = {p["slug"]: p["sun"] for p in existing if p.get("sun") and p.get("slug")}
-            if sun_by_slug:
-                carried = 0
+            by_slug = {
+                p["slug"]: p
+                for p in existing
+                if p.get("slug") and (p.get("sun") or p.get("_outdoor_hash"))
+            }
+            if by_slug:
+                carried_sun = 0
+                carried_hash = 0
                 for pub in pubs:
-                    if not pub.get("sun") and pub.get("slug") in sun_by_slug:
-                        pub["sun"] = sun_by_slug[pub["slug"]]
-                        carried += 1
-                if carried:
-                    print(f"  Carried forward {carried} sun scores from existing pubs.json")
+                    prev = by_slug.get(pub.get("slug") or "")
+                    if not prev:
+                        continue
+                    if not pub.get("sun") and prev.get("sun"):
+                        pub["sun"] = prev["sun"]
+                        carried_sun += 1
+                    if not pub.get("_outdoor_hash") and prev.get("_outdoor_hash"):
+                        pub["_outdoor_hash"] = prev["_outdoor_hash"]
+                        carried_hash += 1
+                if carried_sun:
+                    print(f"  Carried forward {carried_sun} sun scores from existing pubs.json")
+                if carried_hash:
+                    print(f"  Carried forward {carried_hash} outdoor hashes (SCORE skip state)")
         except (json.JSONDecodeError, KeyError):
             pass
 

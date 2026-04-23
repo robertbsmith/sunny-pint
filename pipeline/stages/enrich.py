@@ -689,6 +689,7 @@ def run(area) -> dict:
     prev_ids = set(enriched_by_id.keys()) if ENRICHED_PATH.exists() else set()
     pubs_to_process = []
     skipped = 0
+    incomplete_rematch = 0
     for i, pub in area_pubs:
         pub_id = pub.get("id") or pub.get("osm_id")
         if pub_id in prev_ids:
@@ -696,15 +697,26 @@ def run(area) -> dict:
             # elev or outdoor). Pubs written to enriched output during a
             # failed/killed run may exist by ID but have no actual data.
             if _pub_is_enriched(pub):
+                # A pub with `local_authority` but no `outdoor` means a
+                # previous run matched the cadastral parcel but failed to
+                # compute the outdoor polygon — historically this was the
+                # Phase 2 NameError bug on line 984 which silently skipped
+                # outdoor computation for every Scottish/Welsh pub. Force
+                # a re-attempt on those.
+                incomplete = pub.get("local_authority") and not pub.get("outdoor")
                 h = _pub_hash(pub)
                 prev_hash = pub.get("_enrich_hash")
-                if prev_hash is None or prev_hash == h:
+                if not incomplete and (prev_hash is None or prev_hash == h):
                     skipped += 1
                     continue
+                if incomplete:
+                    incomplete_rematch += 1
         pub["_enrich_hash"] = _pub_hash(pub)
         pubs_to_process.append((i, pub))
 
     print(f"  {skipped} pubs skipped (unchanged + already enriched)")
+    if incomplete_rematch:
+        print(f"  {incomplete_rematch} pubs re-matched (LA set but no outdoor)")
     print(f"  {len(pubs_to_process)} pubs need enrichment")
 
     if not pubs_to_process:
@@ -758,7 +770,27 @@ def run(area) -> dict:
     tile_bboxes = {tid: label_to_bbox(b["label"]) for tid, b in bundles.items()}
     tile_bboxes = {tid: bb for tid, bb in tile_bboxes.items() if bb}
 
+    # Any pub with a parcel match but no outdoor goes straight to Phase 2.
+    #
+    # Phase 1 does a large DTM+DSM bundle download per 5 km tile — valuable
+    # when a pub needs fresh LiDAR, but heavy. For the re-enrichment pattern
+    # (fixing the Phase 2 outdoor NameError that left Scottish/Welsh pubs
+    # without outdoor polygons) the Defra bundle endpoint has been slow and
+    # occasionally hanging, and the LiDAR output for most of these pubs is
+    # already correct — they only need outdoor recomputed.
+    #
+    # Routing to Phase 2:
+    #  - Pubs with existing elev+horizon get a cheap short-circuit that
+    #    skips the LiDAR fetch entirely (pure spatial ops, ~100× faster).
+    #  - Pubs without LiDAR fall through to Phase 2's WCS fetch — if that
+    #    succeeds, they get elev+horizon; if it fails, outdoor still gets
+    #    computed from parcels + buildings since those are independent.
+    outdoor_only_routed = 0
     for gi, pub in pubs_to_process:
+        if pub.get("local_authority") and not pub.get("outdoor"):
+            unmatched_pubs.append((gi, pub))
+            outdoor_only_routed += 1
+            continue
         cx, cy = to_osgb.transform(pub["lng"], pub["lat"])
         matched = False
         for tid, (emin, nmin, emax, nmax) in tile_bboxes.items():
@@ -768,6 +800,9 @@ def run(area) -> dict:
                 break
         if not matched:
             unmatched_pubs.append((gi, pub))
+
+    if outdoor_only_routed:
+        print(f"  {outdoor_only_routed} pubs routed to Phase 2 (LA but no outdoor — skip Phase 1 bundle fetch)")
 
     # Drop empty tiles.
     tile_pub_map = {tid: pubs for tid, pubs in tile_pub_map.items() if pubs}
@@ -904,7 +939,17 @@ def run(area) -> dict:
             tn = int(cy // TILE_SIZE) * TILE_SIZE
             w, s, e, n = te, tn, te + TILE_SIZE, tn + TILE_SIZE
 
-            ndsm, dtm_arr, tfm = _fetch_ndsm_wcs(w, s, e, n)
+            # Skip the slow LiDAR fetch if this pub already has horizon +
+            # elev from a previous run and only needs outdoor recomputed.
+            # LiDAR output is deterministic for the same pub position, so
+            # re-fetching would just reproduce the existing values at the
+            # cost of a ~1–3s WCS/COG HTTP request per pub.
+            has_lidar = pub.get("elev") is not None and pub.get("horizon") is not None
+            needs_outdoor_only = has_lidar and pub.get("local_authority") and not pub.get("outdoor")
+            if needs_outdoor_only:
+                ndsm, dtm_arr, tfm = None, None, None
+            else:
+                ndsm, dtm_arr, tfm = _fetch_ndsm_wcs(w, s, e, n)
 
             result: dict = {"index": gi}
 
@@ -981,7 +1026,14 @@ def run(area) -> dict:
                     result["local_authority"] = parcel_la
 
                     # Compute outdoor area: parcel - nearby buildings.
-                    conn2 = sqlite3.connect(f"file:{gpkg_path}?mode=ro", uri=True, timeout=60.0)
+                    # Use GPKG_PATH (module constant) here. Phase 1's version
+                    # of this block has `gpkg_path` as a function parameter,
+                    # but Phase 2 runs inline in run() and only has the
+                    # module-level constant. This was a copy-paste bug that
+                    # NameError'd silently whenever Phase 2 reached an
+                    # unmatched pub with a valid parcel — ie. every
+                    # Scottish/Welsh pub with a cadastral parcel match.
+                    conn2 = sqlite3.connect(f"file:{GPKG_PATH}?mode=ro", uri=True, timeout=60.0)
                     conn2.execute("PRAGMA busy_timeout=60000")
                     try:
                         pbox = parcel.bounds
