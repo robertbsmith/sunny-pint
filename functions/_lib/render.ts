@@ -425,7 +425,7 @@ export function renderCityPage(template: string, ctx: CityContext): string {
 
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
-    { name: country, path: `/${slugify(country)}/` },
+    { name: country, path: `/explore/${slugify(country)}/` },
     { name: town, path: `/${slug}/` },
   ];
 
@@ -506,7 +506,7 @@ export function renderPubPage(template: string, ctx: PubContext): string {
   const countrySlug = slugify(country);
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
-    { name: country, path: `/${countrySlug}/` },
+    { name: country, path: `/explore/${countrySlug}/` },
     { name: town, path: `/${townSlug}/` },
     { name: pub.name, path: `/pub/${slug}/` },
   ];
@@ -690,7 +690,7 @@ export function renderThemePage(template: string, ctx: ThemeContext): string {
 
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Sunny Pint", path: "/" },
-    { name: country, path: `/${slugify(country)}/` },
+    { name: country, path: `/explore/${slugify(country)}/` },
     { name: town, path: `/${slug}/` },
     { name: theme.name, path: `/${slug}/${theme.slug}/` },
   ];
