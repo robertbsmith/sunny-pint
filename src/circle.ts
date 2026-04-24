@@ -192,13 +192,16 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
         ctx.restore();
       }
     } else {
-      // No outdoor area — just show shadows normally
-      if (dayFrac > 0 && state.shadowPolys.length > 0) {
+      // No outdoor area — just show shadows normally. drawShadows handles
+      // building + terrain shadows together; call it whenever there's
+      // sunlight so rural pubs (no nearby buildings) still get their
+      // terrain shadow drawn.
+      if (dayFrac > 0) {
         drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
       }
     }
   } else {
-    if (dayFrac > 0 && state.shadowPolys.length > 0) {
+    if (dayFrac > 0) {
       drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
     }
 
@@ -330,31 +333,38 @@ function drawShadows(
     const az = state.terrainShadowAzimuth;
     const azRad = (az * Math.PI) / 180;
 
-    // Shadow edge is perpendicular to the sun azimuth, at edgeM metres
-    // from the pub in the anti-sun direction (toward the ridge).
-    // Positive edgeM = shadow edge is between pub and ridge.
-    // Negative edgeM = shadow extends past pub (full shade).
+    // Shadow edge is perpendicular to the sun azimuth. edgeM is the signed
+    // distance from pub to edge, measured sun-ward.
+    //   edgeM > 0  → edge between pub and ridge, pub in sun
+    //   edgeM = 0  → edge at pub (ridge angle == sun altitude)
+    //   edgeM < 0  → edge anti-sun of pub, pub in terrain shade
     const edgePx = edgeM / mpp;
 
     // Direction from pub toward the sun (compass → canvas, canvas y is down).
     const sunDx = Math.sin(azRad);
     const sunDy = -Math.cos(azRad);
 
-    // Edge is sun-ward of pub by edgeM; shadow region is sun-ward of the edge
-    // (between edge and ridge, which sits further sun-ward still).
+    // Edge point in canvas coordinates.
     const edgeCx = cx + sunDx * edgePx;
     const edgeCy = cy + sunDy * edgePx;
 
     // True perpendicular (dot(perp, sun) = 0 at any azimuth).
     const perpDx = -sunDy;
     const perpDy = sunDx;
-    const bigR = Math.max(W, H);
+
+    // The fill spans from the edge line, extending `depth` pixels toward
+    // the sun. Both dimensions scale with |edgePx| so the quad always
+    // reaches the canvas regardless of how far off-screen the edge sits
+    // — otherwise a pub deep in shade (edge 1000m anti-sun) would paint
+    // a fill quad entirely off-screen and nothing would show in the
+    // porthole even though the pub is fully shaded.
+    const span = Math.max(W, H) + Math.abs(edgePx) * 2;
 
     offCtx.beginPath();
-    offCtx.moveTo(edgeCx + perpDx * bigR, edgeCy + perpDy * bigR);
-    offCtx.lineTo(edgeCx - perpDx * bigR, edgeCy - perpDy * bigR);
-    offCtx.lineTo(edgeCx - perpDx * bigR + sunDx * bigR, edgeCy - perpDy * bigR + sunDy * bigR);
-    offCtx.lineTo(edgeCx + perpDx * bigR + sunDx * bigR, edgeCy + perpDy * bigR + sunDy * bigR);
+    offCtx.moveTo(edgeCx + perpDx * span, edgeCy + perpDy * span);
+    offCtx.lineTo(edgeCx - perpDx * span, edgeCy - perpDy * span);
+    offCtx.lineTo(edgeCx - perpDx * span + sunDx * span, edgeCy - perpDy * span + sunDy * span);
+    offCtx.lineTo(edgeCx + perpDx * span + sunDx * span, edgeCy + perpDy * span + sunDy * span);
     offCtx.closePath();
     offCtx.fill();
   }

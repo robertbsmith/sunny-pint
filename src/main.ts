@@ -15,7 +15,7 @@ import { parseHours } from "./hours";
 import { initIcons } from "./icons";
 import { initLocation } from "./location";
 import { initPubList, renderList, sortByDistance } from "./publist";
-import { computeShadows, isTerrainOccluded, terrainShadowEdge } from "./shadow";
+import { computeShadows, terrainShadowEdge } from "./shadow";
 import { shareSnapshot } from "./share";
 import { selectedPub, state } from "./state";
 import { type LocationSource, loadLocation, saveLocation, type ZoomStep } from "./storage";
@@ -168,12 +168,11 @@ function updateScene(): void {
   state.terrainShadowEdgeM = terrainShadowEdge(pub, sun);
   state.terrainShadowAzimuth = sun.azimuth;
 
-  // If terrain fully occludes the sun, skip building shadows.
-  if (isTerrainOccluded(pub, sun)) {
-    state.shadowPolys = [];
-  } else {
-    state.shadowPolys = computeShadows(state.buildings, sun);
-  }
+  // Always compute building shadows — as sun descends toward the ridge,
+  // shadow length grows smoothly (height / tan(alt)), and past the ridge
+  // the terrain-shadow overlay naturally darkens the whole porthole on top.
+  // Zeroing the list at the ridge-crossing moment caused a jarring pop.
+  state.shadowPolys = computeShadows(state.buildings, sun);
 
   const canvas = document.getElementById("circle-canvas") as HTMLCanvasElement;
   renderCircle(canvas);
