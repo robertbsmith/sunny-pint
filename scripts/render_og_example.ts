@@ -46,8 +46,7 @@ async function main(): Promise<void> {
   console.log(`Sun: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
   console.log("Fetching map tiles…");
-  const stadiaKey = process.env.STADIA_API_KEY;
-  const tileCache = await prefetchPortholeTiles(pub, stadiaKey);
+  const tileCache = await prefetchPortholeTiles(pub);
   console.log(`Got ${tileCache.size} tiles`);
 
   const svg = renderOgCard({ pub, buildings, sun, tileCache });

@@ -14,7 +14,7 @@ Sunny Pint uses LiDAR elevation data and building footprints to project geometri
 
 - **Porthole view** — circular shadow map with basemap tiles, building polygons, and geometric shadow projection
 - **Sun arc** — drag to scrub time, play to animate sunrise-to-sunset at 60fps
-- **33k UK pubs** — extracted from OpenStreetMap, each with a precomputed Sunny Rating
+- **38k UK pubs** — extracted from OpenStreetMap, each with a precomputed Sunny Rating
 - **Building heights** — sampled from Environment Agency 1m LiDAR DSM/DTM
 - **Weather** — live cloud cover from Open-Meteo (no API key needed)
 - **Pub signs** — procedurally generated heraldic devices, unique per pub
@@ -115,5 +115,5 @@ MIT — see [LICENSE](LICENSE)
 - Pub & building data: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL)
 - Building heights: [Environment Agency](https://www.gov.uk/government/organisations/environment-agency) LiDAR (OGL v3)
 - Property boundaries: [HM Land Registry](https://use-land-property-data.service.gov.uk/) (OGL v3)
-- Map tiles: [Stadia Maps](https://stadiamaps.com/) + [OpenMapTiles](https://openmaptiles.org/)
+- Map tiles: [Mapbox](https://www.mapbox.com/) + [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors
 - Sun position: [SunCalc](https://github.com/mourner/suncalc) (BSD)

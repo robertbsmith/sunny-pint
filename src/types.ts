@@ -11,6 +11,9 @@ export interface SunMetrics {
   evening_sun: boolean;
   all_day_sun: boolean;
   sample_day: string;
+  /** The outdoor-polygon hash this score was computed from. Lets SCORE
+   *  skip pubs whose outdoor area hasn't changed on subsequent runs. */
+  _outdoor_hash?: string;
 }
 
 /** A pub from OSM */

@@ -8,12 +8,12 @@
  *
  * Uses child processes (same pattern as precompute_sun.ts) for
  * parallelism. Each worker loads building tiles from PMTiles, fetches
- * Stadia map tiles (cached across nearby pubs), and renders via resvg.
+ * Mapbox map tiles (cached across nearby pubs), and renders via resvg.
  *
  * Run with:
- *   STADIA_API_KEY=<key> pnpm tsx scripts/render_og_cards.ts
+ *   pnpm tsx scripts/render_og_cards.ts
  *
- * Requires: pubs.json (with sun scores), buildings.pmtiles (or .pbf tiles)
+ * Requires: pubs.json (with sun scores), buildings.pmtiles
  */
 
 import { execFile } from "node:child_process";
@@ -37,10 +37,7 @@ function runWorker(batchFile: string, outputDir: string): Promise<void> {
     execFile(
       "pnpm",
       ["tsx", join(__dirname, "render_og_worker.ts"), batchFile, outputDir],
-      {
-        maxBuffer: 50 * 1024 * 1024,
-        env: { ...process.env, STADIA_API_KEY: process.env.STADIA_API_KEY || "" },
-      },
+      { maxBuffer: 50 * 1024 * 1024 },
       (err, _stdout, stderr) => {
         if (stderr) process.stderr.write(stderr);
         if (err) reject(err);
@@ -51,10 +48,6 @@ function runWorker(batchFile: string, outputDir: string): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (!process.env.STADIA_API_KEY) {
-    console.warn("WARNING: STADIA_API_KEY not set — OG cards will have no map background");
-  }
-
   let pubs: Pub[];
   try {
     pubs = JSON.parse(readFileSync(PUBS_JSON, "utf-8")) as Pub[];

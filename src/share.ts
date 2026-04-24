@@ -14,6 +14,7 @@
 import SunCalc from "suncalc";
 import { renderCircle } from "./circle";
 import { selectedPub, state } from "./state";
+import { ukDateAt } from "./time";
 
 // ── Card dimensions ─────────────────────────────────────────────────────
 
@@ -378,9 +379,7 @@ function buildFactLine(
   if (!pub) return tier.label;
 
   // Build the timestamped date the user is currently viewing.
-  const viewing = new Date(state.date);
-  viewing.setHours(0, 0, 0, 0);
-  viewing.setMinutes(state.timeMins);
+  const viewing = ukDateAt(state.date, state.timeMins);
 
   const sun = SunCalc.getPosition(viewing, pub.lat, pub.lng);
   const isDay = sun.altitude > 0;
@@ -429,9 +428,7 @@ function format12h(timeMins: number): string {
 
 function buildShareText(pub: ReturnType<typeof selectedPub>, _tier: TierStyle): string {
   if (!pub) return "Find your sunny pint";
-  const d = new Date(state.date);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(state.timeMins);
+  const d = ukDateAt(state.date, state.timeMins);
   const sun = SunCalc.getPosition(d, pub.lat, pub.lng);
   const isDay = sun.altitude > 0;
   if (!isDay) return `🌙 ${pub.name}`;

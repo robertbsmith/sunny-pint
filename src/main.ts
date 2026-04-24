@@ -21,6 +21,7 @@ import { selectedPub, state } from "./state";
 import { type LocationSource, loadLocation, saveLocation, type ZoomStep } from "./storage";
 import { initSunArc, renderArc } from "./sunarc";
 import { largeSunBadgeHtml } from "./sunbadge";
+import { ukDateAt, ukTimeMins } from "./time";
 import type { Pub } from "./types";
 import {
   clearTimeUserDriven,
@@ -43,23 +44,6 @@ const DATA_BASE_URL = (() => {
   const meta = document.querySelector('meta[name="data-url"]');
   return meta?.getAttribute("content") || "/data";
 })();
-
-/** Minutes-from-midnight in UK wall-clock time for the given moment.
- *  Every pub on the site is in the UK, so "now" for the sun simulation
- *  and the Now button must mean Europe/London regardless of where the
- *  user's browser thinks it is. `Intl.DateTimeFormat.formatToParts` is
- *  the standard way to do this without pulling in a timezone library. */
-function ukTimeMins(date: Date): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  const h = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
-  const m = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return h * 60 + m;
-}
 
 async function loadPubs(): Promise<void> {
   const resp = await fetch(`${DATA_BASE_URL}/pubs-index.json`);
@@ -173,9 +157,7 @@ function updateScene(): void {
   const pub = selectedPub();
   if (!pub) return;
 
-  const d = new Date(state.date);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(state.timeMins);
+  const d = ukDateAt(state.date, state.timeMins);
   const pos = SunCalc.getPosition(d, pub.lat, pub.lng);
   const sun = {
     azimuth: ((pos.azimuth * 180) / Math.PI + 180) % 360,

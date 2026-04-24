@@ -202,10 +202,7 @@ function updateSelection(): void {
     const el = li as HTMLElement;
     // Match by stable pub id (written as data-pub-id on render). Using the
     // visible name would select the wrong row when two pubs share a name.
-    el.setAttribute(
-      "aria-selected",
-      el.dataset.pubId === state.selectedPubId ? "true" : "false",
-    );
+    el.setAttribute("aria-selected", el.dataset.pubId === state.selectedPubId ? "true" : "false");
   }
   const selected = listEl.querySelector('[aria-selected="true"]');
   selected?.scrollIntoView({ block: "nearest" });

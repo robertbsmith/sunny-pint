@@ -10,6 +10,7 @@ import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
 import { PLAY_SPEED } from "./config";
 import { setPlayIcon } from "./icons";
 import { pubCenter, state } from "./state";
+import { ukDateAt, ukTimeMins } from "./time";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -185,14 +186,12 @@ function isToday(d: Date): boolean {
 function computeArc(): void {
   const centre = pubCenter();
   const times = SunCalc.getTimes(state.date, centre.lat, centre.lng);
-  sunriseMins = times.sunrise.getHours() * 60 + times.sunrise.getMinutes();
-  sunsetMins = times.sunset.getHours() * 60 + times.sunset.getMinutes();
+  sunriseMins = ukTimeMins(times.sunrise);
+  sunsetMins = ukTimeMins(times.sunset);
 
   arcPoints = [];
   for (let m = 0; m <= 1440; m += 3) {
-    const d = new Date(state.date);
-    d.setHours(0, 0, 0, 0);
-    d.setMinutes(m);
+    const d = ukDateAt(state.date, m);
     const pos = SunCalc.getPosition(d, centre.lat, centre.lng);
     arcPoints.push({ mins: m, alt: (pos.altitude * 180) / Math.PI });
   }

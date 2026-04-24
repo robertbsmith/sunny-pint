@@ -26,6 +26,7 @@ import { drawPubSign, measureSignLayout, type SignLayout } from "./sign";
 import { pubCenter, pubOrigin, selectedPub, state } from "./state";
 import { isDark, lerpColor } from "./theme";
 import { loadTile, setSuppressTileRedraw, setTileRedrawCallback } from "./tiles";
+import { ukDateAt } from "./time";
 import type { SunPosition } from "./types";
 
 // ── Callbacks ────────────────────────────────────────────────────────────
@@ -58,9 +59,7 @@ const COLORS = {
 
 function getSunPosition(): SunPosition {
   const centre = pubCenter();
-  const d = new Date(state.date);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(state.timeMins);
+  const d = ukDateAt(state.date, state.timeMins);
   const pos = SunCalc.getPosition(d, centre.lat, centre.lng);
   return {
     azimuth: ((pos.azimuth * 180) / Math.PI + 180) % 360,
@@ -337,26 +336,25 @@ function drawShadows(
     // Negative edgeM = shadow extends past pub (full shade).
     const edgePx = edgeM / mpp;
 
-    // Direction from pub toward the sun (where light comes from).
-    // Shadow fills the side AWAY from the sun (toward the ridge).
+    // Direction from pub toward the sun (compass → canvas, canvas y is down).
     const sunDx = Math.sin(azRad);
     const sunDy = -Math.cos(azRad);
 
-    // Edge line centre point (offset from porthole centre toward the ridge).
-    const edgeCx = cx - sunDx * edgePx;
+    // Edge is sun-ward of pub by edgeM; shadow region is sun-ward of the edge
+    // (between edge and ridge, which sits further sun-ward still).
+    const edgeCx = cx + sunDx * edgePx;
     const edgeCy = cy + sunDy * edgePx;
 
-    // Perpendicular direction for the edge line.
+    // True perpendicular (dot(perp, sun) = 0 at any azimuth).
     const perpDx = -sunDy;
-    const perpDy = -sunDx;
+    const perpDy = sunDx;
     const bigR = Math.max(W, H);
 
-    // Draw filled region from edge line extending away from sun.
     offCtx.beginPath();
     offCtx.moveTo(edgeCx + perpDx * bigR, edgeCy + perpDy * bigR);
     offCtx.lineTo(edgeCx - perpDx * bigR, edgeCy - perpDy * bigR);
-    offCtx.lineTo(edgeCx - perpDx * bigR - sunDx * bigR, edgeCy - perpDy * bigR + sunDy * bigR);
-    offCtx.lineTo(edgeCx + perpDx * bigR - sunDx * bigR, edgeCy + perpDy * bigR + sunDy * bigR);
+    offCtx.lineTo(edgeCx - perpDx * bigR + sunDx * bigR, edgeCy - perpDy * bigR + sunDy * bigR);
+    offCtx.lineTo(edgeCx + perpDx * bigR + sunDx * bigR, edgeCy + perpDy * bigR + sunDy * bigR);
     offCtx.closePath();
     offCtx.fill();
   }

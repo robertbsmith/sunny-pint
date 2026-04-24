@@ -39,8 +39,6 @@ const RESVG_OPTIONS = {
   },
 };
 
-const STADIA_KEY = process.env.STADIA_API_KEY || "";
-
 /** Font family replacements — system fonts → our loaded TTFs. */
 function fixFonts(svg: string): string {
   return svg
@@ -56,7 +54,7 @@ async function renderPub(pub: Pub, outputDir: string): Promise<boolean> {
     // Load buildings + map tiles in parallel.
     const [buildings, tileCache] = await Promise.all([
       loadBuildingsForPub(pub),
-      prefetchPortholeTiles(pub, STADIA_KEY || undefined),
+      prefetchPortholeTiles(pub),
     ]);
 
     const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);

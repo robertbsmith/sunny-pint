@@ -365,6 +365,9 @@ function barOrPubJsonLd(pub: Pub, town: string): object {
   };
   if (pub.phone) schema.telephone = pub.phone;
   if (pub.slug) schema.image = `https://data.sunny-pint.co.uk/og/${pub.slug}.jpg`;
+  // `sameAs` points to the pub's own website (our `url` points at our page).
+  // Google uses this to merge our entity with the pub's Knowledge Graph entry.
+  if (pub.website && /^https?:\/\//i.test(pub.website)) schema.sameAs = [pub.website];
   // OSM uses "yes" / "no" as sentinel boolean values on the brand and
   // brewery tags — "yes" means "branded but name not recorded", not an
   // actual brand named "yes". Skip those.
