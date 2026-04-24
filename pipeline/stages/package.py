@@ -90,9 +90,15 @@ def assign_slugs(pubs: list[dict]) -> int:
     if SLUG_LOCK.exists():
         try:
             lock = json.loads(SLUG_LOCK.read_text())
-        except json.JSONDecodeError:
-            print("  WARNING: slug_lock.json corrupted, starting fresh")
-            lock = {}
+        except json.JSONDecodeError as e:
+            # Silent reset re-slugs every pub and breaks every Google-indexed
+            # URL. Fail hard so an operator sees the problem and can restore
+            # from git (the lock is tracked).
+            raise RuntimeError(
+                f"slug_lock.json is corrupted ({e}). Restore from git or "
+                "the last-known-good backup — a silent reset would rename "
+                "every pub slug and break every indexed URL."
+            ) from e
     else:
         lock = {}
 
@@ -120,9 +126,16 @@ def assign_slugs(pubs: list[dict]) -> int:
 
     if new_count:
         SLUG_LOCK.parent.mkdir(parents=True, exist_ok=True)
-        SLUG_LOCK.write_text(json.dumps(lock, indent=2, sort_keys=True))
+        _atomic_write(SLUG_LOCK, json.dumps(lock, indent=2, sort_keys=True))
 
     return new_count
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """tmp + rename so a crash mid-write can't truncate the target file."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
 
 
 # ── Output assembly ──────────────────────────────────────────────────────
@@ -219,8 +232,9 @@ def assemble_outputs(pubs: list[dict]) -> dict:
             pass
 
     # Initialize OS Open Names place lookup for town derivation.
-    from pipeline.utils.places import PlaceLookup
     from pyproj import Transformer
+
+    from pipeline.utils.places import PlaceLookup
     place_lookup = PlaceLookup()
     to_osgb = Transformer.from_crs("EPSG:4326", "EPSG:27700", always_xy=True) if place_lookup.available else None
     if place_lookup.available:
@@ -301,22 +315,32 @@ def assemble_outputs(pubs: list[dict]) -> dict:
             if detail:
                 detail_chunks.setdefault(cell_key, {})[slug] = detail
 
-    # Write full pubs.json.
-    PUBS_OUT.write_text(json.dumps(output_pubs))
+    # tmp + rename so a crash mid-write can't leave a truncated pubs.json.
+    _atomic_write(PUBS_OUT, json.dumps(output_pubs))
     pubs_size = PUBS_OUT.stat().st_size / 1e6
     print(f"  pubs.json: {pubs_size:.1f} MB")
 
-    # Write slim index.
-    PUBS_INDEX_OUT.write_text(json.dumps(index_pubs))
+    _atomic_write(PUBS_INDEX_OUT, json.dumps(index_pubs))
     index_size = PUBS_INDEX_OUT.stat().st_size / 1e6
     print(f"  pubs-index.json: {index_size:.1f} MB")
 
-    # Write detail chunks.
+    # Detail chunks: stage into detail.tmp/, then swap. A crash between the
+    # old `unlink` and the per-chunk writes used to leave R2 with no chunks
+    # if deploy-data ran before a rerun.
     DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    staging = DETAIL_DIR.parent / f"{DETAIL_DIR.name}.tmp"
+    if staging.exists():
+        for f in staging.glob("*.json"):
+            f.unlink()
+    else:
+        staging.mkdir(parents=True)
+    for cell_key, slugs in detail_chunks.items():
+        (staging / f"{cell_key}.json").write_text(json.dumps(slugs))
     for old in DETAIL_DIR.glob("*.json"):
         old.unlink()
-    for cell_key, slugs in detail_chunks.items():
-        (DETAIL_DIR / f"{cell_key}.json").write_text(json.dumps(slugs))
+    for f in staging.glob("*.json"):
+        f.rename(DETAIL_DIR / f.name)
+    staging.rmdir()
     total_detail = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json"))
     print(f"  detail/: {len(detail_chunks)} chunks, {total_detail / 1e6:.1f} MB")
 

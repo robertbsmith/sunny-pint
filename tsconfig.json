@@ -13,5 +13,5 @@
     },
     "types": ["node", "@cloudflare/workers-types"]
   },
-  "include": ["src", "scripts", "functions"]
+  "include": ["src", "scripts", "functions", "pipeline/ts"]
 }

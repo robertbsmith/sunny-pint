@@ -1,0 +1,24 @@
+# Shared config for the Python pipeline + legacy scripts.
+# CI runs: `ruff check pipeline scripts`.
+
+line-length = 100
+target-version = "py311"
+
+[lint]
+# Start conservative: import hygiene (F, I) + common errors (E), pyupgrade (UP).
+# Skip style rules that would churn the codebase.
+select = ["E", "F", "I", "UP"]
+
+# PMTiles parsers intentionally bind unused header fields for documentation —
+# keeping them as named locals beats magic offset arithmetic.
+ignore = ["E501"]  # line length handled by formatter, not linter
+
+[lint.per-file-ignores]
+# PMTiles archive parsers: header fields bound for readability, never read.
+"pipeline/stages/tiles.py" = ["F841"]
+"scripts/generate_tiles.py" = ["F841"]
+# Files that manipulate sys.path before importing from the workspace root.
+"pipeline/run.py" = ["E402"]
+"pipeline/deploy_data.py" = ["E402"]
+"pipeline/stages/horizon.py" = ["E402"]
+"pipeline/stages/score.py" = ["E402"]

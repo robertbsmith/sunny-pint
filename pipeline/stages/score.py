@@ -22,7 +22,7 @@ DETAIL_DIR = ROOT / "public" / "data" / "detail"
 # footgun: SCORE regenerates pubs-index.json and detail chunks, and any
 # mismatch with PACKAGE's field sets strips fields PACKAGE added (lost
 # the BarOrPub address/phone/website fields once this way).
-from pipeline.stages.package import INDEX_FIELDS, DETAIL_FIELDS  # noqa: E402
+from pipeline.stages.package import DETAIL_FIELDS, INDEX_FIELDS  # noqa: E402
 
 
 def _outdoor_hash(pub: dict) -> str | None:
@@ -68,18 +68,41 @@ def _regenerate_splits(pubs: list[dict]) -> None:
             if detail:
                 detail_chunks.setdefault(cell_key, {})[slug] = detail
 
-    PUBS_INDEX_OUT.write_text(json.dumps(index_pubs))
+    # Write via tmp + rename so a crash mid-write can't leave a truncated
+    # pubs-index.json on disk (the file the browser loads at startup).
+    _atomic_write(PUBS_INDEX_OUT, json.dumps(index_pubs))
     idx_size = PUBS_INDEX_OUT.stat().st_size / 1e6
     with_sun = sum(1 for p in index_pubs if "sun" in p)
     print(f"  pubs-index.json: {idx_size:.1f} MB ({with_sun} with sun)")
 
+    # Detail chunks: stage into detail.tmp/, then delete stale files + move
+    # new ones in. A crash between the old `unlink` and the per-chunk writes
+    # used to leave the directory empty, which then got pushed to R2 if
+    # someone ran `just deploy-data` before rerunning.
     DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    staging = DETAIL_DIR.parent / f"{DETAIL_DIR.name}.tmp"
+    if staging.exists():
+        for f in staging.glob("*.json"):
+            f.unlink()
+    else:
+        staging.mkdir(parents=True)
+    for cell_key, slugs in detail_chunks.items():
+        (staging / f"{cell_key}.json").write_text(json.dumps(slugs))
+    # Swap: delete stale chunks, move new ones in, remove staging dir.
     for old in DETAIL_DIR.glob("*.json"):
         old.unlink()
-    for cell_key, slugs in detail_chunks.items():
-        (DETAIL_DIR / f"{cell_key}.json").write_text(json.dumps(slugs))
+    for f in staging.glob("*.json"):
+        f.rename(DETAIL_DIR / f.name)
+    staging.rmdir()
     total_detail = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json"))
     print(f"  detail/: {len(detail_chunks)} chunks, {total_detail / 1e6:.1f} MB")
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write to <path>.tmp then rename, so a crash mid-write can't truncate."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
 
 
 def run(area) -> dict:
@@ -109,7 +132,7 @@ def run(area) -> dict:
         oh = _outdoor_hash(pub)
         if oh:
             pub["_outdoor_hash"] = oh
-    PUBS_JSON.write_text(json.dumps(pubs))
+    _atomic_write(PUBS_JSON, json.dumps(pubs))
 
     # Run precompute_sun.ts.
     print("  Running precompute_sun.ts...", flush=True)
@@ -144,7 +167,7 @@ def run(area) -> dict:
             if sun:
                 ep["sun"] = sun
                 backfilled += 1
-        ENRICHED_PATH.write_text(json.dumps(enriched, indent=2))
+        _atomic_write(ENRICHED_PATH, json.dumps(enriched, indent=2))
         print(f"  Backfilled {backfilled} sun scores to pubs_enriched.json")
 
     # Regenerate index + detail chunks with sun data.

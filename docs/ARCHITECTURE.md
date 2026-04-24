@@ -38,7 +38,7 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend `pmtiles` instanc
 
 ## Circle View: Map Tiles as Background
 
-**Decision**: Load Stadia Maps Alidade Smooth raster tiles into the canvas porthole.
+**Decision**: Load Mapbox streets-v12 raster tiles into the canvas porthole.
 
 **Why**: Drawing roads from OSM data looked crude. Loading 9 tile images (3×3 grid) gives full map detail (roads, parks, water, labels) with no effort.
 
@@ -62,7 +62,7 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend `pmtiles` instanc
 | EA LiDAR | Building heights | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | © Environment Agency |
 | HM Land Registry | Plot boundaries | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | Crown copyright, reproduced with permission of HM Land Registry. Polygons subject to Crown copyright, Ordnance Survey AC0000851063. |
 | Open-Meteo | Weather | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | open-meteo.com |
-| Stadia Maps | Base map tiles | See [terms](https://stadiamaps.com/terms-of-service/) | © Stadia Maps, © OpenMapTiles |
+| Mapbox | Base map tiles | See [terms](https://www.mapbox.com/legal/tos) | © Mapbox, © OpenStreetMap contributors |
 | SunCalc | Sun position | BSD 2-Clause | © Vladimir Agafonkin |
 
 Full attribution with required legal wording: [/attribution.html](/attribution.html)

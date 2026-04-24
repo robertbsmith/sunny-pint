@@ -11,10 +11,9 @@ import time
 from pathlib import Path
 
 import fiona
-from fiona.crs import CRS
 import osmium
-
 from areas import parse_area
+from fiona.crs import CRS
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PBF_PATHS = sorted(DATA_DIR.glob("*-latest.osm.pbf"))

@@ -34,11 +34,20 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (src + scripts + functions)
+      - name: Typecheck (src + scripts + functions + pipeline/ts)
         run: pnpm typecheck
 
       - name: Lint (Biome)
         run: pnpm lint
+
+      - name: Lint Python (ruff)
+        # Catches the class of bug that broke Scotland/Wales for weeks:
+        # an undefined name (`gpkg_path` vs `GPKG_PATH`) shipped because
+        # the only check was runtime. Ruff's static analysis runs in
+        # under a second and would have caught it.
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: check pipeline scripts
 
       - name: Build (Vite)
         # A passing typecheck doesn't prove the site actually builds —

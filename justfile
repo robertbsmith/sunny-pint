@@ -119,10 +119,11 @@ generate-tiles:
 # src/shadow.ts directly via tsx so the offline rating uses the exact same
 # math as the live in-browser porthole.
 precompute-sun:
-    pnpm tsx scripts/precompute_sun.ts
+    pnpm tsx pipeline/ts/precompute_sun.ts
 
 # Pre-render OG card images for all qualifying pubs → public/data/og/*.jpg
-# Requires STADIA_API_KEY env var for map tiles. Idempotent (skips existing).
+# Map tiles come from Mapbox (token embedded in src/config.ts). Idempotent
+# (skips existing).
 render-og:
     pnpm tsx scripts/render_og_cards.ts
 

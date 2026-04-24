@@ -8,7 +8,8 @@ Required env vars (loaded from .env automatically):
     R2_SECRET_ACCESS_KEY R2 S3 API secret key
 
 Usage:
-    uv run python scripts/deploy_data.py [--dry-run]
+    uv run python pipeline/deploy_data.py [--dry-run]
+    just deploy-data
 """
 
 import argparse

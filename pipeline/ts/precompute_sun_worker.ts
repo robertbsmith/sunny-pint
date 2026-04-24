@@ -14,7 +14,7 @@ import SunCalc from "suncalc";
 import { M_PER_DEG_LAT } from "../../src/config";
 import { mPerDegLng } from "../../src/geo";
 import { computeShadows, isTerrainOccluded } from "../../src/shadow";
-import type { Pub } from "../../src/types";
+import type { Pub, SunMetrics } from "../../src/types";
 import { loadBuildingsForPub } from "./lib/tiles_node";
 
 // ── Tunables (must match precompute_sun.ts) ─────────────────────────────
@@ -140,17 +140,6 @@ function polygonArea(polygon: XY[][]): number {
 }
 
 // ── Sun metrics ─────────────────────────────────────────────────────────
-
-interface SunMetrics {
-  score: number;
-  label: string;
-  best_window: string | null;
-  morning_sun: boolean;
-  midday_sun: boolean;
-  evening_sun: boolean;
-  all_day_sun: boolean;
-  sample_day: string;
-}
 
 function scoreLabel(score: number): string {
   if (score >= 80) return "Sun trap";
@@ -308,6 +297,9 @@ const results: WorkResult[] = [];
 for (const item of batch) {
   try {
     const metrics = await computeSunMetrics(item.pub);
+    // Stamp the hash we scored against so future runs can skip if unchanged.
+    const hash = (item.pub as unknown as { _outdoor_hash?: string })._outdoor_hash;
+    if (metrics && hash) metrics._outdoor_hash = hash;
     results.push({ index: item.index, metrics });
   } catch {
     results.push({ index: item.index, metrics: null });

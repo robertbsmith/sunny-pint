@@ -61,7 +61,7 @@ Extracts all `amenity=pub` nodes and ways from the .pbf file. Each pub gets:
 - Name, lat/lng, building polygon (if mapped as a way)
 - Beer garden, outdoor seating, opening hours tags
 
-UK-wide: ~33k pubs.
+UK-wide: ~38k pubs.
 
 ## Step 2: Download INSPIRE Plot Data (England & Wales)
 
@@ -176,4 +176,4 @@ All runtime data is in WGS84. OSGB is only used during pipeline processing.
 | EA LiDAR | Building heights (DSM/DTM) | OGL v3 | Auto-downloaded via WCS |
 | HM Land Registry INSPIRE | Property plot boundaries | OGL v3 | `scripts/download_inspire.py` |
 | Open-Meteo | Cloud cover / weather | CC BY 4.0 | API (no key needed) |
-| Stadia Maps | Base map tiles | See [terms](https://stadiamaps.com/terms-of-service/) | Domain-authenticated tiles |
+| Mapbox | Base map tiles | See [terms](https://www.mapbox.com/legal/tos) | Public token, URL-restricted to sunny-pint.co.uk |

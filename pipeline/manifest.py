@@ -7,7 +7,6 @@ orchestrator uses it to decide which stages need re-running.
 
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -63,9 +62,11 @@ def stage_needs_run(
     stage_name: str,
     current_inputs: dict[str, str],
     area_name: str = "",
+    expected_outputs: list[Path] | None = None,
 ) -> tuple[bool, str]:
     """Check if a stage needs to run by comparing current input hashes
-    against the manifest's recorded inputs.
+    against the manifest's recorded inputs, AND verifying that every
+    expected output file still exists on disk.
 
     The manifest is keyed by stage:area so different areas don't skip
     each other (e.g., running Norwich doesn't cause Edinburgh to skip).
@@ -76,6 +77,13 @@ def stage_needs_run(
     prev = manifest.get(key, {})
     if not prev:
         return True, "never run"
+    # Before trusting the "inputs unchanged" shortcut, check the outputs
+    # actually exist. An accidental `rm` in public/data/ otherwise leaves
+    # the manifest saying "done" while the downstream stage finds nothing.
+    if expected_outputs:
+        missing = [p for p in expected_outputs if not p.exists()]
+        if missing:
+            return True, f"outputs missing: {', '.join(p.name for p in missing)}"
     prev_inputs = prev.get("inputs", {})
     if current_inputs != prev_inputs:
         changed = set(current_inputs.keys()) ^ set(prev_inputs.keys())

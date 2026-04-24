@@ -18,15 +18,14 @@ _root = str(Path(__file__).resolve().parent.parent)
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-from pipeline.utils.areas import parse_area_name, Area
 from pipeline.manifest import (
     hash_inputs,
     load_manifest,
     record_stage,
-    save_manifest,
     stage_needs_run,
 )
 from pipeline.report import RunReport
+from pipeline.utils.areas import Area, parse_area_name
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public" / "data"
@@ -65,10 +64,29 @@ def get_stage_inputs(stage: str) -> list[Path]:
     return []
 
 
+def get_stage_outputs(stage: str) -> list[Path]:
+    """Return the primary output files a stage produces. Used by
+    stage_needs_run to detect "manifest says done but output was deleted"
+    — otherwise a stray rm in public/data/ silently survives a rerun."""
+    if stage == "extract":
+        return [DATA_DIR / "pubs_merged.json", DATA_DIR / "buildings.gpkg"]
+    if stage == "index":
+        return [DATA_DIR / "inspire.gpkg"]
+    if stage == "enrich":
+        return [DATA_DIR / "pubs_enriched.json"]
+    if stage == "package":
+        return [PUBLIC_DIR / "pubs.json", PUBLIC_DIR / "buildings.pmtiles"]
+    if stage == "score":
+        return [PUBLIC_DIR / "pubs-index.json"]
+    return []
+
+
 def run_stage(stage: str, area: Area, manifest: dict, report: RunReport, force: bool) -> bool:
     """Run a single stage if needed. Returns True if it ran."""
     inputs = hash_inputs(get_stage_inputs(stage))
-    needs_run, reason = stage_needs_run(manifest, stage, inputs, area.name)
+    needs_run, reason = stage_needs_run(
+        manifest, stage, inputs, area.name, get_stage_outputs(stage)
+    )
 
     if not needs_run and not force:
         report.skip(stage, reason)
@@ -131,18 +149,26 @@ def main():
     if args.dry_run:
         for stage in stages:
             inputs = hash_inputs(get_stage_inputs(stage))
-            needs_run, reason = stage_needs_run(manifest, stage, inputs)
+            # Pass area + outputs so dry-run matches what a real run will do.
+            # Previously this was omitted and every stage always reported
+            # "never run" — the opposite of the stated purpose.
+            needs_run, reason = stage_needs_run(
+                manifest, stage, inputs, area.name, get_stage_outputs(stage)
+            )
             flag = "RUN" if needs_run or args.force else "SKIP"
             print(f"  [{stage}] {flag} — {reason}")
         return
 
-    for stage in stages:
-        if stage not in STAGES:
-            print(f"  Unknown stage: {stage}")
-            continue
-        run_stage(stage, area, manifest, report, args.force)
-
-    report.save()
+    # try/finally: save the partial report even if a stage crashes. A 2-hour
+    # ENRICH failure otherwise produced no record in data/pipeline_runs/.
+    try:
+        for stage in stages:
+            if stage not in STAGES:
+                print(f"  Unknown stage: {stage}")
+                continue
+            run_stage(stage, area, manifest, report, args.force)
+    finally:
+        report.save()
 
 
 if __name__ == "__main__":

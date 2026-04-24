@@ -12,16 +12,14 @@ import json
 import math
 import shutil
 import sqlite3
-import struct
 import subprocess
 import tempfile
 from pathlib import Path
 
+from areas import Area, in_bbox, parse_area
 from shapely import wkb
-from shapely.strtree import STRtree
 from shapely.geometry import Point as ShapelyPoint
-
-from areas import parse_area, in_bbox, Area
+from shapely.strtree import STRtree
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +64,6 @@ def shadow_reach_m(height_m: float) -> float:
     shadow_length = height / tan(sun_altitude)
     reach = porthole_radius + min(shadow_length, shadow_cap)
     """
-    import math
     shadow_len = height_m / math.tan(math.radians(MIN_SUN_ALT_DEG))
     shadow_len = min(shadow_len, SHADOW_CAP_M)
     return PORTHOLE_RADIUS_M + shadow_len
@@ -134,7 +131,7 @@ def extract_tiles_from_pmtiles(pmtiles_path: Path, output_dir: Path, zoom: int) 
         # Read header (127 bytes).
         header_data = f.read(127)
         if header_data[:2] != b"PM":
-            print(f"  ERROR: not a valid PMTiles file")
+            print("  ERROR: not a valid PMTiles file")
             return 0
 
         spec_version = header_data[7]

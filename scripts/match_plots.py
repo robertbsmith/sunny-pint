@@ -21,15 +21,14 @@ import sqlite3
 from pathlib import Path
 
 import fiona
+from areas import in_bbox, parse_area
+from localities import la_to_country, la_to_town_fallback
 from pyproj import Transformer
-from shapely.geometry import shape, Point, Polygon
-from shapely.geometry import Point as ShapelyPoint
 from shapely import prepare, wkb
+from shapely.geometry import Point, Polygon, shape
+from shapely.geometry import Point as ShapelyPoint
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
-
-from areas import parse_area, in_bbox
-from localities import la_to_country, la_to_town_fallback
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 PUBS_IN = DATA / "pubs_merged.json"
@@ -225,7 +224,6 @@ def _load_from_gml_files(gml_names: list[str], pub_tree, buf):
     parcels and contains the local authority name (derived from the GML
     filename) for each parcel.
     """
-    import fiona
 
     parcels = []
     parcel_las: list[str] = []
@@ -273,7 +271,7 @@ def _load_from_gpkg(pub_points_osgb, pub_tree, buf, gpkg_path=None):
     pub_ys = [p.y for p in pub_points_osgb]
     min_x, max_x = min(pub_xs) - buf, max(pub_xs) + buf
     min_y, max_y = min(pub_ys) - buf, max(pub_ys) + buf
-    print(f"  Querying INSPIRE GeoPackage for parcels in pub area...", flush=True)
+    print("  Querying INSPIRE GeoPackage for parcels in pub area...", flush=True)
 
     print(f"  Loading parcels from {gpkg_path.name}...")
     conn = _sqlite3.connect(str(gpkg_path))

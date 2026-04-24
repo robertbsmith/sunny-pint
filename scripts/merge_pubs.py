@@ -11,8 +11,7 @@ import json
 from pathlib import Path
 
 import osmium
-
-from areas import parse_area, in_bbox, Area
+from areas import Area, in_bbox, parse_area
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 

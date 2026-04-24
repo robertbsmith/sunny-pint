@@ -8,18 +8,16 @@ Usage:
     uv run python scripts/download_inspire_scotland.py
 """
 
-import shutil
 import sqlite3
 import struct
 import time
 import urllib.request
 import zipfile
-from io import BytesIO
 from pathlib import Path
 
 import fiona
-from shapely.geometry import shape
 from shapely import wkb
+from shapely.geometry import shape
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SCOTLAND_DIR = DATA_DIR / "inspire_scotland"

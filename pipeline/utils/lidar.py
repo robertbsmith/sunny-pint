@@ -9,7 +9,6 @@ Sources:
 - NRW COG: Natural Resources Wales — Cloud-Optimized GeoTIFF DSM/DTM
 """
 
-import math
 import threading
 import time
 import urllib.request

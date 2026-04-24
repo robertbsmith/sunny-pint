@@ -28,8 +28,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
-import rasterio
-from pyproj import Transformer
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
 from shapely import prepare, wkb
@@ -38,11 +36,11 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
 from pipeline.utils.bundles import (
-    PRODUCT_DTM,
-    PRODUCT_DSM_LAST,
     PRODUCT_DSM_FIRST,
-    PRODUCT_YEAR,
+    PRODUCT_DSM_LAST,
+    PRODUCT_DTM,
     PRODUCT_RES,
+    PRODUCT_YEAR,
     fetch_bundle_zip,
     open_bundle_tif,
     search_cell,
@@ -54,9 +52,8 @@ from pipeline.utils.grid import (
     to_osgb,
     to_wgs,
 )
-from pipeline.utils.progress import eta_str, write_progress
-
 from pipeline.utils.lidar import fetch_ndsm as _fetch_ndsm_wcs
+from pipeline.utils.progress import eta_str, write_progress
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 GPKG_PATH = DATA_DIR / "buildings.gpkg"
@@ -204,7 +201,7 @@ def _compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float,
     if row0 < 0 or row0 >= dtm.shape[0] or col0 < 0 or col0 >= dtm.shape[1]:
         return None, None, None
     pub_elev = float(dtm[row0, col0])
-    if pub_elev <= 0:
+    if not np.isfinite(pub_elev) or pub_elev <= 0:
         return None, None, None
 
     # Phase 1: 1m DTM (0-500m)
@@ -222,7 +219,12 @@ def _compute_horizon(dtm: np.ndarray, transform, cx: float, cy: float,
     rows_safe = np.clip(rows, 0, h - 1)
     cols_safe = np.clip(cols, 0, w - 1)
 
-    terrain_elev = np.where(valid, dtm[rows_safe, cols_safe], 0.0)
+    raw_elev = dtm[rows_safe, cols_safe]
+    # Drop nodata cells from the horizon sample — otherwise a nodata patch in
+    # the DTM would look like sea-level terrain and wipe out any real ridge
+    # in that direction.
+    valid &= ~np.isnan(raw_elev)
+    terrain_elev = np.where(valid, raw_elev, 0.0)
     elev_diff = np.maximum(terrain_elev - pub_elev, 0.0)
     angles = np.where(valid, np.degrees(np.arctan2(elev_diff, _distances[np.newaxis, :])), 0.0)
 
@@ -342,7 +344,11 @@ def _process_bundle(
 
     try:
         dtm_arr = dtm_ds.read(1).astype(np.float32)
-        dtm_arr = np.where(np.isnan(dtm_arr) | (dtm_arr < -100), 0, dtm_arr)
+        # Mark nodata as NaN rather than 0 — otherwise horizon rays crossing a
+        # nodata patch see a fake sea-level terrain and emit angle=0, silently
+        # hiding real ridges. Downstream height sampling already filters by
+        # `> -100` / `> MIN_HEIGHT_M`, both of which reject NaN naturally.
+        dtm_arr = np.where(np.isnan(dtm_arr) | (dtm_arr < -100), np.nan, dtm_arr)
         dtm_transform = dtm_ds.transform
         dtm_bounds = dtm_ds.bounds
     finally:
@@ -730,28 +736,28 @@ def run(area) -> dict:
     all_las_list: list[str | None] = []
 
     if all_osgb and INSPIRE_GPKG.exists():
-        print(f"  Loading INSPIRE parcels (England+Wales)...")
+        print("  Loading INSPIRE parcels (England+Wales)...")
         pub_tree = STRtree([Point(x, y) for x, y in all_osgb])
-        p, l, s = _load_parcels_from_gpkg(
+        parcels, las, scanned = _load_parcels_from_gpkg(
             INSPIRE_GPKG, pub_tree,
             min(x for x, y in all_osgb) - 50, max(x for x, y in all_osgb) + 50,
             min(y for x, y in all_osgb) - 50, max(y for x, y in all_osgb) + 50,
         )
-        all_parcels_list.extend(p)
-        all_las_list.extend(l)
-        print(f"    {len(p):,} INSPIRE parcels kept (from {s:,} scanned)")
+        all_parcels_list.extend(parcels)
+        all_las_list.extend(las)
+        print(f"    {len(parcels):,} INSPIRE parcels kept (from {scanned:,} scanned)")
 
     if all_osgb and SCOTLAND_GPKG.exists():
-        print(f"  Loading Scotland parcels...")
+        print("  Loading Scotland parcels...")
         pub_tree = STRtree([Point(x, y) for x, y in all_osgb])
-        p, l, s = _load_parcels_from_gpkg(
+        parcels, las, scanned = _load_parcels_from_gpkg(
             SCOTLAND_GPKG, pub_tree,
             min(x for x, y in all_osgb) - 50, max(x for x, y in all_osgb) + 50,
             min(y for x, y in all_osgb) - 50, max(y for x, y in all_osgb) + 50,
         )
-        all_parcels_list.extend(p)
-        all_las_list.extend(l)
-        print(f"    {len(p):,} Scotland parcels kept (from {s:,} scanned)")
+        all_parcels_list.extend(parcels)
+        all_las_list.extend(las)
+        print(f"    {len(parcels):,} Scotland parcels kept (from {scanned:,} scanned)")
 
     parcel_tree = STRtree(all_parcels_list) if all_parcels_list else None
     all_parcels = all_parcels_list if all_parcels_list else None
@@ -914,7 +920,7 @@ def run(area) -> dict:
                 tmp = ENRICHED_PATH.with_suffix(".json.tmp")
                 tmp.write_text(json.dumps(all_pubs, indent=2))
                 tmp.replace(ENRICHED_PATH)
-                print(f"  ** incremental save **", flush=True)
+                print("  ** incremental save **", flush=True)
                 last_save = time.time()
 
     conn.commit()

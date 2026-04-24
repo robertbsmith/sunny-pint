@@ -7,7 +7,6 @@ Downloads:
 All downloads are idempotent — skip if the file already exists.
 """
 
-import os
 import urllib.request
 from pathlib import Path
 

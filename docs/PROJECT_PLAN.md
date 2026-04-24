@@ -30,7 +30,7 @@ A mobile-first PWA that helps you find a sunny beer garden right now. Open it, s
 - [x] Cloudflare Pages deployment
 - [x] Pipeline supports `--area` flag for any UK region
 
-- [x] UK-wide data pipeline (33k pubs, 13.4M buildings)
+- [x] UK-wide data pipeline (38k pubs, 13.4M buildings)
 - [x] Full INSPIRE plot data (318 local authorities)
 - [x] Precomputed Sunny Ratings (equinox sun simulation per pub)
 - [x] Per-pub pages via Cloudflare Pages Functions

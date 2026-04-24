@@ -31,24 +31,11 @@ import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Pub } from "../../src/types";
+import type { Pub, SunMetrics } from "../../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "../..");
 const PUBS_JSON = join(ROOT, "public", "data", "pubs.json");
-
-// ── Types (must match worker) ───────────────────────────────────────────
-
-interface SunMetrics {
-  score: number;
-  label: string;
-  best_window: string | null;
-  morning_sun: boolean;
-  midday_sun: boolean;
-  evening_sun: boolean;
-  all_day_sun: boolean;
-  sample_day: string;
-}
 
 // ── Main ─────────────────────────────────────────────────────────────────
 
@@ -82,27 +69,52 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const workerCount = pubs.length < 200 ? 1 : NUM_WORKERS;
-  console.log(`Computing Sunny Rating for ${pubs.length} pubs with ${workerCount} workers...`);
+  // Filter to pubs that actually need (re)scoring. A pub can be skipped if it
+  // already has `sun` whose `_outdoor_hash` matches the pub's current
+  // `_outdoor_hash` — outdoor polygon unchanged → Monte Carlo sampling would
+  // just add noise without adding information. Skipping is essential to
+  // sitemap-lastmod stability: the rounded integer score flickers ±1 across
+  // identical geometry, bumping lastmod for thousands of URLs per run.
+  const needsScoring: { index: number; pub: PubWithSun }[] = [];
+  let alreadyScored = 0;
+  for (let i = 0; i < pubs.length; i++) {
+    const p = pubs[i]!;
+    const hash = (p as unknown as { _outdoor_hash?: string })._outdoor_hash;
+    if (p.sun && hash && p.sun._outdoor_hash === hash) {
+      alreadyScored++;
+      continue;
+    }
+    needsScoring.push({ index: i, pub: p });
+  }
+
+  const workerCount = needsScoring.length < 200 ? 1 : NUM_WORKERS;
+  console.log(
+    `Sunny Rating: ${pubs.length} pubs — ${alreadyScored} already scored (outdoor unchanged), ` +
+      `${needsScoring.length} need scoring.`,
+  );
+  if (needsScoring.length === 0) {
+    console.log("Nothing to do.");
+    return;
+  }
+  console.log(`Running ${workerCount} workers...`);
   const t0 = Date.now();
 
   // Create temp dir for batch/result files.
   const tmpDir = join(ROOT, "data", "sun_tmp");
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
 
-  // Partition pubs across workers. Each worker gets a contiguous chunk.
-  const chunkSize = Math.ceil(pubs.length / workerCount);
+  // Partition the "needs scoring" subset across workers. Each worker gets a
+  // contiguous chunk; the batch item keeps the original pubs[] index so we
+  // can merge results back without shuffling.
+  const chunkSize = Math.ceil(needsScoring.length / workerCount);
   const workerPromises: Promise<void>[] = [];
 
   for (let w = 0; w < workerCount; w++) {
     const start = w * chunkSize;
-    const end = Math.min(start + chunkSize, pubs.length);
-    if (start >= pubs.length) break;
+    const end = Math.min(start + chunkSize, needsScoring.length);
+    if (start >= needsScoring.length) break;
 
-    const batch = [];
-    for (let i = start; i < end; i++) {
-      batch.push({ index: i, pub: pubs[i]! });
-    }
+    const batch = needsScoring.slice(start, end);
 
     const batchFile = join(tmpDir, `batch_${w}.json`);
     const resultFile = join(tmpDir, `result_${w}.json`);
@@ -197,7 +209,11 @@ async function main(): Promise<void> {
 
   // Stats.
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`\nDone in ${elapsed}s — ${scored} scored, ${skipped} skipped.`);
+  const totalWithSun = alreadyScored + scored;
+  console.log(
+    `\nDone in ${elapsed}s — ${scored} newly scored, ${skipped} failed, ` +
+      `${alreadyScored} carried over. ${totalWithSun}/${pubs.length} pubs now have sun.`,
+  );
   console.log("Score distribution:");
   for (const label of ["Sun trap", "Very sunny", "Sunny", "Partly shaded", "Shaded"]) {
     const count = distribution[label] ?? 0;

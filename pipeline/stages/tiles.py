@@ -12,16 +12,15 @@ import json
 import math
 import shutil
 import sqlite3
-import struct
 import subprocess
 import tempfile
 from pathlib import Path
 
 from shapely import wkb
-from shapely.strtree import STRtree
 from shapely.geometry import Point as ShapelyPoint
+from shapely.strtree import STRtree
 
-from pipeline.utils.areas import parse_area, in_bbox, Area
+from pipeline.utils.areas import Area, in_bbox, parse_area
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +65,6 @@ def shadow_reach_m(height_m: float) -> float:
     shadow_length = height / tan(sun_altitude)
     reach = porthole_radius + min(shadow_length, shadow_cap)
     """
-    import math
     shadow_len = height_m / math.tan(math.radians(MIN_SUN_ALT_DEG))
     shadow_len = min(shadow_len, SHADOW_CAP_M)
     return PORTHOLE_RADIUS_M + shadow_len
@@ -134,7 +132,7 @@ def extract_tiles_from_pmtiles(pmtiles_path: Path, output_dir: Path, zoom: int) 
         # Read header (127 bytes).
         header_data = f.read(127)
         if header_data[:2] != b"PM":
-            print(f"  ERROR: not a valid PMTiles file")
+            print("  ERROR: not a valid PMTiles file")
             return 0
 
         spec_version = header_data[7]
@@ -339,7 +337,11 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
     pub_tree = STRtree(pub_points)
 
     conn = sqlite3.connect(str(GPKG_PATH))
-    buf_deg = MAX_RADIUS_M / 111320.0
+    # Metres-per-degree varies with latitude — 1° lng at 57°N (Highland
+    # Scotland) is only ~60 km, not 111. Using the equator constant on
+    # longitude narrows the bbox by ~40 % up there, silently dropping
+    # shadow-casting buildings east/west of Scottish pubs.
+    lat_deg = MAX_RADIUS_M / 111320.0
 
     included_fids: set[int] = set()
     t0 = _time.time()
@@ -350,6 +352,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
         for pi, pub in enumerate(pubs_data):
             lat, lng = pub["lat"], pub["lng"]
+            lng_deg = MAX_RADIUS_M / (111320.0 * max(math.cos(math.radians(lat)), 0.1))
 
             try:
                 rows = conn.execute(
@@ -357,7 +360,7 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
                     "FROM buildings b "
                     "JOIN rtree_buildings_geom r ON b.fid = r.id "
                     "WHERE r.maxx >= ? AND r.minx <= ? AND r.maxy >= ? AND r.miny <= ?",
-                    (lng - buf_deg, lng + buf_deg, lat - buf_deg, lat + buf_deg),
+                    (lng - lng_deg, lng + lng_deg, lat - lat_deg, lat + lat_deg),
                 ).fetchall()
             except sqlite3.OperationalError:
                 continue
@@ -373,7 +376,12 @@ def export_geojson_near_pubs(area: Area, output_path: Path) -> int:
 
                     h = resolve_height(osm_height, levels, lidar_height)
                     reach = shadow_reach_m(h)
-                    reach_deg = reach / 111320.0
+                    # Isotropic buffer sized for the longest axis — lng at
+                    # Scottish latitudes stretches further per metre, so use
+                    # that to guarantee no under-inclusion. Slight over-query
+                    # in lat is cheap; under-query in lng was silently dropping
+                    # real shadow-casters.
+                    reach_deg = reach / (111320.0 * max(math.cos(math.radians(lat)), 0.1))
 
                     centroid = geom.centroid
                     nearby_idxs = pub_tree.query(centroid.buffer(reach_deg))

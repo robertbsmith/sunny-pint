@@ -33,14 +33,13 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
+from areas import Area, in_bbox, parse_area
+from pyproj import Transformer
 from rasterio.features import rasterize
 from rasterio.transform import from_origin
 from rasterio.windows import from_bounds
-from pyproj import Transformer
-from shapely.geometry import Polygon
 from shapely import wkb
-
-from areas import parse_area, in_bbox, Area
+from shapely.geometry import Polygon
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 
@@ -874,8 +873,10 @@ def process_bundle(
     dtm_ds, dtm_mem = _open_bundle_tif(dtm_zip)
     dsm_ds, dsm_mem = _open_bundle_tif(dsm_zip)
     if dtm_ds is None or dsm_ds is None:
-        if dtm_mem: dtm_mem.close()
-        if dsm_mem: dsm_mem.close()
+        if dtm_mem:
+            dtm_mem.close()
+        if dsm_mem:
+            dsm_mem.close()
         return {
             "tile_id": tile_id, "label": bundle["label"], "status": "decode_failed",
             "n_buildings": 0, "measured": 0, "fallback": 0,

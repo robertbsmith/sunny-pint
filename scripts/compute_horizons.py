@@ -22,28 +22,22 @@ import json
 import math
 import threading
 import time
-import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from io import BytesIO
 from pathlib import Path
 
 import numpy as np
-import rasterio
-from pyproj import Transformer
-
-from areas import parse_area, in_bbox
+from areas import in_bbox, parse_area
 from measure_heights import (
+    PRODUCT_DTM,
+    PRODUCT_RES,
+    PRODUCT_YEAR,
+    WCS_WORKERS,
     _fetch_bundle_zip,
     _open_bundle_tif,
     _pub_search_cells,
     _search_cell,
     os_label_to_bbox,
     to_osgb,
-    to_wgs,
-    PRODUCT_DTM,
-    PRODUCT_YEAR,
-    PRODUCT_RES,
-    WCS_WORKERS,
 )
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"

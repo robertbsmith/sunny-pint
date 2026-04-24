@@ -9,8 +9,6 @@ only processes new .pbf files.
 """
 
 import json
-import shutil
-import time
 from pathlib import Path
 
 import fiona
@@ -75,21 +73,33 @@ class DualExtractor(osmium.SimpleHandler):
         if self.building_count % 100000 == 0:
             print(f"    {self.building_count:,} buildings...", flush=True)
 
-    def _extract_pub(self, tags, lat, lng, osm_id, polygon=None):
+    def _extract_pub(self, tags, lat, lng, osm_id, osm_type, polygon=None):
         if not self._in_bbox(lat, lng):
             return
         pub = {
+            # Downstream stages (package, score, backfill) key pubs by "id"
+            # with the v1 `{type}_{osm_id}` shape. Numeric osm_id alone
+            # collides between nodes and ways that share the same integer.
+            "id": f"{osm_type}_{osm_id}",
             "osm_id": osm_id,
             "lat": round(lat, 6),
             "lng": round(lng, 6),
         }
+        # Keep this aligned with the v1 scripts/merge_pubs.py tag list —
+        # INDEX_FIELDS / DETAIL_FIELDS in package.py reference brand,
+        # brewery, real_ale, food, wheelchair, dog, internet_access, and
+        # dropping them here silently empties those columns on a fresh run.
         for key in ("name", "opening_hours", "outdoor_seating", "beer_garden",
                      "addr:city", "addr:town", "addr:village", "addr:hamlet",
                      "addr:place", "addr:street", "addr:housenumber",
-                     "addr:postcode", "phone", "website", "cuisine"):
+                     "addr:postcode", "phone", "website", "cuisine",
+                     "brand", "brewery", "real_ale", "food", "wheelchair",
+                     "dog", "internet_access"):
             val = tags.get(key)
             if val:
                 pub[key.replace(":", "_")] = val
+        if "internet_access" in pub:
+            pub["wifi"] = pub.pop("internet_access")
         if polygon:
             pub["polygon"] = polygon
         self.pubs.append(pub)
@@ -97,7 +107,7 @@ class DualExtractor(osmium.SimpleHandler):
     def node(self, n):
         tags = dict(n.tags)
         if tags.get("amenity") == "pub":
-            self._extract_pub(tags, n.location.lat, n.location.lng, n.id)
+            self._extract_pub(tags, n.location.lat, n.location.lng, n.id, "node")
 
     def way(self, w):
         tags = dict(w.tags)
@@ -111,7 +121,7 @@ class DualExtractor(osmium.SimpleHandler):
             centroid_lat = sum(lat for _, lat in nodes) / len(nodes)
             centroid_lng = sum(lng for lng, _ in nodes) / len(nodes)
             polygon = [[round(lat, 6), round(lng, 6)] for lng, lat in nodes]
-            self._extract_pub(tags, centroid_lat, centroid_lng, w.id, polygon)
+            self._extract_pub(tags, centroid_lat, centroid_lng, w.id, "way", polygon)
 
 
 def run(area) -> dict:

@@ -9,8 +9,8 @@ Usage:
     uv run python scripts/download_inspire.py
 """
 
-import io
 import http.cookiejar
+import io
 import re
 import time
 import urllib.request
@@ -215,7 +215,6 @@ def main():
     gml_files = []
     total_bytes = 0
     failed = 0
-    cached = 0
     start_time = time.time()
 
     for i, url in enumerate(urls, 1):
@@ -226,7 +225,6 @@ def main():
         if gml_path:
             gml_files.append(gml_path)
             total_bytes += size
-            was_cached = gml_path.exists() and size > 0  # crude check
         else:
             failed += 1
 
