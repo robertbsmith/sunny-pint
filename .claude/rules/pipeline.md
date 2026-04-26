@@ -37,7 +37,6 @@ Run via: `uv run python pipeline/run.py --area uk`
 - `pubs.json` — final with slugs, towns, sun scores (PACKAGE + SCORE output)
 - `pubs-index.json` — slim browser index, ~12.6 MB (SCORE output). Just the fields the SPA needs at startup for list, search, sort, filter.
 - `pub/{slug}.json` — full per-pub record + 10-nearest array, ~3 KB each, 38k files (SCORE output). Single source of truth for pub data; fetched by the `/pub/[slug]` Pages Function and the SPA on pub selection.
-- `detail/*.json` — DEPRECATED cell-keyed chunks, still emitted during transition. Will be removed once per-pub is verified.
 
 ## Legacy v1 Scripts (scripts/)
 

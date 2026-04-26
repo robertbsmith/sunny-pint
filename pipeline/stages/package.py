@@ -22,7 +22,7 @@ PUBLIC_DATA = Path(__file__).resolve().parent.parent.parent / "public" / "data"
 PUBS_ENRICHED = DATA_DIR / "pubs_enriched.json"
 PUBS_OUT = PUBLIC_DATA / "pubs.json"
 PUBS_INDEX_OUT = PUBLIC_DATA / "pubs-index.json"
-DETAIL_DIR = PUBLIC_DATA / "detail"
+PUB_DIR = PUBLIC_DATA / "pub"
 SLUG_LOCK = DATA_DIR / "slug_lock.json"
 
 # Fields for the slim index — JUST what the SPA needs at startup for
@@ -35,16 +35,6 @@ SLUG_LOCK = DATA_DIR / "slug_lock.json"
 INDEX_FIELDS = {
     "id", "name", "lat", "lng", "slug", "town", "county", "country",
     "opening_hours", "outdoor_area_m2",
-}
-
-# Heavy fields that go in detail chunks. Kept during transition from the
-# detail-chunk architecture to per-pub files; once the SPA is migrated,
-# detail chunks can be removed entirely (per-pub already contains all
-# of these).
-DETAIL_FIELDS = {
-    "outdoor", "elev", "horizon", "horizon_dist", "clat", "clng",
-    "real_ale", "food", "wheelchair", "dog", "wifi",
-    "local_authority",
 }
 
 
@@ -311,10 +301,10 @@ def write_outputs(pubs: list[dict]) -> dict:
 
     PUBLIC_DATA.mkdir(parents=True, exist_ok=True)
 
-    # Slim index + detail chunks (transition format — kept until SPA is
-    # migrated to per-pub fetches, then can be removed).
+    # Slim index — just the fields the SPA needs at startup for list,
+    # search, distance sort, the open-now filter, and the explore page's
+    # sort-by-garden-size. Everything else is in /data/pub/{slug}.json.
     index_pubs = []
-    detail_chunks: dict[str, dict] = {}
     for pub in pubs:
         idx = {}
         for k in INDEX_FIELDS:
@@ -335,44 +325,10 @@ def write_outputs(pubs: list[dict]) -> dict:
             }
         index_pubs.append(idx)
 
-        slug = pub.get("slug")
-        if slug:
-            cell_lat = math.floor(pub["lat"] * 10) / 10
-            cell_lng = math.floor(pub["lng"] * 10) / 10
-            cell_key = f"{cell_lat}_{cell_lng}"
-            detail = {}
-            for k in DETAIL_FIELDS:
-                if k in pub and pub[k] is not None:
-                    detail[k] = pub[k]
-            if pub.get("sun"):
-                detail["sun"] = pub["sun"]
-            if detail:
-                detail_chunks.setdefault(cell_key, {})[slug] = detail
-
     _atomic_write(PUBS_INDEX_OUT, json.dumps(index_pubs))
     idx_size = PUBS_INDEX_OUT.stat().st_size / 1e6
     with_sun = sum(1 for p in index_pubs if "sun" in p)
     print(f"  pubs-index.json: {idx_size:.1f} MB ({with_sun} with sun)")
-
-    # Detail chunks: stage into detail.tmp/, then swap. A crash between the
-    # old `unlink` and the per-chunk writes used to leave R2 with no chunks
-    # if deploy-data ran before a rerun.
-    DETAIL_DIR.mkdir(parents=True, exist_ok=True)
-    staging = DETAIL_DIR.parent / f"{DETAIL_DIR.name}.tmp"
-    if staging.exists():
-        for f in staging.glob("*.json"):
-            f.unlink()
-    else:
-        staging.mkdir(parents=True)
-    for cell_key, slugs in detail_chunks.items():
-        (staging / f"{cell_key}.json").write_text(json.dumps(slugs))
-    for old in DETAIL_DIR.glob("*.json"):
-        old.unlink()
-    for f in staging.glob("*.json"):
-        f.rename(DETAIL_DIR / f.name)
-    staging.rmdir()
-    total_detail = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json"))
-    print(f"  detail/: {len(detail_chunks)} chunks, {total_detail / 1e6:.1f} MB")
 
     # Per-pub files. Compute the 10 nearest pubs for each via cKDTree on
     # locally-projected coordinates (cosine-corrected for UK latitudes).
@@ -384,7 +340,6 @@ def write_outputs(pubs: list[dict]) -> dict:
     # k=11 gives self + 10 neighbours; the self entry is index 0 (distance 0).
     _, neighbour_idxs = tree.query(xy, k=11)
 
-    PUB_DIR = PUBLIC_DATA / "pub"
     staging_pub = PUBLIC_DATA / "pub.tmp"
     if staging_pub.exists():
         for f in staging_pub.glob("*.json"):
@@ -424,10 +379,7 @@ def write_outputs(pubs: list[dict]) -> dict:
     pub_total = sum(f.stat().st_size for f in PUB_DIR.glob("*.json"))
     print(f"  pub/: {pub_count} files, {pub_total / 1e6:.1f} MB")
 
-    return {
-        "detail_chunks": len(detail_chunks),
-        "per_pub_files": pub_count,
-    }
+    return {"per_pub_files": pub_count}
 
 
 def generate_tiles(area) -> dict:

@@ -86,9 +86,9 @@ class DualExtractor(osmium.SimpleHandler):
             "lng": round(lng, 6),
         }
         # Keep this aligned with the v1 scripts/merge_pubs.py tag list —
-        # INDEX_FIELDS / DETAIL_FIELDS in package.py reference brand,
-        # brewery, real_ale, food, wheelchair, dog, internet_access, and
-        # dropping them here silently empties those columns on a fresh run.
+        # the pipeline downstream relies on brand, brewery, real_ale, food,
+        # wheelchair, dog, internet_access, and dropping them here silently
+        # empties those columns on a fresh run.
         for key in ("name", "opening_hours", "outdoor_seating", "beer_garden",
                      "addr:city", "addr:town", "addr:village", "addr:hamlet",
                      "addr:place", "addr:street", "addr:housenumber",
