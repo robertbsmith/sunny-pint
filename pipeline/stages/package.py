@@ -25,21 +25,22 @@ PUBS_INDEX_OUT = PUBLIC_DATA / "pubs-index.json"
 DETAIL_DIR = PUBLIC_DATA / "detail"
 SLUG_LOCK = DATA_DIR / "slug_lock.json"
 
-# Fields for the slim index (everything the pub list + search needs, plus
-# the small string fields schema.org BarOrPub structured data references on
-# every pub page — phone, postal address, website, brand. Including them
-# here avoids a second R2 fetch per Pages Function cold start. Adds roughly
-# 1.6 MB uncompressed to a 9 MB index; edge-cached so bandwidth impact is
-# negligible).
+# Fields for the slim index — JUST what the SPA needs at startup for
+# list rendering, search, distance sort, the open-now filter, and the
+# explore page's sort-by-garden-size. Everything else (BarOrPub schema
+# fields, outdoor_seating tags, heavy outdoor/horizon/elev) lives in
+# the per-pub files at /data/pub/{slug}.json so the slim index stays
+# small enough for fast SPA startup parsing — and the /pub/ Pages
+# Function never has to parse it at all.
 INDEX_FIELDS = {
     "id", "name", "lat", "lng", "slug", "town", "county", "country",
-    "opening_hours", "outdoor_area_m2", "outdoor_seating", "beer_garden",
-    # Schema.org BarOrPub fields:
-    "phone", "website", "brand", "brewery",
-    "addr_street", "addr_housenumber", "addr_postcode",
+    "opening_hours", "outdoor_area_m2",
 }
 
-# Heavy fields that go in detail chunks (loaded on pub selection).
+# Heavy fields that go in detail chunks. Kept during transition from the
+# detail-chunk architecture to per-pub files; once the SPA is migrated,
+# detail chunks can be removed entirely (per-pub already contains all
+# of these).
 DETAIL_FIELDS = {
     "outdoor", "elev", "horizon", "horizon_dist", "clat", "clng",
     "real_ale", "food", "wheelchair", "dog", "wifi",
@@ -268,9 +269,6 @@ def assemble_outputs(pubs: list[dict]) -> dict:
     PUBLIC_DATA.mkdir(parents=True, exist_ok=True)
 
     output_pubs = []
-    index_pubs = []
-    detail_chunks: dict[str, dict] = {}
-
     for pub in pubs:
         out = dict(pub)
         # Compute centroid from polygon.
@@ -283,46 +281,78 @@ def assemble_outputs(pubs: list[dict]) -> dict:
         out.pop("_enrich_hash", None)
         output_pubs.append(out)
 
-        # Slim index entry.
-        idx = {}
-        for k in INDEX_FIELDS:
-            if k in out and out[k]:
-                idx[k] = out[k]
-        idx["lat"] = out["lat"]
-        idx["lng"] = out["lng"]
-        if out.get("sun"):
-            idx["sun"] = {
-                "score": out["sun"]["score"],
-                "label": out["sun"]["label"],
-                "best_window": out["sun"].get("best_window"),
-                "evening_sun": out["sun"].get("evening_sun"),
-                "all_day_sun": out["sun"].get("all_day_sun"),
-            }
-        index_pubs.append(idx)
-
-        # Detail chunk entry.
-        slug = out.get("slug")
-        if slug:
-            cell_lat = math.floor(out["lat"] * 10) / 10
-            cell_lng = math.floor(out["lng"] * 10) / 10
-            cell_key = f"{cell_lat}_{cell_lng}"
-            detail = {}
-            for k in DETAIL_FIELDS:
-                if k in out and out[k] is not None:
-                    detail[k] = out[k]
-            if out.get("sun"):
-                detail["sun"] = out["sun"]
-            if detail:
-                detail_chunks.setdefault(cell_key, {})[slug] = detail
-
     # tmp + rename so a crash mid-write can't leave a truncated pubs.json.
     _atomic_write(PUBS_OUT, json.dumps(output_pubs))
     pubs_size = PUBS_OUT.stat().st_size / 1e6
     print(f"  pubs.json: {pubs_size:.1f} MB")
 
+    splits = write_outputs(output_pubs)
+
+    return {
+        "pubs": len(output_pubs),
+        "with_town": with_town,
+        "new_slugs": new_slugs,
+        **splits,
+    }
+
+
+def write_outputs(pubs: list[dict]) -> dict:
+    """Write the slim index, detail chunks, and per-pub JSON files.
+
+    Called by both PACKAGE (initial assembly) and SCORE (regeneration after
+    sun scoring). Each per-pub file at /data/pub/{slug}.json contains the
+    full pub data plus a `nearby` array of the 10 nearest pubs — the
+    /pub/[slug] Pages Function fetches one such file per request instead
+    of parsing the multi-MB index, which collapsed cold-start CPU time
+    from "503 timeout" to "sub-100 ms".
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    PUBLIC_DATA.mkdir(parents=True, exist_ok=True)
+
+    # Slim index + detail chunks (transition format — kept until SPA is
+    # migrated to per-pub fetches, then can be removed).
+    index_pubs = []
+    detail_chunks: dict[str, dict] = {}
+    for pub in pubs:
+        idx = {}
+        for k in INDEX_FIELDS:
+            if k in pub and pub[k]:
+                idx[k] = pub[k]
+        idx["lat"] = pub["lat"]
+        idx["lng"] = pub["lng"]
+        if pub.get("sun"):
+            # Slim-index sun: just the fields the SPA needs in the list +
+            # explore views. The full sun object (morning/midday/sample_day)
+            # lives in the per-pub file, only loaded on pub selection.
+            idx["sun"] = {
+                "score": pub["sun"]["score"],
+                "label": pub["sun"]["label"],
+                "best_window": pub["sun"].get("best_window"),
+                "evening_sun": pub["sun"].get("evening_sun"),
+                "all_day_sun": pub["sun"].get("all_day_sun"),
+            }
+        index_pubs.append(idx)
+
+        slug = pub.get("slug")
+        if slug:
+            cell_lat = math.floor(pub["lat"] * 10) / 10
+            cell_lng = math.floor(pub["lng"] * 10) / 10
+            cell_key = f"{cell_lat}_{cell_lng}"
+            detail = {}
+            for k in DETAIL_FIELDS:
+                if k in pub and pub[k] is not None:
+                    detail[k] = pub[k]
+            if pub.get("sun"):
+                detail["sun"] = pub["sun"]
+            if detail:
+                detail_chunks.setdefault(cell_key, {})[slug] = detail
+
     _atomic_write(PUBS_INDEX_OUT, json.dumps(index_pubs))
-    index_size = PUBS_INDEX_OUT.stat().st_size / 1e6
-    print(f"  pubs-index.json: {index_size:.1f} MB")
+    idx_size = PUBS_INDEX_OUT.stat().st_size / 1e6
+    with_sun = sum(1 for p in index_pubs if "sun" in p)
+    print(f"  pubs-index.json: {idx_size:.1f} MB ({with_sun} with sun)")
 
     # Detail chunks: stage into detail.tmp/, then swap. A crash between the
     # old `unlink` and the per-chunk writes used to leave R2 with no chunks
@@ -344,11 +374,59 @@ def assemble_outputs(pubs: list[dict]) -> dict:
     total_detail = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json"))
     print(f"  detail/: {len(detail_chunks)} chunks, {total_detail / 1e6:.1f} MB")
 
+    # Per-pub files. Compute the 10 nearest pubs for each via cKDTree on
+    # locally-projected coordinates (cosine-corrected for UK latitudes).
+    print("  Computing nearest neighbours...")
+    mid_lat = sum(p["lat"] for p in pubs) / len(pubs)
+    m_per_deg_lng = 111320.0 * math.cos(math.radians(mid_lat))
+    xy = np.array([[p["lat"] * 111320.0, p["lng"] * m_per_deg_lng] for p in pubs])
+    tree = cKDTree(xy)
+    # k=11 gives self + 10 neighbours; the self entry is index 0 (distance 0).
+    _, neighbour_idxs = tree.query(xy, k=11)
+
+    PUB_DIR = PUBLIC_DATA / "pub"
+    staging_pub = PUBLIC_DATA / "pub.tmp"
+    if staging_pub.exists():
+        for f in staging_pub.glob("*.json"):
+            f.unlink()
+    else:
+        staging_pub.mkdir(parents=True)
+
+    pub_count = 0
+    for i, pub in enumerate(pubs):
+        slug = pub.get("slug")
+        if not slug:
+            continue
+        pub_data = {k: v for k, v in pub.items() if v is not None and not k.startswith("_")}
+        nearby = []
+        for j in neighbour_idxs[i][1:]:
+            n = pubs[j]
+            if not n.get("slug"):
+                continue
+            nearby.append({
+                "slug": n["slug"],
+                "name": n.get("name"),
+                "lat": n["lat"],
+                "lng": n["lng"],
+                "town": n.get("town"),
+                "sun_score": (n.get("sun") or {}).get("score"),
+            })
+        pub_data["nearby"] = nearby
+        (staging_pub / f"{slug}.json").write_text(json.dumps(pub_data))
+        pub_count += 1
+
+    PUB_DIR.mkdir(parents=True, exist_ok=True)
+    for old in PUB_DIR.glob("*.json"):
+        old.unlink()
+    for f in staging_pub.glob("*.json"):
+        f.rename(PUB_DIR / f.name)
+    staging_pub.rmdir()
+    pub_total = sum(f.stat().st_size for f in PUB_DIR.glob("*.json"))
+    print(f"  pub/: {pub_count} files, {pub_total / 1e6:.1f} MB")
+
     return {
-        "pubs": len(output_pubs),
-        "with_town": with_town,
-        "new_slugs": new_slugs,
         "detail_chunks": len(detail_chunks),
+        "per_pub_files": pub_count,
     }
 
 

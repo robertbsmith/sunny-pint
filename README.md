@@ -97,14 +97,14 @@ just pipeline area=uk          # Full UK (slow)
 
 ## Architecture
 
-**Static site** — no backend at runtime. All data is pre-computed and served from Cloudflare R2: a slim `pubs-index.json` for the browser pub list, per-pub detail chunks grouped by geographic grid cell, and a `buildings.pmtiles` archive for building footprints. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position. Per-pub and OG image pages are rendered on-demand by Cloudflare Pages Functions.
+**Static site** — no backend at runtime. All data is pre-computed and served from Cloudflare R2: a slim `pubs-index.json` for the browser's pub list / search / filter, one `pub/{slug}.json` file per pub for the full record + 10 nearest pubs, and a `buildings.pmtiles` archive for building footprints. The `/pub/[slug]` and `/og/pub/[slug]` Cloudflare Pages Functions fetch the per-pub file directly (no index parse on cold start) and render HTML / OG images on demand. Shadow computation runs client-side at 60fps using geometric projection from building heights and sun position.
 
 Key technical decisions:
 - **Geometric shadow projection** over raster ray-tracing — mathematically precise vector edges, fast enough for real-time animation
 - **DSM minus DTM** for building heights — avoids expensive ground-level estimation
 - **Offscreen canvas compositing** — prevents shadow opacity stacking at polygon overlaps
 - **PMTiles on R2** — single building-tile archive with HTTP range requests (range requests work on R2 where they didn't on Cloudflare Pages' response rewriter)
-- **Split pub data** — slim index loaded at startup, heavy fields (outdoor polygons, horizon arrays) in geographic detail chunks loaded on selection
+- **Split pub data** — slim index covers list / search / filter; per-pub `pub/{slug}.json` file holds the full record (outdoor polygon, horizon, BarOrPub schema) plus a pre-computed 10-nearest array. Pages Function reads one file per request instead of parsing a multi-MB index on cold start.
 
 ## License
 

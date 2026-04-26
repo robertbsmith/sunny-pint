@@ -52,15 +52,27 @@ export interface Pub {
   brand?: string;
   brewery?: string;
   website?: string;
-  /** Detail-chunk fields — populated after loadPubDetail() in the Function, or
-   *  always present in the full pubs.json used at build time. Needed for
-   *  schema.org BarOrPub output. */
   phone?: string;
   addr_street?: string;
   addr_housenumber?: string;
   addr_postcode?: string;
   /** Precomputed Sunny Rating (added by scripts/precompute_sun.ts). */
   sun?: SunMetrics;
+  /** Pre-computed 10 nearest pubs (slug + name + score). Embedded by the
+   *  pipeline in /data/pub/{slug}.json so the Function avoids parsing the
+   *  full index just to find nearby pubs. */
+  nearby?: NearbyPub[];
+}
+
+/** Minimal shape stored in `pub.nearby` — enough to render a "nearby
+ *  gardens" link list (slug → URL, name + sun_score → label). */
+export interface NearbyPub {
+  slug: string;
+  name: string;
+  lat?: number;
+  lng?: number;
+  town?: string;
+  sun_score?: number;
 }
 
 export interface CityContext {
@@ -73,7 +85,7 @@ export interface PubContext {
   pub: Pub;
   town: string;
   country: string;
-  nearby: Pub[];
+  nearby: NearbyPub[];
 }
 
 // ── Constants ────────────────────────────────────────────────────────────
@@ -560,8 +572,8 @@ export function renderPubPage(template: string, ctx: PubContext): string {
         `    <ul class="seo-pub-list">\n` +
         nearby
           .map((p) => {
-            const score = p.sun ? ` — ${p.sun.score}` : "";
-            return `      <li><a href="/pub/${htmlEscape(p.slug ?? "")}/">${htmlEscape(p.name)}${score}</a></li>`;
+            const score = p.sun_score != null ? ` — ${p.sun_score}` : "";
+            return `      <li><a href="/pub/${htmlEscape(p.slug)}/">${htmlEscape(p.name)}${score}</a></li>`;
           })
           .join("\n") +
         `\n    </ul>\n  </details>\n`

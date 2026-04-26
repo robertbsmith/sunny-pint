@@ -41,8 +41,8 @@ The pipeline auto-downloads all data sources on first run:
 Stage 1: EXTRACT     OSM .pbf → pubs_merged.json + buildings.gpkg
 Stage 2: INDEX       INSPIRE GMLs → inspire.gpkg + scotland_parcels.gpkg
 Stage 3: ENRICH      LiDAR + parcels → pubs_enriched.json (heights, horizons, outdoor areas)
-Stage 4: PACKAGE     pubs_enriched → pubs.json + pubs-index.json + detail chunks + buildings.pmtiles
-Stage 5: SCORE       pubs.json → sun scores → regenerates index + detail chunks
+Stage 4: PACKAGE     pubs_enriched → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles
+Stage 5: SCORE       pubs.json → sun scores → regenerates index + per-pub files
 ```
 
 Independent horizon recompute (no re-download of LiDAR):
@@ -57,7 +57,7 @@ uv run python pipeline/stages/horizon.py --area uk --force  # Recompute all
 just deploy-data      # Upload index + chunks + PMTiles + OG cards to R2 (boto3, ~67/s)
 ```
 
-Output: `public/data/pubs-index.json` (R2), `public/data/detail/*.json` (R2), `public/data/buildings.pmtiles` (R2).
+Output: `public/data/pubs-index.json` (R2), `public/data/pub/{slug}.json` (R2), `public/data/buildings.pmtiles` (R2).
 
 See `pipeline/DESIGN.md` for full architecture.
 
@@ -96,8 +96,8 @@ Legacy v1 scripts remain in `scripts/` for reference but are not used by the pip
 
 ### Data Serving
 - **Cloudflare R2** — bucket `sunny-pint-data`, domain `data.sunny-pint.co.uk`
-  - `pubs-index.json` (~1.6 MB gzip) — slim pub list loaded at app startup
-  - `detail/{lat}_{lng}.json` — per-pub heavy data (outdoor polygon, elev, horizon, horizon_dist) in 0.1° grid chunks, loaded on pub selection
+  - `pubs-index.json` (~12.6 MB / ~2 MB gzip) — slim pub list (id, slug, name, lat, lng, town, county, country, sun, opening_hours, outdoor_area_m2) loaded at SPA startup for list rendering, search, distance sort, open-now filter
+  - `pub/{slug}.json` (~3 KB each, 38k files) — full per-pub record (everything in slim + outdoor polygon, elev, horizon, BarOrPub schema fields) plus a pre-computed `nearby` array of the 10 closest pubs. Fetched directly by the `/pub/[slug]` Pages Function (no index parse on cold start) and lazy-loaded by the SPA on pub selection.
   - `buildings.pmtiles` — building vector tiles, range-requested by pmtiles.js
   - `og/{slug}.jpg` — pre-rendered OG card images
 - **Cloudflare Pages** — `dist/` contains only the SPA shell (HTML/JS/CSS/icons), zero data files
@@ -136,7 +136,7 @@ Legacy v1 scripts remain in `scripts/` for reference but are not used by the pip
 - **OSM as sole pub source** — cleaner data than FSA, no duplicates, accurate building polygons
 - **PMTiles on R2** — single archive with range requests, replaces 47k individual .pbf files
 - **R2 for data** — all pipeline output served from R2 (free tier: 10 GB storage, 10M reads/month), zero data in Pages dist/
-- **Split pub data** — slim index for app startup (~1.6 MB gzip), heavy fields loaded per-pub on selection via geographic chunks
+- **Split pub data** — slim index for SPA startup (~12.6 MB / ~2 MB gzip) covers list/search/filter/sort; full per-pub files (`pub/{slug}.json`, ~3 KB each) loaded on pub selection AND fetched directly by the `/pub/[slug]` Pages Function so cold starts don't have to parse the index
 - **Height-dependent radius** — reduces tile data ~30% by excluding short distant buildings
 - **Hybrid DTM for horizons** — 1m Defra DTM for close-range detail, 50m OS Terrain 50 for distant ridges up to 3km
 - **Terrain shadow edge rendering** — half-plane shadow from ridge distance + horizon angle, replaces elevation-based building shadow inflation

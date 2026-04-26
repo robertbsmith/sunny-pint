@@ -51,54 +51,17 @@ interface Env {
   CF_PAGES_COMMIT_SHA?: string;
 }
 
-// ── Module-scope cache ───────────────────────────────────────────────────
-//
-// V8 isolates persist between requests on the same instance, so the parsed
-// pubs.json + slug index survive across invocations on a warm Worker.
-// Keyed on CF_PAGES_COMMIT_SHA so a new deploy invalidates warm isolates —
-// otherwise newly-scored pubs keep their stale index entries until the
-// isolate dies.
-
-let cachedSha: string | null = null;
-let cachedIndex: Map<string, Pub> | null = null;
-
 const R2_DATA_URL = "https://data.sunny-pint.co.uk/data";
 
-async function loadPubs(sha: string): Promise<Map<string, Pub>> {
-  if (cachedSha === sha && cachedIndex) return cachedIndex;
-  const res = await fetch(`${R2_DATA_URL}/pubs-index.json`);
-  if (!res.ok) throw new Error(`Failed to load pubs-index.json from R2: ${res.status}`);
-  const pubs = (await res.json()) as Pub[];
-  const index = new Map<string, Pub>();
-  for (const p of pubs) {
-    if (p.slug) index.set(p.slug, p);
-  }
-  cachedSha = sha;
-  cachedIndex = index;
-  return index;
-}
-
-/** Fetch heavy per-pub fields (outdoor, elev, horizon) from the R2 detail chunk
- *  and return a NEW pub with the extra fields merged in. Must not mutate the
- *  cached index entry — the isolate persists it across requests. */
-async function loadPubWithDetail(pub: Pub): Promise<Pub> {
-  if (pub.outdoor !== undefined) return pub;
-  // toFixed(1) so integer-degree cells serialise as "51.0" / "-3.0" to match
-  // the pipeline's Python filename format. JS would otherwise drop the
-  // trailing zero and miss every detail chunk on a whole-degree boundary.
-  const cellLat = (Math.floor(pub.lat * 10) / 10).toFixed(1);
-  const cellLng = (Math.floor(pub.lng * 10) / 10).toFixed(1);
-  try {
-    const resp = await fetch(`${R2_DATA_URL}/detail/${cellLat}_${cellLng}.json`);
-    if (!resp.ok) return pub;
-    const chunk = (await resp.json()) as Record<string, Partial<Pub>>;
-    if (pub.slug && chunk[pub.slug]) {
-      return { ...pub, ...chunk[pub.slug] };
-    }
-  } catch {
-    // Render without outdoor/elev if detail unavailable.
-  }
-  return pub;
+/** Fetch the per-pub JSON from R2. Returns null on 404 so the Function can
+ *  emit a clean 404 response instead of throwing. Per-pub files contain the
+ *  full pub record (outdoor polygon, elev, horizon, schema fields), so a
+ *  single fetch replaces the old index-then-detail two-fetch dance. */
+async function loadPub(slug: string): Promise<Pub | null> {
+  const res = await fetch(`${R2_DATA_URL}/pub/${slug}.json`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load pub/${slug}.json: ${res.status}`);
+  return (await res.json()) as Pub;
 }
 
 // ── PMTiles-backed tile fetcher ─────────────────────────────────────────
@@ -163,12 +126,8 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   if (!slug) return new Response("Not found", { status: 404 });
 
   try {
-    const index = await loadPubs(sha);
-    const base = index.get(slug);
-    if (!base) return new Response("Pub not found", { status: 404 });
-
-    // Merge heavy detail fields onto a COPY so we don't poison the warm index.
-    const pub = await loadPubWithDetail(base);
+    const pub = await loadPub(slug);
+    if (!pub) return new Response("Pub not found", { status: 404 });
 
     // Load buildings, sun position, map tiles in parallel.
     const tileFetcher = makeTileFetcher(ctx.env, url.origin);

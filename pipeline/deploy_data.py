@@ -62,6 +62,11 @@ UPLOADS = [
 # Directories to upload (all files within).
 UPLOAD_DIRS = [
     # (local_dir, r2_prefix, content_type, cache_control)
+    # Per-pub JSON: one file per pub, fetched by the /pub/[slug] Pages
+    # Function in lieu of parsing the multi-MB index.
+    (PUBLIC_DATA / "pub", "data/pub", "application/json", CACHE_JSON),
+    # Cell-keyed detail chunks (transition format — kept while the SPA still
+    # falls back to them; can be removed once per-pub is verified live).
     (PUBLIC_DATA / "detail", "data/detail", "application/json", CACHE_JSON),
     (PUBLIC_DATA / "og", "data/og", "image/jpeg", CACHE_IMAGE),
 ]

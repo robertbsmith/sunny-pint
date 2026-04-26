@@ -51,38 +51,28 @@ async function loadPubs(): Promise<void> {
   state.pubs = pubs;
 }
 
-/** Cache of loaded detail chunks keyed by grid cell (e.g. "52.6_1.2"). */
-const detailCache = new Map<string, Record<string, Partial<Pub>>>();
+/** Cache of loaded per-pub data, keyed by slug. */
+const pubDetailCache = new Map<string, Partial<Pub>>();
 
-/** Load heavy per-pub fields (outdoor, elev, horizon, tags) from an R2
- *  detail chunk and merge them onto the pub object. Nearby pubs in the
- *  same ~11km grid cell are loaded for free (same chunk). */
+/** Load the per-pub JSON from R2 (full pub record + 10 nearest) and merge
+ *  the extra fields onto the slim-index pub object. Replaces the old
+ *  geographic-cell detail chunks — slug-keyed direct fetch is cheaper at
+ *  startup time and lets the /pub/ Pages Function use the same files. */
 async function loadPubDetail(pub: Pub): Promise<void> {
-  if (pub.outdoor !== undefined) return; // already loaded
-
-  // toFixed(1) so integer-degree cells serialise as "51.0" / "-3.0" to match
-  // the pipeline's Python filename format. Without it JS drops the trailing
-  // zero ("51", "-3") and every pub in a whole-degree grid cell 404s.
-  const cellLat = (Math.floor(pub.lat * 10) / 10).toFixed(1);
-  const cellLng = (Math.floor(pub.lng * 10) / 10).toFixed(1);
-  const cellKey = `${cellLat}_${cellLng}`;
-
-  let chunk = detailCache.get(cellKey);
-  if (!chunk) {
+  if (pub.outdoor !== undefined || !pub.slug) return; // already merged
+  let detail = pubDetailCache.get(pub.slug);
+  if (!detail) {
     try {
-      const resp = await fetch(`${DATA_BASE_URL}/detail/${cellKey}.json`);
+      const resp = await fetch(`${DATA_BASE_URL}/pub/${pub.slug}.json`);
       if (resp.ok) {
-        chunk = (await resp.json()) as Record<string, Partial<Pub>>;
-        detailCache.set(cellKey, chunk);
+        detail = (await resp.json()) as Partial<Pub>;
+        pubDetailCache.set(pub.slug, detail);
       }
     } catch {
       // Network error — pub renders without outdoor/horizon data.
     }
   }
-
-  if (chunk && pub.slug && chunk[pub.slug]) {
-    Object.assign(pub, chunk[pub.slug]);
-  }
+  if (detail) Object.assign(pub, detail);
 }
 
 // ── Porthole controls (satellite + zoom) ────────────────────────────

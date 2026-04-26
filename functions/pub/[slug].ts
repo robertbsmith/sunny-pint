@@ -1,83 +1,58 @@
 /**
  * Cloudflare Pages Function — handles every /pub/<slug>/ URL.
  *
- * One file in the deployment, infinite virtual pages. Sits comfortably
- * within the 100k requests/day Workers free tier because:
+ * Single per-pub JSON fetch from R2, no index parsing. The pipeline writes
+ * /data/pub/{slug}.json containing the full pub data plus a pre-computed
+ * `nearby` array of the 10 closest pubs, so this Function does:
  *
- *   1. We aggressively edge-cache via the Cache API (which ignores client
- *      `Cache-Control: no-cache` headers, unlike HTTP-level caching). After
- *      a Function invocation, the next request to the same URL from the
- *      same POP for the next 7 days is served from cache without re-running
- *      the Function. This neutralises crawler bursts (Googlebot, GPTBot,
- *      ClaudeBot, etc.) that would otherwise eat the daily quota.
+ *   1. Fetch one ~5 KB JSON file from R2 (single network hop, ~50 ms cold)
+ *   2. Render HTML
  *
- *   2. Static-asset fetches via env.ASSETS.fetch() do NOT count toward the
- *      Workers request quota — they're just file reads from the deployed
- *      bundle, free.
+ * vs the previous architecture, which fetched and parsed a 15.78 MB index
+ * on every cold start, blowing the Pages-Function CPU ceiling and 503-ing
+ * for unique URLs hit by Applebot / Googlebot.
  *
- *   3. The pubs.json parse is cached in module scope so subsequent warm
- *      invocations skip both fetches and parses entirely.
- *
- * Production URL → Function:  /pub/coach-and-horses/         → renders the pub
- * Production URL → 404:        /pub/no-such-pub/             → returns 404
+ * Production URL → Function:  /pub/coach-and-horses/  → renders the pub
+ * Production URL → 404:        /pub/no-such-pub/      → returns 404
  */
 
-import { nearbyPubs, type Pub, renderPubPage } from "../_lib/render";
+import { type Pub, renderPubPage } from "../_lib/render";
 
 interface Env {
   ASSETS: Fetcher;
   // Cloudflare Pages auto-injects this at build AND runtime — used as a
   // cache buster so a new deploy invalidates both the module-scope template
-  // cache and the edge Cache API entries from the previous deploy. Without
-  // this, returning users hit the stale 7-day cached HTML which still points
-  // to the old CSS hash (and therefore the old layout).
+  // cache and the edge Cache API entries from the previous deploy.
   CF_PAGES_COMMIT_SHA?: string;
 }
 
 // ── Module-scope cache ───────────────────────────────────────────────────
 //
-// V8 isolates persist between requests on the same instance, so cached
-// state survives across invocations. The Cache API handles inter-instance
-// sharing; this just speeds up the same-instance warm path.
+// Only the HTML template needs to live across requests on a warm isolate
+// (it's the same for every pub). Per-pub data is small enough that a fresh
+// fetch per request is fine.
 
 let cachedSha: string | null = null;
 let cachedTemplate: string | null = null;
-let cachedPubs: Pub[] | null = null;
-let cachedSlugIndex: Map<string, Pub> | null = null;
 
-async function loadAssets(
-  env: Env,
-  origin: string,
-): Promise<{ template: string; pubs: Pub[]; index: Map<string, Pub> }> {
+const R2_DATA_URL = "https://data.sunny-pint.co.uk/data";
+
+async function loadTemplate(env: Env, origin: string): Promise<string> {
   const sha = env.CF_PAGES_COMMIT_SHA ?? "dev";
-  if (cachedSha === sha && cachedTemplate && cachedPubs && cachedSlugIndex) {
-    return { template: cachedTemplate, pubs: cachedPubs, index: cachedSlugIndex };
-  }
-
-  const [tplRes, pubsRes] = await Promise.all([
-    env.ASSETS.fetch(`${origin}/index.html`),
-    fetch("https://data.sunny-pint.co.uk/data/pubs-index.json"),
-  ]);
-
-  if (!tplRes.ok) {
-    throw new Error(`Failed to load template: ${tplRes.status}`);
-  }
-  if (!pubsRes.ok) {
-    throw new Error(`Failed to load pubs-index.json from R2: ${pubsRes.status}`);
-  }
-
-  const template = await tplRes.text();
-  const pubs = (await pubsRes.json()) as Pub[];
-  const index = new Map<string, Pub>();
-  for (const pub of pubs) {
-    if (pub.slug) index.set(pub.slug, pub);
-  }
-
+  if (cachedSha === sha && cachedTemplate) return cachedTemplate;
+  const res = await env.ASSETS.fetch(`${origin}/index.html`);
+  if (!res.ok) throw new Error(`Failed to load template: ${res.status}`);
+  const template = await res.text();
   cachedSha = sha;
   cachedTemplate = template;
-  cachedPubs = pubs;
-  cachedSlugIndex = index;
-  return { template, pubs, index };
+  return template;
+}
+
+async function loadPub(slug: string): Promise<Pub | null> {
+  const res = await fetch(`${R2_DATA_URL}/pub/${slug}.json`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load pub/${slug}.json: ${res.status}`);
+  return (await res.json()) as Pub;
 }
 
 // ── Route handler ────────────────────────────────────────────────────────
@@ -91,14 +66,10 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   }
   const url = new URL(ctx.request.url);
 
-  // Cache lookup using a normalised key (strip query params so cache hits
-  // aren't fragmented by ?utm_source=… etc). Include the deploy SHA so a
-  // new deploy invalidates the entire cache namespace — without this we'd
-  // serve 7-day-old HTML still pointing at the previous CSS hash, which
-  // means the layout fixes from a deploy don't reach returning users.
+  // Edge-cache lookup. Include deploy SHA so a new deploy invalidates the
+  // entire cache namespace; force GET so HEAD probes reuse GET entries and
+  // vice-versa.
   const sha = ctx.env.CF_PAGES_COMMIT_SHA ?? "dev";
-  // Force GET on the cache key so a HEAD probe reuses the GET entry and
-  // vice-versa — Cache API keys are method-sensitive by default.
   const cacheKey = new Request(`${url.origin}${url.pathname}?_v=${sha}`, { method: "GET" });
   // `caches.default` is a Cloudflare Workers extension not present in the
   // standard DOM CacheStorage type. The cast is a pure type-level shim —
@@ -108,18 +79,17 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
   if (cached) return cached;
 
   const slug = String(ctx.params.slug ?? "");
-  if (!slug) {
-    return new Response("Not found", { status: 404 });
-  }
+  if (!slug) return new Response("Not found", { status: 404 });
 
-  let assets: { template: string; pubs: Pub[]; index: Map<string, Pub> };
+  let pub: Pub | null;
+  let template: string;
   try {
-    assets = await loadAssets(ctx.env, url.origin);
+    [pub, template] = await Promise.all([loadPub(slug), loadTemplate(ctx.env, url.origin)]);
   } catch (err) {
+    console.error("pub function load failed", err);
     return new Response(`Internal error: ${(err as Error).message}`, { status: 500 });
   }
 
-  const pub = assets.index.get(slug);
   if (!pub) {
     // Soft 404 — let the static 404.html handle it.
     const fallback = await ctx.env.ASSETS.fetch(`${url.origin}/404.html`);
@@ -131,22 +101,21 @@ export const onRequest: PagesFunction<Env> = async (ctx) => {
 
   const town = pub.town ?? "";
   const country = pub.country ?? "England";
-  const nearby = nearbyPubs(pub, assets.pubs);
+  const nearby = pub.nearby ?? [];
 
-  const html = renderPubPage(assets.template, { pub, town, country, nearby });
+  const html = renderPubPage(template, { pub, town, country, nearby });
 
   const response = new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       // Browser cache 1h (so reloads are fast). Edge cache 7 days (so the
       // Function rarely runs again until pubs.json updates and we redeploy,
-      // which automatically invalidates the cache).
+      // which automatically invalidates the cache via the SHA-keyed key).
       "cache-control": "public, max-age=3600, s-maxage=604800",
     },
   });
 
-  // Store the cloned response in the edge cache asynchronously — we don't
-  // wait for it to complete before responding.
+  // Store the cloned response in the edge cache asynchronously.
   ctx.waitUntil(cache.put(cacheKey, response.clone()));
   return response;
 };

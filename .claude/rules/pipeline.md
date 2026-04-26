@@ -17,8 +17,8 @@ Five-stage pipeline with manifest-based change detection:
 EXTRACT  → pubs_merged.json + buildings.gpkg
 INDEX    → inspire.gpkg + scotland_parcels.gpkg
 ENRICH   → pubs_enriched.json (heights, horizons, outdoor areas, LA)
-PACKAGE  → pubs.json + pubs-index.json + detail chunks + buildings.pmtiles
-SCORE    → sun scores → regenerates index + detail chunks
+PACKAGE  → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles
+SCORE    → sun scores → regenerates index + per-pub files
 ```
 
 Run via: `uv run python pipeline/run.py --area uk`
@@ -35,8 +35,9 @@ Run via: `uv run python pipeline/run.py --area uk`
 - `pubs_merged.json` — raw OSM extract (EXTRACT output)
 - `pubs_enriched.json` — enriched with heights, horizons, outdoor, LA (ENRICH output)
 - `pubs.json` — final with slugs, towns, sun scores (PACKAGE + SCORE output)
-- `pubs-index.json` — slim browser index (SCORE output)
-- `detail/*.json` — per-pub heavy fields in 0.1° grid chunks (SCORE output)
+- `pubs-index.json` — slim browser index, ~12.6 MB (SCORE output). Just the fields the SPA needs at startup for list, search, sort, filter.
+- `pub/{slug}.json` — full per-pub record + 10-nearest array, ~3 KB each, 38k files (SCORE output). Single source of truth for pub data; fetched by the `/pub/[slug]` Pages Function and the SPA on pub selection.
+- `detail/*.json` — DEPRECATED cell-keyed chunks, still emitted during transition. Will be removed once per-pub is verified.
 
 ## Legacy v1 Scripts (scripts/)
 
