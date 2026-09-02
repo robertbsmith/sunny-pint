@@ -65,7 +65,9 @@ UPLOAD_DIRS = [
     # Per-pub JSON: one file per pub. Fetched by /pub/[slug] + /og/pub/[slug]
     # Pages Functions and lazy-loaded by the SPA on pub selection.
     (PUBLIC_DATA / "pub", "data/pub", "application/json", CACHE_JSON),
-    (PUBLIC_DATA / "og", "data/og", "image/jpeg", CACHE_IMAGE),
+    # OG cards live at the bucket root (data.sunny-pint.co.uk/og/<slug>.jpg) —
+    # that's the URL functions/_lib/render.ts puts in og:image and schema.org.
+    (PUBLIC_DATA / "og", "og", "image/jpeg", CACHE_IMAGE),
 ]
 
 
