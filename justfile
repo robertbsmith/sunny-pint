@@ -7,9 +7,14 @@ area := "norwich"
 
 # ── Frontend ──────────────────────────────────────────────────────────
 
-# Start Vite dev server
+# Start Vite dev server (data from R2)
 dev:
     pnpm dev
+
+# Dev server against the pipeline's LOCAL output in public/data — preview a
+# freshly built buildings.pmtiles / pubs-index.json before deploy-data.
+dev-local:
+    VITE_DATA_URL=/data pnpm dev
 
 # Production build
 build:
@@ -62,6 +67,10 @@ ci: typecheck lint build
 # Requires: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY env vars.
 deploy-data:
     uv run --project pipeline python pipeline/deploy_data.py
+
+# Upload just the tile archive (after a tiles/basemap rebuild).
+deploy-tiles:
+    uv run --project pipeline python pipeline/deploy_data.py --only buildings.pmtiles
 
 # Full deploy: build SPA + upload data to R2.
 # Code deploys via GitHub push → Cloudflare Pages auto-build.
@@ -122,8 +131,8 @@ precompute-sun:
     pnpm tsx pipeline/ts/precompute_sun.ts
 
 # Pre-render OG card images for all qualifying pubs → public/data/og/*.jpg
-# Map tiles come from Mapbox (token embedded in src/config.ts). Idempotent
-# (skips existing).
+# Fully offline: buildings + basemap come from the local PMTiles archive.
+# Idempotent (skips existing).
 render-og:
     pnpm tsx scripts/render_og_cards.ts
 

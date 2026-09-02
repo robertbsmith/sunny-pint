@@ -35,7 +35,7 @@ export const SHADOW_CAP_M = 200; // pipeline: SHADOW_CAP_M
 /** Total radius for which we load buildings (porthole + shadow reach). */
 export const LOAD_RADIUS_M = PORTHOLE_RADIUS_M + SHADOW_CAP_M; // 274
 
-/** Web Mercator zoom level used for the porthole map tiles. */
+/** Web Mercator zoom level the porthole's 1x scale is defined at. */
 export const TILE_ZOOM = 18;
 
 /** Vector tile zoom level for building data files. Must match generate_tiles.py. */
@@ -52,13 +52,6 @@ export const TWILIGHT_NIGHT = 0.3;
 export const TWILIGHT_DAY = 0.7;
 
 // ── External services ────────────────────────────────────────────────
-
-/** Mapbox raster tile URLs. 200k Static Tile requests/month free.
- *  Token is public (restricted via URL allowlisting in Mapbox dashboard). */
-const MAPBOX_TOKEN =
-  "pk.eyJ1Ijoicm9iZXJ0YnNtaXRoIiwiYSI6ImNtbnQyemVnbzBoNmYycHIyaHJvb3RremEifQ.zJRELIw_QaWTW0NRQc6-8g";
-export const TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
-export const SATELLITE_TILE_URL = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /** Open-Meteo current weather API. */
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
@@ -85,9 +78,6 @@ export const WEATHER_TTL_MS = 10 * 60 * 1000;
 
 /** Maximum coordinate distance for weather cache hit (degrees). */
 export const WEATHER_CACHE_TOLERANCE_DEG = 0.1;
-
-/** Maximum entries in the porthole map tile cache. */
-export const TILE_CACHE_MAX = 200;
 
 // ── UI tuning ────────────────────────────────────────────────────────
 

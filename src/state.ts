@@ -3,6 +3,7 @@
  * No framework, no store, just shared mutable state.
  */
 
+import { emptyBasemap } from "./basemap";
 import { DEFAULT_LAT, DEFAULT_LNG, M_PER_DEG_LAT } from "./config";
 import type { AppState, Pub } from "./types";
 
@@ -10,6 +11,7 @@ export const state: AppState = {
   pubs: [],
   selectedPubId: null,
   buildings: [],
+  basemap: emptyBasemap(),
   pubBuildingIndex: -1,
   shadowPolys: [],
   terrainShadowEdgeM: null as number | null,
@@ -20,7 +22,6 @@ export const state: AppState = {
   weatherState: "unknown",
   userLat: null,
   userLng: null,
-  satellite: false,
   zoomStep: 1,
   panX: 0,
   panY: 0,

@@ -41,7 +41,7 @@ The pipeline auto-downloads all data sources on first run:
 Stage 1: EXTRACT     OSM .pbf → pubs_merged.json + buildings.gpkg
 Stage 2: INDEX       INSPIRE GMLs → inspire.gpkg + scotland_parcels.gpkg
 Stage 3: ENRICH      LiDAR + parcels → pubs_enriched.json (heights, horizons, outdoor areas)
-Stage 4: PACKAGE     pubs_enriched → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles
+Stage 4: PACKAGE     pubs_enriched → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles (buildings + basemap)
 Stage 5: SCORE       pubs.json → sun scores → regenerates index + per-pub files
 ```
 
@@ -73,10 +73,11 @@ See `pipeline/DESIGN.md` for full architecture.
 - **VitePWA** — offline/installable
 
 Key modules (see `.claude/rules/frontend.md` for full list):
-- `circle.ts` — porthole canvas (buildings, shadows, terrain shadows, bezel, compass, pub sign)
+- `circle.ts` — porthole canvas (vector basemap, buildings, shadows, terrain shadows, bezel, compass, pub sign)
 - `sunarc.ts` — sun arc time picker with play animation
 - `shadow.ts` — geometric shadow projection + terrain shadow edge computation
-- `buildings.ts` — building data loader (PMTiles range requests from R2)
+- `buildings.ts` — building + basemap loader (PMTiles range requests from R2)
+- `basemap.ts` / `basemap_style.ts` — basemap decode + shared palette (canvas and OG SVG)
 - `publist.ts` — pub list with search and distance sorting
 - `state.ts` — app state, pub selection, time
 
@@ -86,6 +87,7 @@ Key modules (see `.claude/rules/frontend.md` for full list):
 - `stages/index.py` — INSPIRE GMLs → spatial GeoPackage
 - `stages/enrich.py` — LiDAR heights + horizons + parcel matching + outdoor areas
 - `stages/package.py` — town/country/slug derivation, index/chunk splitting, PMTiles
+- `stages/basemap.py` — OSM roads/water/green/trees within 300 m of pubs, packed into the same PMTiles
 - `stages/score.py` — sun scoring (shells out to precompute_sun.ts), regenerates splits
 - `stages/horizon.py` — independent horizon recompute with OS Terrain 50 (3km range)
 - `utils/terrain50.py` — OS Terrain 50 loader (50m DTM, all GB)
@@ -98,7 +100,7 @@ Legacy v1 scripts remain in `scripts/` for reference but are not used by the pip
 - **Cloudflare R2** — bucket `sunny-pint-data`, domain `data.sunny-pint.co.uk`
   - `pubs-index.json` (~12.6 MB / ~2 MB gzip) — slim pub list (id, slug, name, lat, lng, town, county, country, sun, opening_hours, outdoor_area_m2) loaded at SPA startup for list rendering, search, distance sort, open-now filter
   - `pub/{slug}.json` (~3 KB each, 38k files) — full per-pub record (everything in slim + outdoor polygon, elev, horizon, BarOrPub schema fields) plus a pre-computed `nearby` array of the 10 closest pubs. Fetched directly by the `/pub/[slug]` Pages Function (no index parse on cold start) and lazy-loaded by the SPA on pub selection.
-  - `buildings.pmtiles` — building vector tiles, range-requested by pmtiles.js
+  - `buildings.pmtiles` — building footprints + basemap layers (roads, rail, waterways, water, land, lines, trees), range-requested by pmtiles.js. One tile paints the whole porthole.
   - `og/{slug}.jpg` — pre-rendered OG card images
 - **Cloudflare Pages** — `dist/` contains only the SPA shell (HTML/JS/CSS/icons), zero data files
   - `just release` strips all data from dist/ before deploy
@@ -121,8 +123,8 @@ Legacy v1 scripts remain in `scripts/` for reference but are not used by the pip
 - Shadow max length capped at 200m to avoid infinite geometry near sunrise/sunset
 - Height-dependent building filter: short buildings excluded if too far to cast useful shadows
 - Day/night transition uses `dayFrac = (altitude + 2) / 10` for smooth 30-minute twilight
-- Mapbox tiles: streets-v12 + satellite-streets-v12 (public token, URL-restricted to sunny-pint.co.uk)
-- Porthole uses tile zoom 18 metres-per-pixel for building overlay alignment
+- No third-party map tiles. The basemap is OSM vectors within 300 m of each pub, packed into buildings.pmtiles and drawn in canvas (`src/basemap_style.ts` is the palette). Mapbox was removed in Sep 2026 after a $38 overage — never reintroduce per-request tile APIs.
+- Porthole 1x scale is Web Mercator zoom 18 metres-per-pixel; basemap widths are in metres so they scale with zoom
 - LiDAR sources: EA/Defra bundles (England), JNCC WCS (Scotland), NRW COG (Wales)
 - OS Terrain 50: 50m DTM covering all GB, used for long-range horizon rays (auto-downloaded, 155MB)
 - Outdoor area polygons support holes (evenodd canvas fill) for enclosed buildings
@@ -135,6 +137,7 @@ Legacy v1 scripts remain in `scripts/` for reference but are not used by the pip
 - **Static site** — all data pre-computed, no server at runtime
 - **OSM as sole pub source** — cleaner data than FSA, no duplicates, accurate building polygons
 - **PMTiles on R2** — single archive with range requests, replaces 47k individual .pbf files
+- **Self-hosted vector basemap** — roads/water/land/trees ride in the same tile as the buildings, so the porthole costs zero extra requests and has no per-view vendor cost. Satellite view was dropped with Mapbox (no free UK aerial source).
 - **R2 for data** — all pipeline output served from R2 (free tier: 10 GB storage, 10M reads/month), zero data in Pages dist/
 - **Split pub data** — slim index for SPA startup (~12.6 MB / ~2 MB gzip) covers list/search/filter/sort; full per-pub files (`pub/{slug}.json`, ~3 KB each) loaded on pub selection AND fetched directly by the `/pub/[slug]` Pages Function so cold starts don't have to parse the index
 - **Height-dependent radius** — reduces tile data ~30% by excluding short distant buildings

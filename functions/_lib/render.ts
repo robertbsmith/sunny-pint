@@ -257,8 +257,8 @@ function applyTemplate(template: string, meta: PageMeta): string {
   );
 
   // og:image / twitter:image — point at a custom URL when the page supplies
-  // one (per-pub OG card via the /og/pub/<slug>.svg Function), otherwise
-  // leave the default banner.png in place.
+  // one (pre-rendered per-pub OG card on R2), otherwise leave the default
+  // banner.png in place.
   if (meta.ogImagePath) {
     const ogImageUrl = meta.ogImagePath.startsWith("http")
       ? meta.ogImagePath

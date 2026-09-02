@@ -4,8 +4,8 @@ Applies to: `src/**`
 
 ## Stack
 - Vite 8 + TypeScript 6 + Biome + Tailwind 4
-- Canvas 2D for the porthole circle view (no map library — custom tile rendering)
-- PMTiles archive for building data (range requests from R2)
+- Canvas 2D for the porthole circle view (no map library — vector basemap drawn from PMTiles)
+- PMTiles archive for buildings AND basemap layers (range requests from R2). No third-party map tiles — no Mapbox, no API keys.
 - SunCalc for sun position
 - vite-plugin-pwa for offline/installable
 
@@ -13,19 +13,20 @@ Applies to: `src/**`
 - All shadow computation is client-side (geometric projection)
 - Building shadows use actual roof height only (no elevation difference)
 - Terrain shadows rendered as half-plane from horizon_dist ridge distances
-- Building data loaded from buildings.pmtiles on R2 via range requests
+- Buildings + basemap (roads, water, land, trees) loaded from buildings.pmtiles on R2 via range requests; one tile paints the whole porthole
 - No backend at runtime — everything is static
 - State is simple module-level variables, no framework
 
 ## Module Structure
 - `main.ts` — entry point, wires everything together
 - `state.ts` — app state, pub selection, time
-- `circle.ts` — porthole canvas renderer (tiles, buildings, shadows, terrain shadows, bezel, sign)
+- `circle.ts` — porthole canvas renderer (basemap, buildings, shadows, terrain shadows, bezel, sign)
 - `shadow.ts` — geometric shadow projection + terrain shadow edge (horizon_dist)
 - `sunarc.ts` — sun arc time picker canvas widget
 - `sunbadge.ts` — sunny rating badge display
-- `buildings.ts` — vector tile loader, spatial filtering, building types
-- `tiles.ts` — Mapbox raster tile loading for porthole background
+- `buildings.ts` — vector tile loader (buildings + basemap from one tile), spatial filtering
+- `basemap.ts` — basemap layer decoding + types (roads, rail, water, land, lines, trees)
+- `basemap_style.ts` — palette + metric widths shared by circle.ts and the OG SVG renderer
 - `sign.ts` — pub sign with procedural heraldic device
 - `heraldry.ts` — deterministic heraldic shield renderer (tinctures, divisions, charges)
 - `publist.ts` — pub list with search and distance sorting

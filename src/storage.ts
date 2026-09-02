@@ -9,7 +9,6 @@
 
 const LOCATION_KEY = "sunny-pint:location";
 const WELCOME_DISMISSED_KEY = "sunny-pint:welcome-dismissed";
-const SATELLITE_KEY = "sunny-pint:satellite";
 const ZOOM_KEY = "sunny-pint:zoom";
 
 /** How a saved location was originally chosen. Used to decide whether to
@@ -93,24 +92,6 @@ export function isWelcomeDismissed(): boolean {
 export function markWelcomeDismissed(): void {
   try {
     localStorage.setItem(WELCOME_DISMISSED_KEY, "1");
-  } catch {
-    // Ignore.
-  }
-}
-
-// ── Satellite mode ──────────────────────────────────────────────────
-
-export function loadSatelliteMode(): boolean {
-  try {
-    return localStorage.getItem(SATELLITE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function saveSatelliteMode(on: boolean): void {
-  try {
-    localStorage.setItem(SATELLITE_KEY, on ? "1" : "0");
   } catch {
     // Ignore.
   }

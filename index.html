@@ -45,10 +45,6 @@
     <link rel="preload" href="https://data.sunny-pint.co.uk/data/pubs-index.json" as="fetch" type="application/json" crossorigin />
     <link rel="preconnect" href="https://data.sunny-pint.co.uk" crossorigin />
 
-    <!-- Preconnect to Mapbox so the porthole's first tile fetch
-         skips the DNS + TLS handshake. -->
-    <link rel="preconnect" href="https://api.mapbox.com" crossorigin />
-
     <!-- Structured data: WebSite + SearchAction so Google can show a
          sitelinks search box. -->
     <script type="application/ld+json">
@@ -180,9 +176,6 @@
               </div>
             </div>
             <div id="porthole-controls-right">
-              <button type="button" id="btn-satellite" class="porthole-btn--rim" title="Satellite view" aria-label="Toggle satellite view">
-                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-              </button>
               <button type="button" id="btn-reset-pan" class="porthole-btn--rim" title="Reset view" aria-label="Reset view" disabled>
                 <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
               </button>
@@ -264,7 +257,6 @@
           </div>
           <div class="footer-attr">
             &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL) ·
-            &copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> ·
             Contains OS data &copy; Crown copyright and database rights 2026
           </div>
         </div>

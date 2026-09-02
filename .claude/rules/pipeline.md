@@ -17,7 +17,7 @@ Five-stage pipeline with manifest-based change detection:
 EXTRACT  → pubs_merged.json + buildings.gpkg
 INDEX    → inspire.gpkg + scotland_parcels.gpkg
 ENRICH   → pubs_enriched.json (heights, horizons, outdoor areas, LA)
-PACKAGE  → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles
+PACKAGE  → pubs.json + pubs-index.json + per-pub files + buildings.pmtiles (buildings + basemap layers)
 SCORE    → sun scores → regenerates index + per-pub files
 ```
 
@@ -30,6 +30,7 @@ Run via: `uv run python pipeline/run.py --area uk`
 - `pipeline/utils/terrain50.py` — OS Terrain 50 loader (50m DTM, auto-downloaded)
 - `pipeline/utils/download.py` — auto-download OSM extracts + OS Terrain 50
 - `pipeline/utils/bundles.py` — Defra LiDAR bundle download/decode
+- `pipeline/stages/basemap.py` — OSM roads/water/land/trees within 300 m of pubs → data/basemap/*.geojsonl (called by tiles.py)
 
 ### Data flow
 - `pubs_merged.json` — raw OSM extract (EXTRACT output)

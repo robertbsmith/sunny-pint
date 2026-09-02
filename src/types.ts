@@ -1,3 +1,5 @@
+import type { Basemap } from "./basemap";
+
 /** Precomputed Sunny Rating, added by scripts/precompute_sun.ts. */
 export interface SunMetrics {
   /** 0–100 — the headline number. */
@@ -87,6 +89,8 @@ export interface AppState {
   pubs: Pub[];
   selectedPubId: string | null;
   buildings: Building[];
+  /** Roads, water, green space etc. near the selected pub (same tiles as buildings). */
+  basemap: Basemap;
   pubBuildingIndex: number;
   shadowPolys: ShadowPoly[];
   terrainShadowEdgeM: number | null;
@@ -97,7 +101,6 @@ export interface AppState {
   weatherState: WeatherState;
   userLat: number | null;
   userLng: number | null;
-  satellite: boolean;
   zoomStep: 1 | 2 | 4;
   /** Pan offset in metres from pub centre. */
   panX: number;

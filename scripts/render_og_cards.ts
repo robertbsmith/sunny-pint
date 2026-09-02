@@ -8,7 +8,7 @@
  *
  * Uses child processes (same pattern as precompute_sun.ts) for
  * parallelism. Each worker loads building tiles from PMTiles, fetches
- * Mapbox map tiles (cached across nearby pubs), and renders via resvg.
+ * the basemap from the local PMTiles archive, and renders via resvg.
  *
  * Run with:
  *   pnpm tsx scripts/render_og_cards.ts

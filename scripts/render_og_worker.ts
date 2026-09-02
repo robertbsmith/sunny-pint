@@ -4,9 +4,8 @@
  * Invoked as: pnpm tsx scripts/render_og_worker.ts <batch.json> <output_dir>
  *
  * Reads a batch of pubs, renders OG card SVG → JPEG for each, writes to
- * output_dir/<slug>.jpg. Map tiles are cached across pubs in the batch
- * via the module-scope tile cache in porthole_svg.ts (nearby pubs share
- * z18 tiles — a batch of geographically sorted pubs gets heavy reuse).
+ * output_dir/<slug>.jpg. Buildings and basemap both come from the local
+ * PMTiles archive — no network access at all.
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -17,9 +16,9 @@ import { Resvg } from "@resvg/resvg-js";
 import sharp from "sharp";
 
 import { renderOgCard } from "../functions/_lib/og_card";
-import { bestWindowSunPosition, prefetchPortholeTiles } from "../functions/_lib/porthole_svg";
+import { bestWindowSunPosition } from "../functions/_lib/porthole_svg";
 import type { Pub } from "../src/types";
-import { loadBuildingsForPub } from "./lib/tiles_node";
+import { loadBasemapForPub, loadBuildingsForPub } from "./lib/tiles_node";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dir, "..");
@@ -51,14 +50,14 @@ async function renderPub(pub: Pub, outputDir: string): Promise<boolean> {
   if (!pub.slug) return false;
 
   try {
-    // Load buildings + map tiles in parallel.
-    const [buildings, tileCache] = await Promise.all([
+    // Buildings + basemap come from the same local PMTiles tiles.
+    const [buildings, basemap] = await Promise.all([
       loadBuildingsForPub(pub),
-      prefetchPortholeTiles(pub),
+      loadBasemapForPub(pub),
     ]);
 
     const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
-    const svg = fixFonts(renderOgCard({ pub, buildings, sun, tileCache }));
+    const svg = fixFonts(renderOgCard({ pub, buildings, sun, basemap }));
 
     // SVG → PNG → JPEG.
     const png = new Resvg(svg, RESVG_OPTIONS).render().asPng();

@@ -92,7 +92,7 @@ just pipeline area=uk          # Full UK (slow)
 ### Deployment
 - **Cloudflare Pages** — static files + Pages Functions for per-pub rendering
 - **Per-pub pages** — rendered on-demand by Cloudflare Pages Functions (`functions/pub/[slug].ts`)
-- **OG images** — generated per-pub at the edge (`functions/og/pub/[slug].ts`)
+- **OG images** — pre-rendered per-pub JPEGs on R2 (`scripts/render_og_cards.ts`)
 - **SEO landing pages** — static city/theme pages generated at build time (`scripts/generate_pages.ts`)
 
 ## Architecture
@@ -115,5 +115,5 @@ MIT — see [LICENSE](LICENSE)
 - Pub & building data: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL)
 - Building heights: [Environment Agency](https://www.gov.uk/government/organisations/environment-agency) LiDAR (OGL v3)
 - Property boundaries: [HM Land Registry](https://use-land-property-data.service.gov.uk/) (OGL v3)
-- Map tiles: [Mapbox](https://www.mapbox.com/) + [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors
+- Basemap + buildings: [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL), self-hosted as PMTiles
 - Sun position: [SunCalc](https://github.com/mourner/suncalc) (BSD)

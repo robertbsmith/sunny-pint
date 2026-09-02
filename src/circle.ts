@@ -1,7 +1,8 @@
 /**
  * Porthole canvas renderer.
  *
- * Composites the main visualisation: basemap tiles, building polygons,
+ * Composites the main visualisation: vector basemap (roads, water, green
+ * space, trees — from the same PMTiles as the buildings), building polygons,
  * geometric shadows, outdoor area outline, bezel ring with compass, sun/moon
  * icon and time text, plus the hanging pub sign above the porthole.
  *
@@ -11,6 +12,23 @@
  */
 
 import SunCalc from "suncalc";
+import type { LatLng } from "./basemap";
+import {
+  GROUND_FILL,
+  LAND_FILL,
+  type LandKind,
+  LINE_STYLE,
+  type LineKind,
+  PARKING_STROKE,
+  PATH_DASH_M,
+  RAIL_STYLE,
+  ROAD_CASING_PX,
+  ROAD_ORDER,
+  ROAD_STYLE,
+  TREE_STYLE,
+  WATER_FILL,
+  WATERWAY_WIDTH_M,
+} from "./basemap_style";
 import { drawMoonCanvas, drawSunCanvas } from "./canvas-icons";
 import {
   DAY_FRAC_OFFSET,
@@ -21,11 +39,10 @@ import {
   TWILIGHT_DAY,
   TWILIGHT_NIGHT,
 } from "./config";
-import { lngLatToTile, tileMetresPerPixel, toPixel } from "./geo";
+import { tileMetresPerPixel, toPixel } from "./geo";
 import { drawPubSign, measureSignLayout, type SignLayout } from "./sign";
 import { pubCenter, pubOrigin, selectedPub, state } from "./state";
 import { isDark, lerpColor } from "./theme";
-import { loadTile, setSuppressTileRedraw, setTileRedrawCallback } from "./tiles";
 import { ukDateAt } from "./time";
 import type { SunPosition } from "./types";
 
@@ -39,7 +56,7 @@ export function setPanChangeCallback(cb: () => void): void {
   panChangeCallback = cb;
 }
 
-/** Register a callback for when zoom/satellite changes via gesture. */
+/** Register a callback for when zoom changes via gesture. */
 export function setViewChangeCallback(cb: () => void): void {
   viewChangeCallback = cb;
 }
@@ -87,8 +104,6 @@ function getOffscreen(w: number, h: number): CanvasRenderingContext2D {
 
 /** Render the porthole canvas at its current state. */
 export function renderCircle(canvas: HTMLCanvasElement): void {
-  setSuppressTileRedraw(true);
-
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -107,7 +122,6 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   const centre = pubCenter();
   const zoom = TILE_ZOOM + Math.log2(state.zoomStep);
   const mpp = tileMetresPerPixel(centre.lat, zoom);
-  const sat = state.satellite;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -119,7 +133,7 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.clip();
 
-  drawTiles(ctx, cx, cy, centre, zoom, sat);
+  drawBasemap(ctx, cx, cy, r, centre, mpp);
 
   if (dayFrac < 1) {
     const alpha = (1 - dayFrac) * 0.6;
@@ -127,87 +141,12 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   }
 
-  if (sat) {
-    // In satellite mode: black out everything outside the garden + pub
-    // building, then draw shadows clipped to the garden only.
-    const pub = selectedPub();
-    if (pub?.outdoor && pub.outdoor.length > 0) {
-      // Black out everything outside the garden and pub building
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(cx - r, cy - r, r * 2, r * 2);
-      // Cut out the garden (evenodd leaves it visible)
-      for (const ring of pub.outdoor) {
-        for (let i = 0; i < ring.length; i++) {
-          const point = ring[i];
-          if (!point) continue;
-          const p = toPixel(point[0], point[1], centre, mpp);
-          if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
-          else ctx.lineTo(cx + p.x, cy + p.y);
-        }
-        ctx.closePath();
-      }
-      ctx.fillStyle = "#000";
-      ctx.fill("evenodd");
-      ctx.restore();
-
-      // Draw the pub building filled + orange border (same as normal mode)
-      const pubB = state.buildings[state.pubBuildingIndex];
-      if (pubB) {
-        const pubFillR = Math.round(180 + 37 * dayFrac);
-        const pubFillG = Math.round(100 + 19 * dayFrac);
-        const pubFillB = Math.round(50 - 44 * dayFrac);
-        ctx.beginPath();
-        for (let j = 0; j < pubB.coords.length; j++) {
-          const coord = pubB.coords[j];
-          if (!coord) continue;
-          const p = toPixel(coord[0], coord[1], centre, mpp);
-          if (j === 0) ctx.moveTo(cx + p.x, cy + p.y);
-          else ctx.lineTo(cx + p.x, cy + p.y);
-        }
-        ctx.closePath();
-        ctx.fillStyle = `rgba(${pubFillR},${pubFillG},${pubFillB},0.65)`;
-        ctx.strokeStyle = lerpColor("#B45C32", "#B45309", dayFrac);
-        ctx.lineWidth = 2;
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      // Draw shadows clipped to the garden area only
-      if (dayFrac > 0 && state.shadowPolys.length > 0) {
-        ctx.save();
-        ctx.beginPath();
-        for (const ring of pub.outdoor) {
-          for (let i = 0; i < ring.length; i++) {
-            const point = ring[i];
-            if (!point) continue;
-            const p = toPixel(point[0], point[1], centre, mpp);
-            if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
-            else ctx.lineTo(cx + p.x, cy + p.y);
-          }
-          ctx.closePath();
-        }
-        ctx.clip("evenodd");
-        drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
-        ctx.restore();
-      }
-    } else {
-      // No outdoor area — just show shadows normally. drawShadows handles
-      // building + terrain shadows together; call it whenever there's
-      // sunlight so rural pubs (no nearby buildings) still get their
-      // terrain shadow drawn.
-      if (dayFrac > 0) {
-        drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
-      }
-    }
-  } else {
-    if (dayFrac > 0) {
-      drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
-    }
-
-    drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
-    drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
+  if (dayFrac > 0) {
+    drawShadows(ctx, cx, cy, W, H, centre, mpp, sun.altitude, dayFrac);
   }
+
+  drawBuildings(ctx, cx, cy, centre, mpp, dayFrac);
+  drawOutdoorArea(ctx, cx, cy, centre, mpp, dayFrac);
 
   // Pub marker dot — drawn at real pub position (moves when panned).
   const origin = pubOrigin();
@@ -228,8 +167,6 @@ export function renderCircle(canvas: HTMLCanvasElement): void {
   drawSunPctMoon(ctx, cx, cy, r, dayFrac);
 
   updatePubSign();
-
-  setSuppressTileRedraw(false);
 }
 
 // ── Sub-renderers ─────────────────────────────────────────────────────────
@@ -289,26 +226,168 @@ function drawBezel(
   ctx.stroke();
 }
 
-function drawTiles(
+/** Trace a lat/lng ring or line into the current path. */
+function tracePath(
   ctx: CanvasRenderingContext2D,
+  coords: LatLng[],
   cx: number,
   cy: number,
   centre: { lat: number; lng: number },
-  zoom: number,
-  satellite: boolean,
+  mpp: number,
+  close: boolean,
 ): void {
-  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, zoom);
-  // At higher zooms each tile covers fewer pixels relative to the viewport,
-  // so we need more tiles. 3x3 at z18, 5x5 at z19, 7x7 at z20.
-  const span = Math.ceil(1 + Math.log2(Math.max(1, zoom - TILE_ZOOM + 1)));
-  for (let dx = -span; dx <= span; dx++) {
-    for (let dy = -span; dy <= span; dy++) {
-      const img = loadTile(zoom, tx + dx, ty + dy, satellite);
-      if (img) {
-        ctx.drawImage(img, cx - px + dx * 256, cy - py + dy * 256, 256, 256);
+  for (let i = 0; i < coords.length; i++) {
+    const c = coords[i];
+    if (!c) continue;
+    const p = toPixel(c[0], c[1], centre, mpp);
+    if (i === 0) ctx.moveTo(cx + p.x, cy + p.y);
+    else ctx.lineTo(cx + p.x, cy + p.y);
+  }
+  if (close) ctx.closePath();
+}
+
+/** Land kinds bottom-up: broad fills first, small surfaces last. */
+const LAND_ORDER: LandKind[] = ["farm", "sand", "green", "wood", "ped", "parking"];
+const LINE_ORDER: LineKind[] = ["wall", "hedge", "trees"];
+
+/**
+ * Paint the vector basemap under everything else: ground, land use,
+ * water, rail, roads (casing pass then fill pass so junctions merge),
+ * footpaths, hedges/walls, then individual trees. Widths are real metres
+ * scaled by mpp so the map stays proportionate at every zoom.
+ */
+function drawBasemap(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  centre: { lat: number; lng: number },
+  mpp: number,
+): void {
+  const bm = state.basemap;
+
+  ctx.fillStyle = GROUND_FILL;
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Each polygon is filled on its own (evenodd for its holes) — batching
+  // same-kind polygons into one path would punch holes where they overlap.
+  for (const kind of LAND_ORDER) {
+    for (const l of bm.land) {
+      if (l.kind !== kind) continue;
+      ctx.beginPath();
+      for (const ring of l.rings) tracePath(ctx, ring, cx, cy, centre, mpp, true);
+      ctx.fillStyle = LAND_FILL[kind];
+      ctx.fill("evenodd");
+      if (kind === "parking") {
+        ctx.strokeStyle = PARKING_STROKE;
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
     }
   }
+
+  for (const w of bm.water) {
+    ctx.beginPath();
+    for (const ring of w.rings) tracePath(ctx, ring, cx, cy, centre, mpp, true);
+    ctx.fillStyle = WATER_FILL;
+    ctx.fill("evenodd");
+  }
+
+  ctx.strokeStyle = WATER_FILL;
+  for (const w of bm.waterways) {
+    ctx.beginPath();
+    tracePath(ctx, w.coords, cx, cy, centre, mpp, false);
+    ctx.lineWidth = Math.max(1, WATERWAY_WIDTH_M[w.kind] / mpp);
+    ctx.stroke();
+  }
+
+  if (bm.rail.length > 0) {
+    const w = Math.max(1.5, RAIL_STYLE.widthM / mpp);
+    ctx.beginPath();
+    for (const l of bm.rail) tracePath(ctx, l.coords, cx, cy, centre, mpp, false);
+    ctx.strokeStyle = RAIL_STYLE.color;
+    ctx.lineWidth = w;
+    ctx.stroke();
+    ctx.strokeStyle = RAIL_STYLE.dash;
+    ctx.lineWidth = w * 0.5;
+    ctx.setLineDash([RAIL_STYLE.dashM[0] / mpp, RAIL_STYLE.dashM[1] / mpp]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Roads: casings for every class first, then fills, so a side road
+  // meeting a main road joins without a casing line across the junction.
+  for (const pass of ["casing", "fill"] as const) {
+    for (const cls of ROAD_ORDER) {
+      const style = ROAD_STYLE[cls];
+      if (pass === "casing" && !style.casing) continue;
+      ctx.beginPath();
+      let any = false;
+      for (const road of bm.roads) {
+        if (road.cls !== cls) continue;
+        tracePath(ctx, road.coords, cx, cy, centre, mpp, false);
+        any = true;
+      }
+      if (!any) continue;
+      const wpx = Math.max(1, style.widthM / mpp);
+      ctx.lineWidth = pass === "casing" ? wpx + 2 * ROAD_CASING_PX : wpx;
+      ctx.strokeStyle = pass === "casing" ? style.casing : style.fill;
+      ctx.stroke();
+    }
+  }
+
+  // Footpaths: thin dashed line on top of everything else on the ground.
+  ctx.beginPath();
+  let anyPath = false;
+  for (const road of bm.roads) {
+    if (road.cls !== "path") continue;
+    tracePath(ctx, road.coords, cx, cy, centre, mpp, false);
+    anyPath = true;
+  }
+  if (anyPath) {
+    const style = ROAD_STYLE.path;
+    ctx.lineWidth = Math.max(1, style.widthM / mpp);
+    ctx.strokeStyle = style.fill;
+    ctx.setLineDash([PATH_DASH_M[0] / mpp, PATH_DASH_M[1] / mpp]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  for (const kind of LINE_ORDER) {
+    ctx.beginPath();
+    let any = false;
+    for (const l of bm.lines) {
+      if (l.kind !== kind) continue;
+      tracePath(ctx, l.coords, cx, cy, centre, mpp, false);
+      any = true;
+    }
+    if (!any) continue;
+    const style = LINE_STYLE[kind];
+    ctx.lineWidth = Math.max(1, style.widthM / mpp);
+    ctx.strokeStyle = style.color;
+    ctx.stroke();
+  }
+
+  if (bm.trees.length > 0) {
+    const tr = Math.max(1.5, TREE_STYLE.radiusM / mpp);
+    ctx.beginPath();
+    for (const t of bm.trees) {
+      const p = toPixel(t[0], t[1], centre, mpp);
+      ctx.moveTo(cx + p.x + tr, cy + p.y);
+      ctx.arc(cx + p.x, cy + p.y, tr, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = TREE_STYLE.fill;
+    ctx.fill();
+    ctx.strokeStyle = TREE_STYLE.stroke;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.lineCap = "butt";
+  ctx.lineJoin = "miter";
 }
 
 function drawShadows(
@@ -693,7 +772,6 @@ export function initCircle(): void {
     renderCircle(canvas);
   };
 
-  setTileRedrawCallback(() => renderCircle(canvas));
   window.addEventListener("resize", resize);
   resize();
 

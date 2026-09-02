@@ -90,6 +90,11 @@ def get_s3_client():
 def main():
     parser = argparse.ArgumentParser(description="Upload pipeline data to R2")
     parser.add_argument("--dry-run", action="store_true", help="List files without uploading")
+    parser.add_argument(
+        "--only",
+        metavar="SUBSTR",
+        help="Upload only R2 keys containing this substring (e.g. buildings.pmtiles)",
+    )
     args = parser.parse_args()
 
     # Build file list.
@@ -108,6 +113,9 @@ def main():
         for f in sorted(local_dir.iterdir()):
             if f.is_file():
                 files.append((f, f"{r2_prefix}/{f.name}", content_type, cache_control))
+
+    if args.only:
+        files = [f for f in files if args.only in f[1]]
 
     total_size = sum(f[0].stat().st_size for f in files)
     print(f"{len(files)} files to upload ({total_size / 1e6:.1f} MB)")

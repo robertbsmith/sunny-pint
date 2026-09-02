@@ -25,6 +25,7 @@
  * inside a translated <g> here. Single source of truth.
  */
 
+import type { Basemap } from "../../src/basemap";
 import type { Building, Pub, SunPosition } from "../../src/types";
 import { renderPortholeSvg } from "./porthole_svg";
 
@@ -230,8 +231,8 @@ export interface OgCardOptions {
   pub: Pub;
   buildings: Building[];
   sun: SunPosition;
-  /** Pre-fetched map tile cache for the porthole. */
-  tileCache?: Map<string, string>;
+  /** Basemap features near the pub (roads, water, green space…). */
+  basemap?: Basemap;
   /** Tagline shown in the footer. */
   tagline?: string;
   /** Render the homepage variant: brand/tagline in the left column instead
@@ -242,7 +243,7 @@ export interface OgCardOptions {
 }
 
 export function renderOgCard(opts: OgCardOptions): string {
-  const { pub, buildings, sun, tileCache, home } = opts;
+  const { pub, buildings, sun, basemap, home } = opts;
   const tagline = opts.tagline ?? "Find your sunny pint";
   const score = pub.sun?.score;
   // Home variant always uses the top "Sun trap" tier so the brand colours
@@ -421,7 +422,7 @@ export function renderOgCard(opts: OgCardOptions): string {
   // ── Porthole on the right ─────────────────────────────────────────
   const portholeSvg = renderPortholeSvg(pub, buildings, sun, {
     size: portholeSize,
-    tileCache,
+    basemap,
   });
   const porthole = `<g transform="translate(${portholeX},${portholeY})">${unwrapSvg(portholeSvg)}</g>`;
 

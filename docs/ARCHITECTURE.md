@@ -36,11 +36,11 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend `pmtiles` instanc
 
 **Why**: Drawing overlapping semi-transparent polygons causes opacity stacking (darker where quads overlap). An offscreen canvas renders them opaque, then a single alpha-blended blit gives uniform shadow darkness.
 
-## Circle View: Map Tiles as Background
+## Circle View: Self-Hosted Vector Basemap
 
-**Decision**: Load Mapbox streets-v12 raster tiles into the canvas porthole.
+**Decision**: Draw the porthole basemap (roads, water, green space, car parks, hedges, trees) from OSM vectors packed into the same PMTiles archive as the buildings. No third-party tile API.
 
-**Why**: Drawing roads from OSM data looked crude. Loading 9 tile images (3×3 grid) gives full map detail (roads, parks, water, labels) with no effort.
+**Why**: Mapbox raster tiles were billed per request with no shared cache — every pub view fetched 9–49 tiles per browser, and a 28k-card OG render blew through the free tier ($38 overage, Sep 2026). The porthole only shows ~74 m around a pub, so the basemap within 300 m of each pub is tiny (~80 MB for the whole UK) and rides in the tile request the SPA already makes for buildings. Marginal cost per view is zero; R2's free tier covers ~1M views/month. Labels and the satellite toggle were dropped — there is no free UK aerial imagery source.
 
 ## Outdoor Areas: Plot Minus All Buildings
 
@@ -58,11 +58,10 @@ Each pub's 300m radius spans at most 4 z14 tiles. The frontend `pmtiles` instanc
 
 | Source | What | License | Attribution |
 |--------|------|---------|-------------|
-| OpenStreetMap | Pubs, buildings | [ODbL](https://opendatacommons.org/licenses/odbl/) | © OpenStreetMap contributors |
+| OpenStreetMap | Pubs, buildings, basemap | [ODbL](https://opendatacommons.org/licenses/odbl/) | © OpenStreetMap contributors |
 | EA LiDAR | Building heights | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | © Environment Agency |
 | HM Land Registry | Plot boundaries | [OGL v3](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/) | Crown copyright, reproduced with permission of HM Land Registry. Polygons subject to Crown copyright, Ordnance Survey AC0000851063. |
 | Open-Meteo | Weather | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) | open-meteo.com |
-| Mapbox | Base map tiles | See [terms](https://www.mapbox.com/legal/tos) | © Mapbox, © OpenStreetMap contributors |
 | SunCalc | Sun position | BSD 2-Clause | © Vladimir Agafonkin |
 
 Full attribution with required legal wording: [/attribution.html](/attribution.html)

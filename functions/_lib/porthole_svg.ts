@@ -2,22 +2,40 @@
  * Porthole SVG renderer — matches the live in-browser circle.ts exactly.
  *
  * The SHADOW GEOMETRY comes from src/shadow.ts (same source of truth as the
- * live app). The MAP TILES come from Mapbox at the same URL the live app
- * fetches. The PROJECTION math comes from src/geo.ts. The COLOURS, dimensions,
- * and layer order all mirror src/circle.ts. The only thing this file does
+ * live app). The BASEMAP comes from the same PMTiles layers the live app
+ * decodes (src/basemap.ts) styled with the same table (src/basemap_style.ts).
+ * The PROJECTION math comes from src/geo.ts. The COLOURS, dimensions, and
+ * layer order all mirror src/circle.ts. The only thing this file does
  * differently is emit SVG markup instead of canvas paint calls — the inputs
- * and outputs are visually identical.
+ * and outputs are visually identical. No network access.
  *
  * Used by:
  *   - scripts/render_porthole_example.ts (sanity testing)
  *   - scripts/render_og_example.ts (build-time OG card design iteration)
- *   - functions/og/pub/[slug].ts (Cloudflare Pages Function — request-time)
+ *   - scripts/render_og_worker.ts (bulk OG card pre-render → R2)
  */
 
 import SunCalc from "suncalc";
 
-import { TILE_URL, TILE_ZOOM } from "../../src/config";
-import { lngLatToTile, tileMetresPerPixel, toPixel } from "../../src/geo";
+import type { Basemap, LatLng } from "../../src/basemap";
+import {
+  GROUND_FILL,
+  LAND_FILL,
+  type LandKind,
+  LINE_STYLE,
+  type LineKind,
+  PARKING_STROKE,
+  PATH_DASH_M,
+  RAIL_STYLE,
+  ROAD_CASING_PX,
+  ROAD_ORDER,
+  ROAD_STYLE,
+  TREE_STYLE,
+  WATER_FILL,
+  WATERWAY_WIDTH_M,
+} from "../../src/basemap_style";
+import { TILE_ZOOM } from "../../src/config";
+import { tileMetresPerPixel, toPixel } from "../../src/geo";
 import { computeShadows, isTerrainOccluded } from "../../src/shadow";
 import type { Building, Pub, ShadowPoly, SunPosition } from "../../src/types";
 
@@ -68,71 +86,9 @@ const SUN_ICON_FILL = "#F59E0B";
 export interface PortholeOptions {
   /** SVG canvas size in user units. Same as the live app's W. */
   size?: number;
-  /** Pre-fetched tile cache (data URI keyed by `${z}_${x}_${y}`). When
-   *  supplied the renderer skips network fetches and uses these. */
-  tileCache?: Map<string, string>;
-}
-
-// ── Tile fetching (Node + Workers fetch) ────────────────────────────────
-
-const tileFetchCache = new Map<string, Promise<string | null>>();
-
-/**
- * Fetch one map tile and return it as a data URI. Cached at the module
- * level so multiple pubs in the same neighbourhood share fetches. Returns
- * null on 404 / network error so the porthole still renders without tiles.
- */
-async function fetchTileDataUri(z: number, x: number, y: number): Promise<string | null> {
-  const key = `${z}_${x}_${y}`;
-  const existing = tileFetchCache.get(key);
-  if (existing) return existing;
-
-  const promise = (async () => {
-    try {
-      const url = TILE_URL.replace("{z}", String(z))
-        .replace("{x}", String(x))
-        .replace("{y}", String(y));
-      const resp = await fetch(url);
-      if (!resp.ok) return null;
-      const buf = await resp.arrayBuffer();
-      const b64 =
-        typeof Buffer !== "undefined"
-          ? Buffer.from(buf).toString("base64")
-          : btoa(String.fromCharCode(...new Uint8Array(buf)));
-      return `data:image/png;base64,${b64}`;
-    } catch {
-      return null;
-    }
-  })();
-
-  tileFetchCache.set(key, promise);
-  return promise;
-}
-
-/**
- * Pre-fetch every map tile a porthole needs for the given pub. Call this
- * before `renderPortholeSvg` so the renderer can run synchronously.
- */
-export async function prefetchPortholeTiles(pub: Pub): Promise<Map<string, string>> {
-  const centre = { lat: pub.clat ?? pub.lat, lng: pub.clng ?? pub.lng };
-  const { tx, ty } = lngLatToTile(centre.lng, centre.lat, TILE_ZOOM);
-  const cache = new Map<string, string>();
-
-  const fetches: Promise<void>[] = [];
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const z = TILE_ZOOM;
-      const x = tx + dx;
-      const y = ty + dy;
-      fetches.push(
-        fetchTileDataUri(z, x, y).then((uri) => {
-          if (uri) cache.set(`${z}_${x}_${y}`, uri);
-        }),
-      );
-    }
-  }
-  await Promise.all(fetches);
-  return cache;
+  /** Basemap features near the pub (from scripts/lib/tiles_node.ts). When
+   *  omitted the porthole renders on plain ground. */
+  basemap?: Basemap;
 }
 
 // ── Sun position helper ─────────────────────────────────────────────────
@@ -250,6 +206,138 @@ function pathAttr(
     .join(" ");
 }
 
+// ── Basemap layer ───────────────────────────────────────────────────────
+
+const LAND_ORDER: LandKind[] = ["farm", "sand", "green", "wood", "ped", "parking"];
+const LINE_ORDER: LineKind[] = ["wall", "hedge", "trees"];
+
+function num(n: number): string {
+  return n.toFixed(2);
+}
+
+/** Multi-line `d` attribute — every line becomes its own M…L… run. */
+function linesD(
+  lines: { coords: LatLng[] }[],
+  cx: number,
+  cy: number,
+  centre: { lat: number; lng: number },
+  mpp: number,
+): string {
+  return lines
+    .map((l) =>
+      l.coords
+        .map(([lat, lng], i) => {
+          const p = toPixel(lat, lng, centre, mpp);
+          return `${i === 0 ? "M" : "L"}${(cx + p.x).toFixed(1)},${(cy + p.y).toFixed(1)}`;
+        })
+        .join(" "),
+    )
+    .join(" ");
+}
+
+/**
+ * SVG equivalent of circle.ts drawBasemap — same layer order, same style
+ * table, widths in metres divided by mpp.
+ */
+function basemapSvg(
+  bm: Basemap,
+  cx: number,
+  cy: number,
+  r: number,
+  centre: { lat: number; lng: number },
+  mpp: number,
+): string {
+  const parts: string[] = [];
+  parts.push(
+    `<rect x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" fill="${GROUND_FILL}"/>`,
+  );
+
+  for (const kind of LAND_ORDER) {
+    for (const l of bm.land) {
+      if (l.kind !== kind) continue;
+      const stroke = kind === "parking" ? ` stroke="${PARKING_STROKE}" stroke-width="1"` : "";
+      parts.push(
+        `<path d="${pathAttr(l.rings, cx, cy, centre, mpp)}" fill="${LAND_FILL[kind]}" fill-rule="evenodd"${stroke}/>`,
+      );
+    }
+  }
+  for (const w of bm.water) {
+    parts.push(
+      `<path d="${pathAttr(w.rings, cx, cy, centre, mpp)}" fill="${WATER_FILL}" fill-rule="evenodd"/>`,
+    );
+  }
+
+  const line = (d: string, width: number, color: string, extra = ""): void => {
+    if (!d) return;
+    parts.push(
+      `<path d="${d}" fill="none" stroke="${color}" stroke-width="${num(width)}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`,
+    );
+  };
+
+  for (const w of bm.waterways) {
+    line(linesD([w], cx, cy, centre, mpp), Math.max(1, WATERWAY_WIDTH_M[w.kind] / mpp), WATER_FILL);
+  }
+
+  if (bm.rail.length > 0) {
+    const d = linesD(bm.rail, cx, cy, centre, mpp);
+    const w = Math.max(1.5, RAIL_STYLE.widthM / mpp);
+    line(d, w, RAIL_STYLE.color);
+    line(
+      d,
+      w * 0.5,
+      RAIL_STYLE.dash,
+      ` stroke-dasharray="${num(RAIL_STYLE.dashM[0] / mpp)} ${num(RAIL_STYLE.dashM[1] / mpp)}"`,
+    );
+  }
+
+  for (const pass of ["casing", "fill"] as const) {
+    for (const cls of ROAD_ORDER) {
+      const style = ROAD_STYLE[cls];
+      if (pass === "casing" && !style.casing) continue;
+      const roads = bm.roads.filter((rd) => rd.cls === cls);
+      if (roads.length === 0) continue;
+      const wpx = Math.max(1, style.widthM / mpp);
+      line(
+        linesD(roads, cx, cy, centre, mpp),
+        pass === "casing" ? wpx + 2 * ROAD_CASING_PX : wpx,
+        pass === "casing" ? style.casing : style.fill,
+      );
+    }
+  }
+
+  const paths = bm.roads.filter((rd) => rd.cls === "path");
+  if (paths.length > 0) {
+    line(
+      linesD(paths, cx, cy, centre, mpp),
+      Math.max(1, ROAD_STYLE.path.widthM / mpp),
+      ROAD_STYLE.path.fill,
+      ` stroke-dasharray="${num(PATH_DASH_M[0] / mpp)} ${num(PATH_DASH_M[1] / mpp)}"`,
+    );
+  }
+
+  for (const kind of LINE_ORDER) {
+    const ls = bm.lines.filter((l) => l.kind === kind);
+    if (ls.length === 0) continue;
+    const style = LINE_STYLE[kind];
+    line(linesD(ls, cx, cy, centre, mpp), Math.max(1, style.widthM / mpp), style.color);
+  }
+
+  if (bm.trees.length > 0) {
+    const tr = Math.max(1.5, TREE_STYLE.radiusM / mpp);
+    const circles = bm.trees
+      .map(([lat, lng]) => {
+        const p = toPixel(lat, lng, centre, mpp);
+        return `<circle cx="${(cx + p.x).toFixed(1)}" cy="${(cy + p.y).toFixed(1)}" r="${num(tr)}"/>`;
+      })
+      .join("");
+    parts.push(
+      `<g fill="${TREE_STYLE.fill}" stroke="${TREE_STYLE.stroke}" stroke-width="1">${circles}</g>`,
+    );
+  }
+
+  return parts.join("");
+}
+
 // ── Main renderer ───────────────────────────────────────────────────────
 
 /**
@@ -257,7 +345,7 @@ function pathAttr(
  *
  * Layers (matching circle.ts order):
  *   1. Bezel ring (outer to inner gradient)
- *   2. Map tiles (Mapbox streets-v12 z18, 3x3 grid, clipped to inner circle)
+ *   2. Vector basemap (ground, land use, water, roads, trees — clipped to inner circle)
  *   3. Shadow polygons (alpha-blended)
  *   4. Building polygons (with the pub building highlighted in orange)
  *   5. Outdoor garden polygon (green-dashed outline, evenodd fill)
@@ -314,21 +402,10 @@ export function renderPortholeSvg(
     // Dark rim line (outside edge of the bezel)
     `<circle cx="${cx}" cy="${cy}" r="${outerR - 0.5}" fill="none" stroke="${COLOURS.bezelRimInner}" stroke-width="1"/>`;
 
-  // ── Map tile layer ─────────────────────────────────────────────────
-  const { tx, ty, px, py } = lngLatToTile(centre.lng, centre.lat, TILE_ZOOM);
-  const tileImages: string[] = [];
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const key = `${TILE_ZOOM}_${tx + dx}_${ty + dy}`;
-      const dataUri = options.tileCache?.get(key);
-      if (!dataUri) continue;
-      const ix = cx - px + dx * 256;
-      const iy = cy - py + dy * 256;
-      tileImages.push(
-        `<image href="${dataUri}" x="${ix.toFixed(1)}" y="${iy.toFixed(1)}" width="256" height="256" preserveAspectRatio="xMidYMid slice"/>`,
-      );
-    }
-  }
+  // ── Basemap layer ──────────────────────────────────────────────────
+  const basemap = options.basemap
+    ? basemapSvg(options.basemap, cx, cy, r, centre, mpp)
+    : `<rect x="${cx - r}" y="${cy - r}" width="${r * 2}" height="${r * 2}" fill="${GROUND_FILL}"/>`;
 
   // ── Shadow layer ───────────────────────────────────────────────────
   // Live app composites shadows on an offscreen canvas at full opacity, then
@@ -412,7 +489,7 @@ export function renderPortholeSvg(
     // All map / building / garden / shadow content is clipped to the inner
     // porthole circle so the bezel ring isn't covered.
     `<g clip-path="url(#${innerClipId})">` +
-    tileImages.join("") +
+    basemap +
     `<g fill="${COLOURS.shadowFill}" fill-opacity="${shadowAlpha.toFixed(3)}">${shadowPolys}</g>` +
     buildingPolys +
     gardenPath +

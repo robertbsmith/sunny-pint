@@ -12,13 +12,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  bestWindowSunPosition,
-  prefetchPortholeTiles,
-  renderPortholeSvg,
-} from "../functions/_lib/porthole_svg";
+import { bestWindowSunPosition, renderPortholeSvg } from "../functions/_lib/porthole_svg";
 import type { Pub } from "../src/types";
-import { loadBuildingsForPub } from "./lib/tiles_node";
+import { loadBasemapForPub, loadBuildingsForPub } from "./lib/tiles_node";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -46,11 +42,10 @@ async function main(): Promise<void> {
   const sun = bestWindowSunPosition(pub, pub.sun?.best_window ?? null);
   console.log(`Sun position: az=${sun.azimuth.toFixed(1)}° alt=${sun.altitude.toFixed(1)}°`);
 
-  console.log("Fetching map tiles…");
-  const tileCache = await prefetchPortholeTiles(pub);
-  console.log(`Got ${tileCache.size} tiles`);
+  const basemap = await loadBasemapForPub(pub);
+  console.log(`Loaded basemap: ${basemap.roads.length} roads, ${basemap.land.length} land polys`);
 
-  const svg = renderPortholeSvg(pub, buildings, sun, { size: 480, tileCache });
+  const svg = renderPortholeSvg(pub, buildings, sun, { size: 480, basemap });
   writeFileSync(OUT, svg);
   console.log(`Wrote ${OUT} (${(svg.length / 1024).toFixed(1)} KB)`);
 }

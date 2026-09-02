@@ -1,9 +1,13 @@
 /**
- * Building data loader.
+ * Building + basemap data loader.
  *
- * Loads buildings on demand from individual z14 vector tile files served as
- * static assets. Each pub's load radius (porthole + max shadow) spans at most
- * 4 tiles. Tiles are cached after first fetch.
+ * Loads buildings on demand from the z14 PMTiles archive on R2. Each pub's
+ * load radius (porthole + max shadow) spans at most 4 tiles. Tiles are
+ * cached after first fetch.
+ *
+ * The same tile carries the basemap layers (roads, water, green space —
+ * see basemap.ts), so one range request paints the whole porthole. No
+ * third-party map tiles are involved.
  *
  * The closest building (by centroid distance) to the pub coordinate is
  * marked as the pub building so it can be highlighted distinctly.
@@ -12,12 +16,20 @@
 import { VectorTile } from "@mapbox/vector-tile";
 import Pbf from "pbf";
 import { PMTiles } from "pmtiles";
+import { appendBasemapWithin, type Basemap, decodeBasemap, emptyBasemap } from "./basemap";
 import { BUILDING_TILE_ZOOM, LOAD_RADIUS_M, M_PER_DEG_LAT } from "./config";
 import { lngLatToTileXY, mPerDegLng, polygonCentroid } from "./geo";
 import { state } from "./state";
 import type { Building, Pub } from "./types";
 
-const tileCache = new Map<string, Building[]>();
+interface TileContents {
+  buildings: Building[];
+  basemap: Basemap;
+}
+
+const EMPTY_TILE: TileContents = { buildings: [], basemap: emptyBasemap() };
+
+const tileCache = new Map<string, TileContents>();
 
 /** Base URL for data files (shared with main.ts). R2 in production,
  *  local public/ dir in dev. Guarded for Workers environment (no document). */
@@ -81,7 +93,7 @@ export function decodeTile(data: ArrayBuffer, tx: number, ty: number, tz: number
 }
 
 /** Fetch a single tile, with caching. 404s / missing tiles cached as empty. */
-async function fetchTile(tx: number, ty: number): Promise<Building[]> {
+async function fetchTile(tx: number, ty: number): Promise<TileContents> {
   const key = `${tx}-${ty}`;
   const cached = tileCache.get(key);
   if (cached) return cached;
@@ -91,8 +103,8 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
     if (USE_PMTILES) {
       const pm = getPMTiles();
       if (!pm) {
-        tileCache.set(key, []);
-        return [];
+        tileCache.set(key, EMPTY_TILE);
+        return EMPTY_TILE;
       }
       try {
         const resp = await pm.getZxy(BUILDING_TILE_ZOOM, tx, ty);
@@ -100,8 +112,8 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
           // This specific tile doesn't exist in the archive — cache the
           // negative result for this tile only, don't blanket-disable
           // PMTiles. Other tiles in the same archive can still succeed.
-          tileCache.set(key, []);
-          return [];
+          tileCache.set(key, EMPTY_TILE);
+          return EMPTY_TILE;
         }
         data = resp.data;
       } catch {
@@ -110,27 +122,31 @@ async function fetchTile(tx: number, ty: number): Promise<Building[]> {
         // continue — previously this globally disabled PMTiles for the
         // rest of the session, so a single flaky range request killed
         // all building shadows. Other tiles stay eligible.
-        tileCache.set(key, []);
-        return [];
+        tileCache.set(key, EMPTY_TILE);
+        return EMPTY_TILE;
       }
     } else {
       // Individual .pbf files (local dev fallback).
       const resp = await fetch(`${TILES_URL}/${key}.pbf`);
       if (!resp.ok) {
-        tileCache.set(key, []);
-        return [];
+        tileCache.set(key, EMPTY_TILE);
+        return EMPTY_TILE;
       }
       data = await resp.arrayBuffer();
     }
-    const buildings = decodeTile(data, tx, ty, BUILDING_TILE_ZOOM);
-    tileCache.set(key, buildings);
-    return buildings;
+    const contents: TileContents = {
+      buildings: decodeTile(data, tx, ty, BUILDING_TILE_ZOOM),
+      basemap: decodeBasemap(data, tx, ty, BUILDING_TILE_ZOOM),
+    };
+    tileCache.set(key, contents);
+    return contents;
   } catch {
-    return [];
+    return EMPTY_TILE;
   }
 }
 
-/** Load all buildings near a pub from static tiles and update the app state. */
+/** Load all buildings + basemap near a pub from the tile archive and
+ *  update the app state. */
 export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   // Use OSM building centroid for matching if available (more accurate than
   // the OSM node geocode which can be slightly off the building footprint).
@@ -144,14 +160,14 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   const [maxTx, maxTy] = lngLatToTileXY(pub.lng + dlng, pub.lat - dlat, BUILDING_TILE_ZOOM);
 
   // Fetch all tiles in the bounding box (at most 4 tiles).
-  const tilePromises: Promise<Building[]>[] = [];
+  const tilePromises: Promise<TileContents>[] = [];
   for (let tx = minTx; tx <= maxTx; tx++) {
     for (let ty = minTy; ty <= maxTy; ty++) {
       tilePromises.push(fetchTile(tx, ty));
     }
   }
   const tileResults = await Promise.all(tilePromises);
-  const allBuildings = tileResults.flat();
+  const allBuildings = tileResults.flatMap((t) => t.buildings);
 
   // Deduplicate (tippecanoe can clip features across tile boundaries) and
   // bbox-filter. Pub building is whichever polygon contains the pub point;
@@ -168,6 +184,12 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   const west = pub.lng - dlng;
   const east = pub.lng + dlng;
   const cosLat = Math.cos((matchLat * Math.PI) / 180);
+
+  // Basemap: keep anything whose extent overlaps the load box. Tile-edge
+  // clipping means a road crossing a tile seam appears in both tiles; the
+  // two clipped halves abut exactly, so no dedupe is needed.
+  const basemap = emptyBasemap();
+  for (const t of tileResults) appendBasemapWithin(basemap, t.basemap, [south, west, north, east]);
 
   for (const b of allBuildings) {
     const c = polygonCentroid(b.coords);
@@ -205,6 +227,7 @@ export async function loadBuildingsForPub(pub: Pub): Promise<void> {
   }
 
   state.buildings = nearby;
+  state.basemap = basemap;
   state.pubBuildingIndex = containingIdx !== -1 ? containingIdx : nearestIdx;
 }
 

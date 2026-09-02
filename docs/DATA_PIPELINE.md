@@ -172,8 +172,7 @@ All runtime data is in WGS84. OSGB is only used during pipeline processing.
 
 | Source | What | License | How to obtain |
 |--------|------|---------|---------------|
-| OpenStreetMap | Pubs, buildings, roads | ODbL | [Geofabrik .pbf](https://download.geofabrik.de/europe/united-kingdom/england.html) |
+| OpenStreetMap | Pubs, buildings, basemap (roads, water, land, trees) | ODbL | [Geofabrik .pbf](https://download.geofabrik.de/europe/united-kingdom/england.html) |
 | EA LiDAR | Building heights (DSM/DTM) | OGL v3 | Auto-downloaded via WCS |
 | HM Land Registry INSPIRE | Property plot boundaries | OGL v3 | `scripts/download_inspire.py` |
 | Open-Meteo | Cloud cover / weather | CC BY 4.0 | API (no key needed) |
-| Mapbox | Base map tiles | See [terms](https://www.mapbox.com/legal/tos) | Public token, URL-restricted to sunny-pint.co.uk |

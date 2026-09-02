@@ -75,12 +75,11 @@ async function loadPubDetail(pub: Pub): Promise<void> {
   if (detail) Object.assign(pub, detail);
 }
 
-// ── Porthole controls (satellite + zoom) ────────────────────────────
+// ── Porthole controls (zoom + reset) ────────────────────────────────
 
 const ZOOM_STEPS: ZoomStep[] = [1, 2, 4];
 
 function initPortholeControls(): void {
-  const satBtn = document.getElementById("btn-satellite");
   const zoomIn = document.getElementById("btn-zoom-in");
   const zoomOut = document.getElementById("btn-zoom-out");
   const zoomLabel = document.getElementById("zoom-label");
@@ -88,12 +87,6 @@ function initPortholeControls(): void {
 
   // Restore saved state to UI
   syncPortholeUI();
-
-  satBtn?.addEventListener("click", () => {
-    state.satellite = !state.satellite;
-    syncPortholeUI();
-    updateScene();
-  });
 
   zoomIn?.addEventListener("click", () => {
     const idx = ZOOM_STEPS.indexOf(state.zoomStep);
@@ -130,7 +123,6 @@ function initPortholeControls(): void {
   portholeUISync = syncPortholeUI;
 
   function syncPortholeUI(): void {
-    satBtn?.classList.toggle("active", state.satellite);
     if (zoomLabel) zoomLabel.textContent = `${state.zoomStep}x`;
     if (zoomIn) (zoomIn as HTMLButtonElement).disabled = state.zoomStep >= 4;
     if (zoomOut) (zoomOut as HTMLButtonElement).disabled = state.zoomStep <= 1;
@@ -186,7 +178,6 @@ async function onPubSelected(pub: Pub): Promise<void> {
   state.panX = 0;
   state.panY = 0;
   state.zoomStep = 1;
-  state.satellite = false;
   portholeUISync?.();
   updatePubInfo(pub);
   // Immediate URL push so the browser back button has a real history entry

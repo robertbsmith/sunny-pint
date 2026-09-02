@@ -1,11 +1,14 @@
-"""Generate individual vector tile files from buildings GeoPackage.
+"""Generate the z14 PMTiles archive: buildings + basemap near pubs.
 
-Filters buildings to those near pubs, runs tippecanoe to create a temporary
-PMTiles archive, then extracts individual z14 .pbf tiles as static files
-for serving from any CDN (no range request support needed).
+Filters buildings to those near pubs (height-dependent shadow reach),
+builds the basemap layers (roads, water, green space, trees — see
+stages/basemap.py) within KEEP_RADIUS_M of every pub, and runs a single
+tippecanoe pass so all layers land in one archive. The SPA then paints
+the whole porthole from one range request per tile — no third-party map
+tiles.
 
 Usage:
-    uv run python scripts/generate_tiles.py --area norwich
+    uv run --project pipeline python -m pipeline.stages.tiles --area uk
 """
 
 import json
@@ -20,6 +23,7 @@ from shapely import wkb
 from shapely.geometry import Point as ShapelyPoint
 from shapely.strtree import STRtree
 
+from pipeline.stages import basemap
 from pipeline.utils.areas import Area, in_bbox, parse_area
 
 # ── Paths ──────────────────────────────────────────────────────────────────
@@ -45,7 +49,11 @@ MIN_SUN_ALT_DEG = 3
 # Max possible radius: porthole + shadow cap.
 MAX_RADIUS_M = PORTHOLE_RADIUS_M + SHADOW_CAP_M  # 274m
 
-TILE_ZOOM = 14  # zoom level for individual tile files
+TILE_ZOOM = 14  # single zoom level in the archive
+
+# Tile coordinate detail: 2^14 units per tile ≈ 9 cm at UK latitudes, so
+# geometry stays crisp when the porthole is zoomed to 4x (z20).
+TILE_DETAIL = 14
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -458,7 +466,21 @@ def main(area=None):
         print(f"  GeoJSON: {gj_size:.1f} MB")
         print()
 
-        # Step 2: Run tippecanoe → PMTiles archive.
+        # Step 2: Basemap layers near pubs (rebuilt only when the .pbfs or
+        # the pub set changed).
+        with open(PUBS_PATH) as f:
+            pubs_for_basemap = json.load(f)
+        if area.bbox is not None:
+            pubs_for_basemap = [p for p in pubs_for_basemap if in_bbox(p["lat"], p["lng"], area.bbox)]
+        print("Building basemap...", flush=True)
+        basemap.build(pubs_for_basemap)
+        layer_args: list[str] = ["-L", f"buildings:{geojson_path}"]
+        for name, path in basemap.layer_paths().items():
+            if path.exists() and path.stat().st_size > 0:
+                layer_args += ["-L", f"{name}:{path}"]
+        print()
+
+        # Step 3: Run tippecanoe → PMTiles archive.
         pmtiles_tmp = tmp / "buildings.pmtiles"
         tippecanoe = shutil.which("tippecanoe")
         if tippecanoe is None:
@@ -471,11 +493,11 @@ def main(area=None):
             "-o", str(pmtiles_tmp),
             "-z", str(TILE_ZOOM),
             "-Z", str(TILE_ZOOM),  # single zoom level only
-            "-l", "buildings",
+            "-d", str(TILE_DETAIL),
             "--no-feature-limit",
             "--no-tile-size-limit",
             "--force",
-            str(geojson_path),
+            *layer_args,
         ]
         print(f"  cmd: {' '.join(cmd)}", flush=True)
         result = subprocess.run(cmd, text=True)

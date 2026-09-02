@@ -2,9 +2,32 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+/**
+ * Point the SPA at a different data origin. `VITE_DATA_URL=/data pnpm dev`
+ * serves the pipeline's local output from public/data (Vite honours Range
+ * requests, so buildings.pmtiles works) — handy for previewing a freshly
+ * built archive before `just deploy-data`. Unset = production R2 URL.
+ */
+function dataUrlOverride() {
+  const url = process.env.VITE_DATA_URL;
+  return {
+    name: "sunny-pint-data-url",
+    transformIndexHtml(html: string): string {
+      if (!url) return html;
+      return html
+        .replace(
+          /<meta name="data-url" content="[^"]*" \/>/,
+          `<meta name="data-url" content="${url}" />`,
+        )
+        .replaceAll("https://data.sunny-pint.co.uk/data/", `${url}/`);
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     tailwindcss(),
+    dataUrlOverride(),
     VitePWA({
       registerType: "autoUpdate",
       manifest: {
@@ -52,15 +75,6 @@ export default defineConfig({
               cacheName: "pages-v3",
               networkTimeoutSeconds: 3,
               expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
-            },
-          },
-          {
-            // Cache Mapbox raster tiles (streets + satellite)
-            urlPattern: /^https:\/\/api\.mapbox\.com\//,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "map-tiles",
-              expiration: { maxEntries: 1000, maxAgeSeconds: 7 * 24 * 60 * 60 },
             },
           },
           {

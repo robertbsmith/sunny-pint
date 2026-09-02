@@ -1317,7 +1317,7 @@ a.explore-item-name {
   container-type: inline-size;
 }
 
-/* ── Porthole controls (satellite + zoom) ────────────────────────── */
+/* ── Porthole controls (zoom + reset) ────────────────────────────── */
 
 #porthole-controls-left,
 #porthole-controls-right {
